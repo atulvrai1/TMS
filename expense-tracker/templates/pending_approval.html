@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+
+{% block title %}Approval Pending — FleetFlow{% endblock %}
+
+{% block content %}
+<div class="auth-section">
+    <div class="auth-container">
+        <div class="auth-card" style="text-align: center;">
+            <div style="font-size: 3rem; margin-bottom: 1rem;">{{ '!' if rejected else '⏳' }}</div>
+            <h1 class="auth-title">{{ 'Registration Rejected' if rejected else 'Access Pending' }}</h1>
+            <p class="auth-subtitle">
+                {% if rejected %}
+                Your registration was rejected by the system administrator. Please contact the administrator if you believe this was a mistake.
+                {% else %}
+                Your account has been created, but it is currently awaiting approval from the system administrator.
+                {% endif %}
+            </p>
+            <p style="margin-top: 1.5rem; font-size: 0.9rem; color: var(--ink-muted);">
+                You will be notified once your access is granted. Please contact <strong>atulv.11239@gmail.com</strong> for urgent requests.
+            </p>
+            <a href="{{ url_for('logout') }}" class="btn-ghost" style="display: block; margin-top: 2rem; text-align: center;">Log Out</a>
+        </div>
+    </div>
+</div>
+{% endblock %}

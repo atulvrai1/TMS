@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+
+{% block title %}{{ 'Add' if not truck else 'Edit' }} Truck — FleetFlow{% endblock %}
+{% block breadcrumb %}Administration / Trucks{% endblock %}
+
+{% block content_dashboard %}
+<div class="dashboard-page">
+    <div class="panel-header">
+        <div>
+            <h1 class="dashboard-title">{{ 'Add truck' if not truck else 'Edit truck' }}</h1>
+            <p class="dashboard-subtitle">Only administrators can manage truck registry details.</p>
+        </div>
+    </div>
+    <section class="dispatch-panel">
+        <form action="{% if truck %}{{ url_for('edit_truck', id=truck.truck_id) }}{% else %}{{ url_for('add_truck') }}{% endif %}" method="POST" class="dispatch-form">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+            <div class="form-group">
+                <label for="registration_number">Registration number</label>
+                <input id="registration_number" type="text" name="registration_number" class="form-input" value="{{ truck.registration_number if truck else '' }}" maxlength="40" placeholder="e.g. KA-01-AB-1234" required>
+            </div>
+            <div class="form-group">
+                <label for="model">Model</label>
+                <input id="model" type="text" name="model" class="form-input" value="{{ truck.model if truck else '' }}" maxlength="100" placeholder="e.g. Tata Prima" required>
+            </div>
+            <div class="form-group">
+                <label for="year">Year</label>
+                <input id="year" type="number" name="year" class="form-input" value="{{ truck.year if truck else '' }}" min="1950" max="2100" placeholder="e.g. 2022" required>
+            </div>
+            <div class="form-group">
+                <label for="capacity_tons">Capacity (tons)</label>
+                <input id="capacity_tons" type="number" step="0.1" min="0" name="capacity_tons" class="form-input" value="{{ truck.capacity_tons if truck else '' }}" placeholder="e.g. 25.0">
+            </div>
+            <div class="form-group">
+                <label for="status">Status</label>
+                <select id="status" name="status" class="form-input" required>
+                    <option value="Available" {% if not truck or truck.status == 'Available' %}selected{% endif %}>Available</option>
+                    <option value="In Trip" {% if truck and truck.status == 'In Trip' %}selected{% endif %}>In Trip</option>
+                    <option value="Maintenance" {% if truck and truck.status == 'Maintenance' %}selected{% endif %}>Maintenance</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label for="last_service_date">Last service date</label>
+                <input id="last_service_date" type="date" name="last_service_date" class="form-input" value="{{ truck.last_service_date if truck else '' }}">
+            </div>
+            <div class="form-actions">
+                <button type="submit" class="btn-primary">Save truck record</button>
+                <a class="btn-ghost" href="{{ url_for('trucks') }}">Cancel</a>
+            </div>
+        </form>
+    </section>
+</div>
+{% endblock %}

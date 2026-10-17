@@ -1,0 +1,259 @@
+{% extends "base.html" %}
+
+{% block title %}Expenses — FleetFlow{% endblock %}
+{% block breadcrumb %}Operations / Expenses{% endblock %}
+
+{% block content_dashboard %}
+<div class="dashboard-page">
+    <div class="panel-header">
+        <div>
+            <h1 class="dashboard-title">Trip Expenses</h1>
+            <p class="dashboard-subtitle">Record trip costs against the correct trip. Expenses are grouped by trip, with a complete history for each one.</p>
+        </div>
+        <div class="trip-page-links">
+            <a class="btn-ghost" href="{{ url_for('trips') }}">Back to trips & dispatch</a>
+            <a class="btn-ghost" href="{{ url_for('payments') }}">View customer payments</a>
+        </div>
+    </div>
+
+    <div class="dispatch-transparency-note">
+        Choose the trip shown on the receipt and enter the exact amount in your business currency.
+        {% if can_review %}
+        Expenses you enter as an admin are approved immediately and included in P/L. Regular user submissions remain pending until you review them.
+        {% else %}
+        Your entries wait for admin review before they count in P/L.
+        {% endif %}
+        Keep the original paper receipt with your records; receipt uploads are not enabled yet.
+    </div>
+
+    <details class="dispatch-panel" open>
+        <summary class="dispatch-panel-summary">Record an expense</summary>
+        {% if trips %}
+        <form action="{{ url_for('create_expense') }}" method="POST" class="expense-form">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+            <div class="form-group">
+                <label for="trip_id">Trip this expense belongs to</label>
+                <select class="form-input" id="trip_id" name="trip_id" required>
+                    <option value="">Select a trip</option>
+                    {% for trip in trips %}
+                    <option value="{{ trip.trip_id }}">#{{ trip.trip_id }} · {{ trip.route_from }} → {{ trip.route_to }} · {{ trip.registration_number or 'No truck' }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="form-group">
+                <label for="category">What was the expense?</label>
+                <select class="form-input" id="category" name="category" required>
+                    <option value="">Select category</option>
+                    <option>Fuel</option>
+                    <option>Toll</option>
+                    <option>Meals/Allowance</option>
+                    <option>Maintenance/Repairs</option>
+                    <option>Loading/Unloading</option>
+                    <option>Other</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label for="amount">Amount spent (business currency)</label>
+                <input class="form-input" id="amount" name="amount" type="number" min="0.01" max="100000000" step="0.01" placeholder="e.g. 1250.00" required>
+            </div>
+            <div class="form-group">
+                <label for="date">Date paid</label>
+                <input class="form-input" id="date" name="date" type="date" value="{{ today }}" required>
+            </div>
+            <div class="form-group expense-notes">
+                <label for="description">Notes / receipt reference (optional)</label>
+                <input class="form-input" id="description" name="description" maxlength="500" placeholder="What was purchased? Bill number, if available">
+            </div>
+            <button type="submit" class="btn-primary dispatch-submit">Save expense</button>
+        </form>
+        {% else %}
+        <p class="account-help">Schedule a trip before recording a trip expense.</p>
+        {% endif %}
+    </details>
+
+    <section class="financial-overview" aria-labelledby="expense-financial-heading">
+        <h2 class="admin-section-title" id="expense-financial-heading">Overall fleet P/L — all trips</h2>
+        <p class="financial-definition">
+            Net P/L = customer freight charges − approved trip expenses. Cash P/L = payments received − approved trip expenses.
+            Expenses awaiting admin review are shown separately and excluded from profit until approved.
+        </p>
+        <div class="stats-grid">
+            <div class="stat-tile"><span class="stat-label">Freight charges</span><span class="stat-value">{{ '%.2f'|format(finance_summary.freight_total) }}</span></div>
+            <div class="stat-tile"><span class="stat-label">Payments received</span><span class="stat-value">{{ '%.2f'|format(finance_summary.received_total) }}</span></div>
+            <a class="stat-tile stat-tile-link" href="{{ url_for('payments', due='1') }}" aria-label="View trips with customer balances due">
+                <span class="stat-label">Customer balance due · View trips →</span>
+                <span class="stat-value">{{ '%.2f'|format(finance_summary.balance_due_total) }}</span>
+            </a>
+            <a class="stat-tile stat-tile-link" href="{{ url_for('expenses', status='Approved') }}#expense-history" aria-label="View all approved expense records">
+                <span class="stat-label">Approved expenses · View history →</span>
+                <span class="stat-value">{{ '%.2f'|format(finance_summary.approved_expenses_total) }}</span>
+            </a>
+            <div class="stat-tile financial-result"><span class="stat-label">Net P/L (charged)</span><span class="stat-value">{{ '%.2f'|format(finance_summary.profit_loss_total) }}</span></div>
+            <div class="stat-tile financial-result"><span class="stat-label">Cash P/L (received)</span><span class="stat-value">{{ '%.2f'|format(finance_summary.cash_profit_loss_total) }}</span></div>
+            {% if finance_summary.pending_expenses_total > 0 %}
+            <a class="stat-tile stat-tile-link" href="{{ url_for('expenses', status='Pending') }}#expense-history" aria-label="View expenses awaiting admin review">
+                <span class="stat-label">Awaiting admin review · View records →</span>
+                <span class="stat-value">{{ '%.2f'|format(finance_summary.pending_expenses_total) }}</span>
+            </a>
+            {% else %}
+            <div class="stat-tile"><span class="stat-label">Awaiting admin review · not in P/L</span><span class="stat-value">{{ '%.2f'|format(finance_summary.pending_expenses_total) }}</span></div>
+            {% endif %}
+        </div>
+    </section>
+
+    <section class="trip-profitability" aria-labelledby="trip-profitability-heading">
+        <h2 class="admin-section-title" id="trip-profitability-heading">Profit / loss by trip</h2>
+        <div class="table-container">
+            <table class="fleet-table">
+                <thead><tr><th>Trip</th><th>Status</th><th>Customer freight charge</th><th>Received</th><th>Balance due</th><th>Approved trip expenses</th><th>Net P/L</th><th>Cash P/L</th></tr></thead>
+                <tbody>
+                    {% for trip in trip_finances %}
+                    <tr>
+                        <td>#{{ trip.trip_id }}<br><span class="expense-secondary">{{ trip.route_from }} → {{ trip.route_to }}</span></td>
+                        <td>{{ trip.status }}</td>
+                        <td>{{ '%.2f'|format(trip.freight_amount) }}</td>
+                        <td>{{ '%.2f'|format(trip.amount_received) }}</td>
+                        <td>
+                            {% if trip.balance_due > 0 %}
+                            <a href="{{ url_for('payments', due='1', trip=trip.trip_id) }}" aria-label="View outstanding balance for trip {{ trip.trip_id }}">{{ '%.2f'|format(trip.balance_due) }}</a>
+                            {% else %}
+                            {{ '%.2f'|format(trip.balance_due) }}
+                            {% endif %}
+                        </td>
+                        <td><a href="{{ url_for('expenses', trip=trip.trip_id) }}#expense-history" aria-label="View all expense history for trip {{ trip.trip_id }}">{{ '%.2f'|format(trip.approved_expenses) }} · View</a>{% if trip.pending_expenses %}<br><a class="expense-secondary" href="{{ url_for('expenses', trip=trip.trip_id, status='Pending') }}#expense-history" aria-label="View pending expenses for trip {{ trip.trip_id }}">{{ '%.2f'|format(trip.pending_expenses) }} pending · View</a>{% endif %}</td>
+                        <td class="{% if trip.profit_loss > 0 %}profit-loss-positive{% elif trip.profit_loss < 0 %}profit-loss-negative{% endif %}">{{ '%.2f'|format(trip.profit_loss) }}</td>
+                        <td class="{% if trip.cash_profit_loss > 0 %}profit-loss-positive{% elif trip.cash_profit_loss < 0 %}profit-loss-negative{% endif %}">{{ '%.2f'|format(trip.cash_profit_loss) }}</td>
+                    </tr>
+                    {% else %}
+                    <tr><td colspan="8" class="user-empty-state">No trips to include in the P/L summary.</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        <p class="admin-section-link"><a href="{{ url_for('trips') }}">Open trips and record customer payments →</a></p>
+    </section>
+
+    <details id="expense-history" class="expense-history-section" {% if selected_trip_id or selected_status %}open{% endif %}>
+    <summary class="expense-history-toggle">{% if selected_trip_id %}Show expense history for Trip #{{ selected_trip_id }}{% elif selected_status %}Show {{ selected_status|lower }} expense history{% else %}Show expense history{% endif %}</summary>
+    <div class="expense-history-heading">
+        <div>
+            <h2 class="admin-section-title" id="expense-history-heading">{% if selected_trip_id %}Expense history — Trip #{{ selected_trip_id }}{% elif selected_status %}{{ selected_status }} expense history{% else %}Expense history{% endif %}</h2>
+            {% if selected_trip_id %}
+            <p class="financial-definition">Showing every expense for Trip #{{ selected_trip_id }}, including expenses awaiting admin review, approved/rejected entries, and correction history.</p>
+            {% elif selected_status %}
+            <p class="financial-definition">Showing only {{ selected_status|lower }} expense records across all trips.</p>
+            {% else %}
+            <p class="financial-definition">Newest expense records appear first. Expand correction details to review the audit trail.</p>
+            {% endif %}
+        </div>
+        {% if selected_trip_id or selected_status %}
+        <a class="btn-ghost" href="{{ url_for('expenses') }}#expense-history">Show all expense records</a>
+        {% endif %}
+    </div>
+    <div class="stats-grid">
+        <div class="stat-tile"><span class="stat-label">Trips with matching expenses</span><span class="stat-value">{{ expenses_by_trip|length }}</span></div>
+        <div class="stat-tile financial-result"><span class="stat-label">Matching expense total</span><span class="stat-value">{{ '%.2f'|format(filtered_expense_total) }}</span></div>
+        {% if not selected_status %}
+        {% if totals.pending > 0 %}
+        <a class="stat-tile stat-tile-link" style="border-left: 4px solid var(--status-trip);" href="{{ url_for('expenses', status='Pending') }}#expense-history" aria-label="View all pending expenses across all trips">
+            <span class="stat-label">Awaiting admin review · View records →</span>
+            <span class="stat-value">{{ '%.2f'|format(totals.pending) }}</span>
+        </a>
+        {% else %}
+        <div class="stat-tile" style="border-left: 4px solid var(--status-trip);"><span class="stat-label">Awaiting admin review</span><span class="stat-value">{{ '%.2f'|format(totals.pending) }}</span></div>
+        {% endif %}
+        {% endif %}
+    </div>
+
+    <div class="table-container">
+        <table class="fleet-table">
+            <thead>
+                <tr>
+                    <th>Trip / Truck</th>
+                    <th>Expense records</th>
+                    <th>Approved</th>
+                    <th>Pending</th>
+                    <th>Total in this view</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for trip in expenses_by_trip %}
+                <tr>
+                    <td>
+                        <strong>#{{ trip.trip_id }} · {{ trip.route_from }} → {{ trip.route_to }}</strong><br>
+                        <span class="expense-secondary">{{ trip.registration_number or 'No truck assigned' }} · {{ trip.driver_name or 'No driver assigned' }}</span>
+                    </td>
+                    <td>
+                        {{ trip.expenses|length }} record{{ '' if trip.expenses|length == 1 else 's' }}
+                        <details class="trip-expense-collapse">
+                            <summary>View complete expense history</summary>
+                            <div class="trip-expense-list">
+                                {% for expense in trip.expenses %}
+                                <article class="trip-expense-item">
+                                    <div class="trip-expense-summary">
+                                        <strong>#{{ expense.expense_id }} · {{ expense.category }} · {{ '%.2f'|format(expense.amount) }}</strong>
+                                        <span>{{ expense.date }} · {{ expense.submitter_name or expense.submitter_email or 'Legacy record' }}</span>
+                                        {% if expense.description %}<span>{{ expense.description }}</span>{% endif %}
+                                        <span class="status-badge {% if expense.status == 'Approved' %}badge-available{% elif expense.status == 'Rejected' %}badge-maint{% else %}badge-trip{% endif %}">{% if expense.status == 'Pending' %}Pending review{% else %}{{ expense.status }}{% endif %}</span>
+                                        {% if expense.status != 'Pending' and expense.reviewed_at %}
+                                        <span class="expense-secondary">Reviewed {{ expense.reviewed_at }}{% if expense.reviewer_name or expense.reviewer_email %} by {{ expense.reviewer_name or expense.reviewer_email }}{% endif %}</span>
+                                        {% endif %}
+                                    </div>
+                                    {% if can_review and expense.status == 'Pending' %}
+                                    <div class="expense-review-actions">
+                                        <form action="{{ url_for('review_expense', id=expense.expense_id) }}" method="POST">
+                                            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                                            <input type="hidden" name="status" value="Approved">
+                                            <button type="submit" class="link-button">Approve</button>
+                                        </form>
+                                        <form action="{{ url_for('review_expense', id=expense.expense_id) }}" method="POST" onsubmit="return confirm('Reject expense #{{ expense.expense_id }}?');">
+                                            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                                            <input type="hidden" name="status" value="Rejected">
+                                            <button type="submit" class="link-button danger-link">Reject</button>
+                                        </form>
+                                    </div>
+                                    {% endif %}
+                                    {% if expense.corrections %}
+                                    <details class="correction-history">
+                                        <summary>{{ expense.corrections|length }} correction{{ '' if expense.corrections|length == 1 else 's' }} recorded</summary>
+                                        <ul>
+                                            {% for correction in expense.corrections %}
+                                            <li>{{ correction.changed_at }}: {{ '%.2f'|format(correction.old_amount) }} → {{ '%.2f'|format(correction.new_amount) }} by {{ correction.changed_by_name or correction.changed_by_email or 'Unknown' }} — {{ correction.reason }}</li>
+                                            {% endfor %}
+                                        </ul>
+                                    </details>
+                                    {% endif %}
+                                    {% if expense.can_correct %}
+                                    <details class="correct-amount-details">
+                                        <summary>Correct amount</summary>
+                                        {% if expense.status == 'Approved' %}
+                                        <p class="expense-secondary">{% if can_review %}Your correction will be approved immediately and included in P/L.{% else %}Your correction will return this expense to Pending review and wait for admin review.{% endif %}</p>
+                                        {% endif %}
+                                        <form action="{{ url_for('correct_expense_amount', id=expense.expense_id) }}" method="POST" class="amount-correction-form">
+                                            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                                            <label for="expense-correction-amount-{{ expense.expense_id }}">Correct amount</label>
+                                            <input id="expense-correction-amount-{{ expense.expense_id }}" type="number" name="amount" min="0.01" max="100000000" step="0.01" value="{{ '%.2f'|format(expense.amount) }}" required>
+                                            <label for="expense-correction-reason-{{ expense.expense_id }}">Why is it being corrected?</label>
+                                            <input id="expense-correction-reason-{{ expense.expense_id }}" type="text" name="reason" minlength="5" maxlength="300" placeholder="Short explanation required" required>
+                                            <button type="submit" class="link-button">Save correction</button>
+                                        </form>
+                                    </details>
+                                    {% endif %}
+                                </article>
+                                {% endfor %}
+                            </div>
+                        </details>
+                    </td>
+                    <td>{{ '%.2f'|format(trip.approved_total) }}</td>
+                    <td>{{ '%.2f'|format(trip.pending_total) }}</td>
+                    <td>{{ '%.2f'|format(trip.total) }}</td>
+                </tr>
+                {% else %}
+                <tr><td colspan="5" class="user-empty-state">No expense records yet. Record the first trip expense above.</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    </details>
+</div>
+{% endblock %}

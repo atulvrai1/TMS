@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+
+{% block title %}Maintenance — FleetFlow{% endblock %}
+{% block breadcrumb %}Operations / Maintenance{% endblock %}
+
+{% block content_dashboard %}
+<div class="dashboard-page">
+    <div class="panel-header" style="margin-bottom: 2rem;">
+        <h1 class="dashboard-title">Maintenance</h1>
+        <p class="dashboard-subtitle">Review service history and maintenance costs across the fleet.</p>
+    </div>
+
+    <div class="stats-grid">
+        <div class="stat-tile"><span class="stat-label">Service Records</span><span class="stat-value">{{ counts.total or 0 }}</span></div>
+        <div class="stat-tile"><span class="stat-label">Recorded Cost</span><span class="stat-value">{{ '%.2f'|format(counts.total_cost or 0) }}</span></div>
+    </div>
+
+    <div class="table-container">
+        <table class="fleet-table">
+            <thead><tr><th>Service Date</th><th>Truck</th><th>Service</th><th>Cost</th><th>Notes</th></tr></thead>
+            <tbody>
+                {% for record in maintenance_records %}
+                <tr>
+                    <td>{{ record.service_date }}</td>
+                    <td>{{ record.registration_number or 'Vehicle unavailable' }}</td>
+                    <td>{{ record.service_type }}</td>
+                    <td>{{ '%.2f'|format(record.cost) }}</td>
+                    <td>{{ record.notes or '—' }}</td>
+                </tr>
+                {% else %}
+                <tr><td colspan="5" class="user-empty-state">No maintenance records have been entered yet.</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

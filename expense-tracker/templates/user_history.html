@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+
+{% block title %}User Task History — FleetFlow{% endblock %}
+{% block breadcrumb %}Admin / User History{% endblock %}
+
+{% block content %}
+<div class="dashboard-page">
+    <div class="panel-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem;">
+        <div>
+            <h1 style="font-family: var(--font-display); font-size: 2rem; color: var(--ink); margin: 0;">User Activity Log</h1>
+            <p style="color: var(--ink-muted); margin-top: 0.25rem;">Detailed audit trail for user operations</p>
+        </div>
+        <a href="{{ url_for('admin_users') }}" class="btn-ghost" style="padding: 0.4rem 0.8rem; font-size: 0.8rem;">Back to Users</a>
+    </div>
+
+    <div class="table-container">
+        <table class="fleet-table">
+            <thead style="background: var(--bg-main);">
+                <tr>
+                    <th>Timestamp</th>
+                    <th>Action</th>
+                    <th>Details</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for log in logs %}
+                <tr>
+                    <td style="font-size: 0.8rem; color: var(--ink-muted);">{{ log.timestamp }}</td>
+                    <td style="font-weight: 600;">{{ log.action }}</td>
+                    <td>{{ log.details }}</td>
+                </tr>
+                {% endfor %}
+                {% if not logs %}
+                <tr>
+                    <td colspan="3" style="text-align: center; padding: 3rem; color: var(--ink-muted);">
+                        No activity logs found for this user.
+                    </td>
+                </tr>
+                {% endif %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

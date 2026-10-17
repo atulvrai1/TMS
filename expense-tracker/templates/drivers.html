@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+
+{% block title %}Drivers — FleetFlow{% endblock %}
+{% block breadcrumb %}Operations / Drivers{% endblock %}
+
+{% block content_dashboard %}
+<div class="dashboard-page">
+    <div class="panel-header" style="margin-bottom: 2rem;">
+        <div>
+            <h1 class="dashboard-title">Driver Registry</h1>
+            <p class="dashboard-subtitle">{% if is_admin %}Manage driver records and availability.{% else %}Check driver availability before assigning operational work.{% endif %}</p>
+        </div>
+        {% if is_admin %}
+        <a class="btn-primary finance-action-link" href="{{ url_for('add_driver') }}">Add a driver</a>
+        {% endif %}
+    </div>
+
+    <div class="stats-grid">
+        <div class="stat-tile"><span class="stat-label">All Drivers</span><span class="stat-value">{{ counts.total or 0 }}</span></div>
+        <div class="stat-tile" style="border-left: 4px solid var(--status-available);"><span class="stat-label">Active</span><span class="stat-value">{{ counts.active or 0 }}</span></div>
+        <div class="stat-tile" style="border-left: 4px solid var(--accent-2);"><span class="stat-label">On Leave</span><span class="stat-value">{{ counts.on_leave or 0 }}</span></div>
+        {% if is_admin %}<div class="stat-tile" style="border-left: 4px solid var(--status-maint);"><span class="stat-label">Departed</span><span class="stat-value">{{ counts.terminated or 0 }}</span></div>{% endif %}
+    </div>
+
+    <div class="table-container">
+        <table class="fleet-table">
+            <thead><tr><th>Driver</th>{% if is_admin %}<th>License number</th><th>Contact</th>{% endif %}<th>Status</th>{% if is_admin %}<th>Actions</th>{% endif %}</tr></thead>
+            <tbody>
+                {% for driver in drivers %}
+                <tr>
+                    <td style="font-weight: 500;">{{ driver.name }}</td>
+                    {% if is_admin %}
+                    <td>{{ driver.license_number }}</td>
+                    <td>{{ driver.contact_info or '—' }}</td>
+                    {% endif %}
+                    <td>
+                        {% if is_admin and driver.is_terminated %}
+                        <span class="status-badge badge-maint">Departed</span><br>
+                        <span class="expense-secondary">Since {{ driver.terminated_at }}</span>
+                        {% else %}
+                        <span class="status-badge {% if driver.status == 'Active' %}badge-available{% else %}badge-trip{% endif %}">{{ driver.status }}</span>
+                        {% endif %}
+                    </td>
+                    {% if is_admin %}<td><a href="{{ url_for('edit_driver', id=driver.driver_id) }}">Manage / edit</a></td>{% endif %}
+                </tr>
+                {% else %}
+                <tr><td colspan="{{ 5 if is_admin else 2 }}" class="user-empty-state">No drivers have been added to the registry yet.</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% if not is_admin %}<p class="user-data-note">Driver contact and license details are restricted to protect personal information.</p>{% endif %}
+</div>
+{% endblock %}

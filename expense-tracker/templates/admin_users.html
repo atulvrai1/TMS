@@ -1,0 +1,101 @@
+{% extends "base.html" %}
+
+{% block title %}User Management — FleetFlow{% endblock %}
+{% block breadcrumb %}Admin / User Management{% endblock %}
+
+{% block content_dashboard %}
+<div class="dashboard-page">
+    <div class="panel-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem;">
+        <div>
+            <h1 style="font-family: var(--font-display); font-size: 2rem; color: var(--ink); margin: 0;">Registered Users</h1>
+            <p style="color: var(--ink-muted); margin-top: 0.25rem;">Review account access and retain a record of employment departures</p>
+        </div>
+    </div>
+
+    <div class="table-container">
+        <table class="fleet-table">
+            <thead style="background: var(--bg-main);">
+                <tr>
+                    <th>Full Name</th>
+                    <th>Email Address</th>
+                    <th>Operational Role</th>
+                    <th>Joined Date</th>
+                    <th>Status</th>
+                    <th style="text-align: right;">Action</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for user in users %}
+                <tr>
+                    <td style="font-weight: 500;">{{ user.full_name or user.email }}</td>
+                    <td>{{ user.email }}</td>
+                    <td>
+                        {% if user.role == 'Admin' %}
+                        <span class="status-badge badge-terminated">Admin</span>
+                        {% elif user.is_approved and not user.is_rejected and not user.is_terminated and user.user_id != current_user_id %}
+                        <form action="{{ url_for('update_user_job_role', id=user.user_id) }}" method="POST" class="role-assignment-form">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                            <select name="job_role" aria-label="Operational role for {{ user.email }}">
+                                {% for role_option in ('User', 'Dispatcher') %}
+                                <option value="{{ role_option }}" {% if user.job_role == role_option %}selected{% endif %}>{{ role_option }}</option>
+                                {% endfor %}
+                            </select>
+                            <button type="submit" class="link-button">Save</button>
+                        </form>
+                        {% else %}
+                        <span>{{ user.role if user.role == 'Admin' else user.job_role }}</span>
+                        {% endif %}
+                    </td>
+                    <td>{{ user.created_at }}</td>
+                    <td>
+                        {% if user.is_terminated %}
+                        <span class="status-badge badge-terminated">Terminated</span>
+                        {% elif user.is_approved %}
+                        <span class="status-badge badge-available">Approved</span>
+                        {% elif user.is_rejected %}
+                        <span class="status-badge badge-maint">Rejected</span>
+                        {% else %}
+                        <span class="status-badge badge-maint">Pending Approval</span>
+                        {% endif %}
+                    </td>
+                    <td style="text-align: right;">
+                        {% if not user.is_terminated and user.user_id != current_user_id and not (super_admin_email and user.email == super_admin_email) %}
+                        <div class="admin-user-actions">
+                        {% if not user.is_approved and not user.is_rejected %}
+                        <form action="{{ url_for('approve_user', id=user.user_id) }}" method="POST" style="display: inline;">
+                            <button type="submit" class="btn-primary" style="padding: 0.4rem 0.8rem; font-size: 0.8rem; cursor: pointer; border: none;">Approve Access</button>
+                        </form>
+                        <form action="{{ url_for('reject_user', id=user.user_id) }}" method="POST" style="display: inline; margin-left: 0.4rem;">
+                            <button type="submit" class="btn-ghost" style="padding: 0.4rem 0.8rem; font-size: 0.8rem; cursor: pointer; border: 1px solid var(--danger); color: var(--danger);" onclick="return confirm('Reject this registration?')">Reject</button>
+                        </form>
+                        {% endif %}
+                        <details class="terminate-details">
+                            <summary class="terminate-summary">Terminate account</summary>
+                            <form action="{{ url_for('terminate_user', id=user.user_id) }}" method="POST" class="terminate-form" onsubmit="return confirm('Terminate this account? Existing activity will be retained for administrators.');">
+                                <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                                <label for="termination-reason-{{ user.user_id }}">Reason (required)</label>
+                                <input id="termination-reason-{{ user.user_id }}" name="reason" type="text" maxlength="500" minlength="5" placeholder="e.g. Employee left company" required>
+                                <button type="submit" class="btn-terminate">Confirm termination</button>
+                            </form>
+                        </details>
+                        </div>
+                        {% elif user.is_terminated %}
+                        <span class="terminated-at">Terminated {{ user.terminated_at or '' }}</span>
+                        {% else %}
+                        <span style="color: var(--ink-muted);">Your account</span>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+                {% if not users %}
+                <tr>
+                    <td colspan="6" style="text-align: center; padding: 3rem; color: var(--ink-muted);">
+                        No registered users found.
+                    </td>
+                </tr>
+                {% endif %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,145 @@
+{% extends "base.html" %}
+
+{% block title %}Payments — FleetFlow{% endblock %}
+{% block breadcrumb %}Finance / Payments{% endblock %}
+
+{% block content_dashboard %}
+<div class="dashboard-page">
+    <div class="panel-header">
+        <div>
+            <h1 class="dashboard-title">{% if selected_trip_id and due_only %}Outstanding Balance — Trip #{{ selected_trip_id }}{% elif selected_trip_id %}Payment History — Trip #{{ selected_trip_id }}{% elif due_only %}Outstanding Customer Balances{% else %}Customer Payments{% endif %}</h1>
+            <p class="dashboard-subtitle">{% if selected_trip_id %}Review this trip's customer freight charge, payments received, and balance.{% elif due_only %}Review only trips that still have an unpaid customer freight charge.{% else %}A complete record of customer payments, grouped by trip.{% endif %}</p>
+        </div>
+        {% if not due_only %}
+        <a class="btn-primary finance-action-link" href="{{ url_for('trips') }}">Record a payment</a>
+        {% endif %}
+    </div>
+    {% if due_only %}
+    <div class="dispatch-transparency-note">
+        {% if selected_trip_id %}
+        This view shows only Trip #{{ selected_trip_id }} and its outstanding amount. Other trips and payment histories are hidden to avoid confusion.
+        {% else %}
+        Showing only trips where the agreed customer freight charge is greater than payments received. Customer names are not currently collected, so use the trip number, route, and truck to identify the account to follow up.
+        {% endif %}
+    </div>
+    <p class="admin-section-link"><a href="{{ url_for('payments', due='1') }}">Show all trips with outstanding balances →</a> · <a href="{{ url_for('payments') }}">Show payment balances for all trips →</a></p>
+    {% endif %}
+
+    <div class="stats-grid">
+        {% if due_only %}
+        <div class="stat-tile"><span class="stat-label">{% if selected_trip_id %}Trip with outstanding balance{% else %}Trips with outstanding balances{% endif %}</span><span class="stat-value">{{ trip_totals|length }}</span></div>
+        <div class="stat-tile financial-result"><span class="stat-label">{% if selected_trip_id %}Trip balance due{% else %}Total outstanding{% endif %}</span><span class="stat-value">{{ '%.2f'|format(outstanding_due_total) }}</span></div>
+        {% else %}
+        <div class="stat-tile"><span class="stat-label">{% if selected_trip_id %}Trip with payments{% else %}Trips with payments{% endif %}</span><span class="stat-value">{{ totals.trip_count }}</span></div>
+        <div class="stat-tile financial-result"><span class="stat-label">{% if selected_trip_id %}Received for this trip{% else %}Total received{% endif %}</span><span class="stat-value">{{ '%.2f'|format(totals.amount_received) }}</span></div>
+        {% if outstanding_due_total > 0 %}
+        <a class="stat-tile stat-tile-link" href="{{ url_for('payments', due='1', trip=selected_trip_id) if selected_trip_id else url_for('payments', due='1') }}" aria-label="View outstanding balances">
+            <span class="stat-label">{% if selected_trip_id %}Trip balance due{% else %}Total balance due across trips{% endif %} · View →</span>
+            <span class="stat-value">{{ '%.2f'|format(outstanding_due_total) }}</span>
+        </a>
+        {% else %}
+        <div class="stat-tile"><span class="stat-label">{% if selected_trip_id %}Trip balance due{% else %}Total balance due across trips{% endif %}</span><span class="stat-value">{{ '%.2f'|format(outstanding_due_total) }}</span></div>
+        {% endif %}
+        {% endif %}
+    </div>
+
+    <section class="payment-history" aria-labelledby="payment-history-heading">
+        <h2 class="admin-section-title" id="payment-history-heading">{% if selected_trip_id and due_only %}Outstanding amount for Trip #{{ selected_trip_id }}{% elif selected_trip_id %}Payment history for Trip #{{ selected_trip_id }}{% elif due_only %}Trips with balance due{% else %}Payments by trip{% endif %}</h2>
+        <p class="financial-definition">{% if due_only %}Customer freight charge minus payments received = balance due. Only trips with an outstanding balance are shown.{% else %}Each trip appears once. Expand its payment history to see individual receipts and any amount corrections.{% endif %}</p>
+        <div class="table-container">
+            <table class="fleet-table">
+                {% if due_only %}
+                <thead><tr><th>Trip / route</th><th>Truck</th><th>Customer freight charge</th><th>Received</th><th>Payment status</th><th>Balance due</th>{% if can_record_payments %}<th>Record payment</th>{% endif %}</tr></thead>
+                {% else %}
+                <thead><tr><th>Trip / route</th><th>Truck</th><th>Customer freight charge</th><th>Received</th><th>Payment status</th><th>Balance due</th><th>Payment history</th></tr></thead>
+                {% endif %}
+                <tbody>
+                    {% for trip in trip_totals %}
+                    {% set remaining = trip.balance_due %}
+                    <tr id="trip-{{ trip.trip_id }}">
+                        <td>
+                            <a href="{{ url_for('payments', trip=trip.trip_id) }}">#{{ trip.trip_id }} · {{ trip.route_from }} → {{ trip.route_to }} · View trip history</a><br>
+                            <span class="expense-secondary">Balance due: {{ '%.2f'|format(remaining) }}</span>
+                        </td>
+                        <td>{{ trip.registration_number or 'Unassigned' }}</td>
+                        <td>{{ '%.2f'|format(trip.freight_amount) }}</td>
+                        <td>{{ '%.2f'|format(trip.amount_received) }}</td>
+                        <td><span class="payment-status-badge payment-status-{{ trip.payment_status|lower|replace(' ', '-') }}">{{ trip.payment_status }}</span></td>
+                        <td>
+                            {% if remaining > 0 %}
+                            <a href="{{ url_for('payments', due='1', trip=trip.trip_id) }}">{{ '%.2f'|format(remaining) }} · Follow up</a>
+                            {% else %}
+                            {{ '%.2f'|format(remaining) }}
+                            {% endif %}
+                        </td>
+                        {% if due_only and can_record_payments %}
+                        <td>
+                            <form action="{{ url_for('record_trip_payment', id=trip.trip_id) }}" method="POST" class="due-payment-form">
+                                <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                                <input type="hidden" name="return_to" value="due">
+                                <span class="form-help">Balance due: {{ '%.2f'|format(remaining) }}</span>
+                                <label class="visually-hidden" for="due-payment-amount-{{ trip.trip_id }}">Payment received for trip {{ trip.trip_id }}</label>
+                                <input id="due-payment-amount-{{ trip.trip_id }}" name="amount" type="number" min="0.01" max="{{ '%.2f'|format(remaining) }}" step="0.01" placeholder="Amount received" required>
+                                <label class="visually-hidden" for="due-payment-date-{{ trip.trip_id }}">Payment date for trip {{ trip.trip_id }}</label>
+                                <input id="due-payment-date-{{ trip.trip_id }}" name="payment_date" type="date" value="{{ today }}" required>
+                                <label class="visually-hidden" for="due-payment-reference-{{ trip.trip_id }}">Payment reference for trip {{ trip.trip_id }}</label>
+                                <input id="due-payment-reference-{{ trip.trip_id }}" name="reference" maxlength="200" placeholder="Receipt / reference">
+                                <button type="submit" class="btn-primary">Save payment</button>
+                            </form>
+                        </td>
+                        {% endif %}
+                        {% if not due_only %}
+                        <td>
+                            {% if trip.payments %}
+                            <details class="payment-trip-history">
+                                <summary>{{ trip.payments|length }} payment{{ '' if trip.payments|length == 1 else 's' }} · View history</summary>
+                                <div class="payment-history-list">
+                                    {% for payment in trip.payments %}
+                                    <article class="payment-history-item">
+                                        <div class="payment-history-summary">
+                                            <strong>{{ '%.2f'|format(payment.amount) }}</strong>
+                                            <span>{{ payment.payment_date }} · recorded {{ payment.recorded_at }}</span>
+                                            <span>{{ payment.reference or 'No reference' }} · {{ payment.recorder_name or payment.recorder_email or 'Unknown' }}</span>
+                                        </div>
+                                        {% if payment.corrections %}
+                                        <details class="correction-history">
+                                            <summary>{{ payment.corrections|length }} correction{{ '' if payment.corrections|length == 1 else 's' }} recorded</summary>
+                                            <ul>
+                                                {% for correction in payment.corrections %}
+                                                <li>{{ correction.changed_at }}: {{ '%.2f'|format(correction.old_amount) }} → {{ '%.2f'|format(correction.new_amount) }} by {{ correction.changed_by_name or correction.changed_by_email or 'Unknown' }} — {{ correction.reason }}</li>
+                                                {% endfor %}
+                                            </ul>
+                                        </details>
+                                        {% endif %}
+                                        {% if can_correct_payments %}
+                                        <details class="correct-amount-details">
+                                            <summary>Correct this amount</summary>
+                                            <form action="{{ url_for('correct_payment_amount', id=payment.payment_id) }}" method="POST" class="amount-correction-form">
+                                                <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                                                <label for="payment-correction-amount-{{ payment.payment_id }}">Correct amount</label>
+                                                <input id="payment-correction-amount-{{ payment.payment_id }}" type="number" name="amount" min="0.01" max="100000000" step="0.01" value="{{ '%.2f'|format(payment.amount) }}" required>
+                                                <label for="payment-correction-reason-{{ payment.payment_id }}">Why is it being corrected?</label>
+                                                <input id="payment-correction-reason-{{ payment.payment_id }}" type="text" name="reason" minlength="5" maxlength="300" placeholder="Short explanation required" required>
+                                                <button type="submit" class="link-button">Save correction</button>
+                                            </form>
+                                        </details>
+                                        {% endif %}
+                                    </article>
+                                    {% endfor %}
+                                </div>
+                            </details>
+                            {% else %}
+                            <span class="expense-secondary">No payments received</span>
+                            {% endif %}
+                        </td>
+                        {% endif %}
+                    </tr>
+                    {% else %}
+                    <tr><td colspan="{{ (7 if can_record_payments else 6) if due_only else 7 }}" class="user-empty-state">{% if selected_trip_id and due_only %}Trip #{{ selected_trip_id }} has no outstanding balance or could not be found.{% elif selected_trip_id %}Trip #{{ selected_trip_id }} could not be found.{% elif due_only %}There are no outstanding customer balances.{% else %}No trips are available to show.{% endif %}</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </section>
+</div>
+{% endblock %}

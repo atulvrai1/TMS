@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+
+{% block title %}Audit Log — FleetFlow{% endblock %}
+{% block breadcrumb %}Administration / Audit Log{% endblock %}
+
+{% block content_dashboard %}
+<div class="dashboard-page">
+    <div class="panel-header" style="margin-bottom: 2rem;">
+        <h1 style="font-family: var(--font-display); font-size: 2rem; color: var(--ink); margin: 0;">Audit Log</h1>
+        <p style="color: var(--ink-muted); margin-top: 0.25rem;">A chronological record of account registrations and administrative decisions</p>
+    </div>
+
+    <div class="admin-transparency-note">
+        New account registrations, approvals, and rejections are recorded with the action time, affected account, and administrator who performed the decision.
+        {% set ns = namespace(has_legacy_admin_event=false) %}
+        {% for event in activity %}
+            {% if event.action in ('Account Approved', 'Account Rejected') and not event.actor_email %}
+                {% set ns.has_legacy_admin_event = true %}
+            {% endif %}
+        {% endfor %}
+        {% if ns.has_legacy_admin_event %}
+        Older events may show “Actor not recorded” because previous versions did not capture the administrator identity.
+        {% endif %}
+    </div>
+
+    {% if activity %}
+    <div class="table-container">
+        <table class="fleet-table">
+            <thead>
+                <tr><th>Timestamp</th><th>Action</th><th>Performed by</th><th>Account affected</th><th>Details</th></tr>
+            </thead>
+            <tbody>
+                {% for event in activity %}
+                <tr>
+                    <td>{{ event.timestamp }}</td>
+                    <td>{{ event.action }}</td>
+                    <td>{{ event.actor_name or event.actor_email or ('Self-service registration' if event.action == 'Account Registered' else 'Actor not recorded') }}</td>
+                    <td>{{ event.subject_name or event.subject_email or 'Account unavailable' }}</td>
+                    <td>{{ event.details }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    <p class="admin-audit-limit">Showing up to the latest 200 events.</p>
+    {% else %}
+    <div class="table-container admin-empty-state">No audit events have been recorded yet.</div>
+    {% endif %}
+</div>
+{% endblock %}

@@ -1,0 +1,124 @@
+{% extends "base.html" %}
+
+{% block title %}Admin Overview — FleetFlow{% endblock %}
+{% block breadcrumb %}Administration / Overview{% endblock %}
+
+{% block content_dashboard %}
+<div class="dashboard-page">
+    <div class="panel-header" style="margin-bottom: 2rem;">
+        <h1 style="font-family: var(--font-display); font-size: 2rem; color: var(--ink); margin: 0;">Administration Overview</h1>
+        <p style="color: var(--ink-muted); margin-top: 0.25rem;">A transparent summary of access decisions and fleet operations</p>
+    </div>
+
+    <section aria-labelledby="access-summary-heading">
+        <h2 class="admin-section-title" id="access-summary-heading">Account access</h2>
+        <div class="stats-grid">
+            <div class="stat-tile"><span class="stat-label">All Accounts</span><span class="stat-value">{{ user_counts.total or 0 }}</span></div>
+            <div class="stat-tile" style="border-left: 4px solid var(--status-available);"><span class="stat-label">Approved</span><span class="stat-value">{{ user_counts.approved or 0 }}</span></div>
+            <div class="stat-tile" style="border-left: 4px solid var(--accent-2);"><span class="stat-label">Awaiting Review</span><span class="stat-value">{{ user_counts.pending or 0 }}</span></div>
+            <div class="stat-tile" style="border-left: 4px solid var(--status-maint);"><span class="stat-label">Rejected</span><span class="stat-value">{{ user_counts.rejected or 0 }}</span></div>
+            <div class="stat-tile" style="border-left: 4px solid var(--ink-muted);"><span class="stat-label">Terminated</span><span class="stat-value">{{ user_counts.terminated or 0 }}</span></div>
+        </div>
+        <p class="admin-section-link"><a href="{{ url_for('admin_users') }}">Review registered users and decisions →</a></p>
+    </section>
+
+    <section aria-labelledby="fleet-summary-heading" style="margin-top: 2rem;">
+        <h2 class="admin-section-title" id="fleet-summary-heading">Fleet status</h2>
+        <div class="stats-grid">
+            <div class="stat-tile"><span class="stat-label">Total Vehicles</span><span class="stat-value">{{ fleet_counts.total or 0 }}</span></div>
+            <div class="stat-tile"><span class="stat-label">Available</span><span class="stat-value">{{ fleet_counts.available or 0 }}</span></div>
+            <div class="stat-tile"><span class="stat-label">In Transit</span><span class="stat-value">{{ fleet_counts.in_trip or 0 }}</span></div>
+            <div class="stat-tile"><span class="stat-label">Maintenance</span><span class="stat-value">{{ fleet_counts.maintenance or 0 }}</span></div>
+        </div>
+        <p class="admin-section-link"><a href="{{ url_for('trucks') }}">Open fleet management →</a></p>
+    </section>
+
+    <section class="financial-overview" aria-labelledby="admin-financial-heading">
+        <h2 class="admin-section-title" id="admin-financial-heading">Overall fleet P/L — all trips</h2>
+        <p class="financial-definition">
+            Net P/L = freight charges − approved trip expenses. Cash P/L = payments received − approved trip expenses.
+            Expenses awaiting admin review are shown separately and excluded from profit until approved.
+        </p>
+        <div class="stats-grid">
+            <div class="stat-tile"><span class="stat-label">Freight charges</span><span class="stat-value">{{ '%.2f'|format(finance_summary.freight_total) }}</span></div>
+            <div class="stat-tile"><span class="stat-label">Payments received</span><span class="stat-value">{{ '%.2f'|format(finance_summary.received_total) }}</span></div>
+            <a class="stat-tile stat-tile-link" href="{{ url_for('payments', due='1') }}" aria-label="View trips with customer balances due">
+                <span class="stat-label">Customer balance due · View trips →</span>
+                <span class="stat-value">{{ '%.2f'|format(finance_summary.balance_due_total) }}</span>
+            </a>
+            <a class="stat-tile stat-tile-link" href="{{ url_for('expenses', status='Approved') }}#expense-history" aria-label="View all approved expense records">
+                <span class="stat-label">Approved expenses · View history →</span>
+                <span class="stat-value">{{ '%.2f'|format(finance_summary.approved_expenses_total) }}</span>
+            </a>
+            <div class="stat-tile financial-result"><span class="stat-label">Net P/L (charged)</span><span class="stat-value">{{ '%.2f'|format(finance_summary.profit_loss_total) }}</span></div>
+            <div class="stat-tile financial-result"><span class="stat-label">Cash P/L (received)</span><span class="stat-value">{{ '%.2f'|format(finance_summary.cash_profit_loss_total) }}</span></div>
+            {% if finance_summary.pending_expenses_total > 0 %}
+            <a class="stat-tile stat-tile-link" href="{{ url_for('expenses', status='Pending') }}#expense-history" aria-label="Review expenses awaiting admin approval">
+                <span class="stat-label">Awaiting admin review · View records →</span>
+                <span class="stat-value">{{ '%.2f'|format(finance_summary.pending_expenses_total) }}</span>
+            </a>
+            {% else %}
+            <div class="stat-tile"><span class="stat-label">Awaiting admin review</span><span class="stat-value">{{ '%.2f'|format(finance_summary.pending_expenses_total) }}</span></div>
+            {% endif %}
+        </div>
+        <h3 class="admin-section-title" style="margin-top: 1.5rem;">Trip P/L breakdown</h3>
+        <div class="table-container">
+            <table class="fleet-table">
+                <thead><tr><th>Trip</th><th>Status</th><th>Customer freight charge</th><th>Received</th><th>Balance due</th><th>Approved trip expenses</th><th>Net P/L</th><th>Cash P/L</th></tr></thead>
+                <tbody>
+                    {% for trip in trip_finances %}
+                    <tr>
+                        <td>#{{ trip.trip_id }}<br><span class="expense-secondary">{{ trip.route_from }} → {{ trip.route_to }}</span></td>
+                        <td>{{ trip.status }}</td>
+                        <td>{{ '%.2f'|format(trip.freight_amount) }}</td>
+                        <td>{{ '%.2f'|format(trip.amount_received) }}</td>
+                        <td>
+                            {% if trip.balance_due > 0 %}
+                            <a href="{{ url_for('payments', due='1', trip=trip.trip_id) }}" aria-label="View outstanding balance for trip {{ trip.trip_id }}">{{ '%.2f'|format(trip.balance_due) }}</a>
+                            {% else %}
+                            {{ '%.2f'|format(trip.balance_due) }}
+                            {% endif %}
+                        </td>
+                        <td><a href="{{ url_for('expenses', trip=trip.trip_id) }}#expense-history" aria-label="View all expense history for trip {{ trip.trip_id }}">{{ '%.2f'|format(trip.approved_expenses) }} · View</a>{% if trip.pending_expenses %}<br><a class="expense-secondary" href="{{ url_for('expenses', trip=trip.trip_id, status='Pending') }}#expense-history" aria-label="View pending expenses for trip {{ trip.trip_id }}">{{ '%.2f'|format(trip.pending_expenses) }} pending · View</a>{% endif %}</td>
+                        <td class="{% if trip.profit_loss > 0 %}profit-loss-positive{% elif trip.profit_loss < 0 %}profit-loss-negative{% endif %}">{{ '%.2f'|format(trip.profit_loss) }}</td>
+                        <td class="{% if trip.cash_profit_loss > 0 %}profit-loss-positive{% elif trip.cash_profit_loss < 0 %}profit-loss-negative{% endif %}">{{ '%.2f'|format(trip.cash_profit_loss) }}</td>
+                    </tr>
+                    {% else %}
+                    <tr><td colspan="8" class="user-empty-state">No trips to include in the P/L summary.</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        <p class="admin-section-link"><a href="{{ url_for('expenses') }}">Open expenses and review trip costs →</a> · <a href="{{ url_for('trips') }}">Record customer payments →</a></p>
+        {% if finance_summary.trip_count > trip_finances|length %}
+        <p class="admin-audit-limit">Showing {{ trip_finances|length }} of {{ finance_summary.trip_count }} trips.</p>
+        {% endif %}
+    </section>
+
+    <section aria-labelledby="recent-activity-heading" style="margin-top: 2rem;">
+        <div class="panel-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+            <h2 class="admin-section-title" id="recent-activity-heading">Recent activity</h2>
+            <a href="{{ url_for('admin_audit') }}">View full audit log →</a>
+        </div>
+        {% if recent_activity %}
+        <div class="table-container">
+            <table class="fleet-table">
+                <thead><tr><th>Time</th><th>Action</th><th>Performed by</th><th>Account affected</th></tr></thead>
+                <tbody>
+                    {% for event in recent_activity %}
+                    <tr>
+                        <td>{{ event.timestamp }}</td>
+                        <td>{{ event.action }}</td>
+                        <td>{{ event.actor_name or event.actor_email or ('Self-service registration' if event.action == 'Account Registered' else 'Actor not recorded') }}</td>
+                        <td>{{ event.subject_name or event.subject_email or 'Account unavailable' }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div class="table-container admin-empty-state">No activity has been recorded yet.</div>
+        {% endif %}
+    </section>
+</div>
+{% endblock %}

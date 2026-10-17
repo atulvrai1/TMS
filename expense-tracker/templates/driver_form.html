@@ -1,0 +1,103 @@
+{% extends "base.html" %}
+
+{% block title %}{{ 'Add' if not driver else 'Edit' }} Driver — FleetFlow{% endblock %}
+{% block breadcrumb %}Administration / Drivers{% endblock %}
+
+{% block content_dashboard %}
+<div class="dashboard-page">
+    <div class="panel-header">
+        <div>
+            <h1 class="dashboard-title">{{ 'Add driver' if not driver else 'Edit driver' }}</h1>
+            <p class="dashboard-subtitle">Driver registry details are managed by administrators.</p>
+        </div>
+    </div>
+    <section class="dispatch-panel">
+        <form action="{% if driver %}{{ url_for('edit_driver', id=driver.driver_id) }}{% else %}{{ url_for('add_driver') }}{% endif %}" method="POST" class="dispatch-form">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+            <div class="form-group">
+                <label for="name">Driver name</label>
+                <input id="name" name="name" type="text" class="form-input" value="{{ driver.name if driver else '' }}" maxlength="120" required>
+            </div>
+            <div class="form-group">
+                <label for="license_number">License number</label>
+                <input id="license_number" name="license_number" type="text" class="form-input" value="{{ driver.license_number if driver else '' }}" maxlength="80" required>
+            </div>
+            <div class="form-group">
+                <label for="contact_info">Contact details</label>
+                <input id="contact_info" name="contact_info" type="text" class="form-input" value="{{ driver.contact_info if driver else '' }}" maxlength="200" placeholder="Phone or other contact">
+            </div>
+            <div class="form-group">
+                <label for="status">Availability</label>
+                <select id="status" name="status" class="form-input" required>
+                    <option value="Active" {% if not driver or (not driver.is_terminated and driver.status == 'Active') %}selected{% endif %}>Active</option>
+                    <option value="On Leave" {% if driver and not driver.is_terminated and driver.status == 'On Leave' %}selected{% endif %}>On Leave</option>
+                    {% if driver %}<option value="Departed" {% if driver.is_terminated %}selected{% endif %}>Departed</option>{% endif %}
+                </select>
+            </div>
+            {% if driver %}
+            <div class="form-group" id="termination-reason-group">
+                <label for="termination_reason">Departure reason</label>
+                <input id="termination_reason" name="termination_reason" type="text" class="form-input" value="{{ driver.termination_reason or '' }}" minlength="5" maxlength="300" placeholder="Required when status is Departed">
+                <span class="form-help">Changing status to Departed retains this driver’s documents and trip history.</span>
+            </div>
+            {% endif %}
+            <div class="form-actions">
+                <button type="submit" class="btn-primary">Save driver record</button>
+                <a class="btn-ghost" href="{{ url_for('drivers') }}">Cancel</a>
+            </div>
+        </form>
+    </section>
+    {% if driver %}
+    <section class="dispatch-panel driver-documents-panel">
+        <h2 class="admin-section-title">Government documents</h2>
+        <p class="financial-definition">Store official driver records such as a driving license, Aadhaar card, government ID, tax document, or address proof. Files are private and only administrators can access them. Accepted formats: PDF, JPG, PNG; maximum 10 MB per file.</p>
+        <form action="{{ url_for('upload_driver_document', id=driver.driver_id) }}" method="POST" enctype="multipart/form-data" class="driver-document-form">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+            <div class="form-group">
+                <label for="document_type">Document type</label>
+                <select id="document_type" name="document_type" class="form-input" required>
+                    {% for document_type in ('Driving license', 'Aadhaar card', 'Government ID', 'Tax document', 'Address proof', 'Other') %}
+                    <option value="{{ document_type }}">{{ document_type }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="form-group">
+                <label for="document">Choose file</label>
+                <input id="document" name="document" type="file" accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png" required>
+            </div>
+            <button type="submit" class="btn-primary">Upload document</button>
+        </form>
+        <h3 class="admin-section-title">Saved documents</h3>
+        {% if documents %}
+        <ul class="driver-document-list">
+            {% for document in documents %}
+            <li>
+                <span><strong>{{ document.document_type }}</strong> · {{ document.original_name }} · {{ (document.file_size / 1048576)|round(2) }} MB · uploaded {{ document.uploaded_at }}</span>
+                <a href="{{ url_for('download_driver_document', document_id=document.document_id) }}">Download</a>
+            </li>
+            {% endfor %}
+        </ul>
+        {% else %}
+        <p class="account-help">No government documents have been uploaded for this driver.</p>
+        {% endif %}
+    </section>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block scripts %}
+{% if driver %}
+<script>
+    const driverStatus = document.getElementById("status");
+    const terminationReasonGroup = document.getElementById("termination-reason-group");
+    const terminationReason = document.getElementById("termination_reason");
+    const updateTerminationReason = () => {
+        const isDeparted = driverStatus.value === "Departed";
+        terminationReasonGroup.hidden = !isDeparted;
+        terminationReason.required = isDeparted;
+    };
+    driverStatus.addEventListener("change", updateTerminationReason);
+    updateTerminationReason();
+</script>
+{% endif %}
+{% endblock %}

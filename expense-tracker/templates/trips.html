@@ -1,0 +1,168 @@
+{% extends "base.html" %}
+
+{% block title %}Trips — FleetFlow{% endblock %}
+{% block breadcrumb %}Operations / Trips{% endblock %}
+
+{% block content_dashboard %}
+<div class="dashboard-page">
+    <div class="panel-header">
+    <div>
+        <h1 class="dashboard-title">Trips & Dispatch</h1>
+        <p class="dashboard-subtitle">Plan trips, follow dispatch progress, and see what each trip earns and spends.</p>
+    </div>
+    </div>
+
+    {% if can_dispatch %}
+    <details class="dispatch-panel" open>
+    <summary class="dispatch-panel-summary">Plan a trip</summary>
+    <p class="account-help">Choose the route, planned date, truck, driver, and agreed customer freight charge. Enter all amounts in your business currency.</p>
+    {% if available_trucks and available_drivers %}
+    <form action="{{ url_for('create_trip') }}" method="POST" class="dispatch-form">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <div class="form-group">
+            <label for="route_from">Pickup / origin</label>
+            <input class="form-input" id="route_from" name="route_from" maxlength="120" placeholder="Where the load starts" required>
+        </div>
+        <div class="form-group">
+            <label for="route_to">Delivery / destination</label>
+            <input class="form-input" id="route_to" name="route_to" maxlength="120" placeholder="Where the load is delivered" required>
+        </div>
+        <div class="form-group">
+            <label for="start_date">Planned start date</label>
+            <input class="form-input" type="date" id="start_date" name="start_date" required>
+        </div>
+        <div class="form-group">
+            <label for="freight_amount">Customer freight charge</label>
+            <input class="form-input" type="number" id="freight_amount" name="freight_amount" min="0.01" max="100000000" step="0.01" placeholder="Agreed amount" required>
+        </div>
+        <div class="form-group">
+            <label for="truck_id">Available truck</label>
+            <select class="form-input" id="truck_id" name="truck_id" required>
+                <option value="">Select a truck</option>
+                {% for truck in available_trucks %}
+                <option value="{{ truck.truck_id }}">{{ truck.registration_number }} — {{ truck.model }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="form-group">
+            <label for="driver_id">Active driver</label>
+            <select class="form-input" id="driver_id" name="driver_id" required>
+                <option value="">Select a driver</option>
+                {% for driver in available_drivers %}
+                <option value="{{ driver.driver_id }}">{{ driver.name }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <button type="submit" class="btn-primary dispatch-submit">Schedule trip</button>
+    </form>
+    {% else %}
+    <p class="account-help">A trip can be scheduled when at least one truck is available and one driver is active and unassigned.</p>
+    {% endif %}
+    </details>
+    {% endif %}
+
+    <div class="dispatch-transparency-note">
+    Trip status and odometer readings are entered manually (not live GPS). Enter driver spend under Expenses; approved costs are counted in trip P/L. Record customer payments on this page or view the full ledger in Payments.
+    </div>
+    <div class="trip-page-links">
+        <a class="btn-ghost" href="{{ url_for('expenses') }}">Record / review expenses</a>
+        <a class="btn-ghost" href="{{ url_for('payments') }}">View all payments</a>
+    </div>
+
+    <div class="stats-grid">
+        <div class="stat-tile"><span class="stat-label">All Trips</span><span class="stat-value">{{ counts.total or 0 }}</span></div>
+        <div class="stat-tile" style="border-left: 4px solid var(--status-trip);"><span class="stat-label">Scheduled / In Progress</span><span class="stat-value">{{ counts.active or 0 }}</span></div>
+        <div class="stat-tile" style="border-left: 4px solid var(--status-available);"><span class="stat-label">Completed</span><span class="stat-value">{{ counts.completed or 0 }}</span></div>
+    </div>
+
+    <div class="table-container">
+        <table class="fleet-table">
+            <thead><tr><th>Trip</th><th>Route</th><th>Truck</th><th>Driver</th><th>Trip finances</th><th>Start</th><th>End</th><th>Status</th></tr></thead>
+            <tbody>
+                {% for trip in trips %}
+                {% set trip_due = trip.freight_amount - trip.amount_received %}
+                <tr>
+                    <td>#{{ trip.trip_id }}</td>
+                    <td>{{ trip.route_from }} → {{ trip.route_to }}</td>
+                    <td>{{ trip.registration_number or 'Unassigned' }}</td>
+                    <td>{{ trip.driver_name or 'Unassigned' }}</td>
+                    <td class="trip-finances">
+                        <div><span>Customer freight charge:</span> {{ '%.2f'|format(trip.freight_amount) }}</div>
+                        <div><span>Received:</span> {{ '%.2f'|format(trip.amount_received) }}</div>
+                        <div><span>Payment status:</span> <span class="payment-status-badge {% if trip_due <= 0 %}payment-status-paid{% elif trip.amount_received > 0 %}payment-status-partially-paid{% else %}payment-status-due{% endif %}">{% if trip_due <= 0 %}Paid{% elif trip.amount_received > 0 %}Partially paid{% else %}Due{% endif %}</span></div>
+                        <div><span>Balance due:</span> <a href="{{ url_for('payments', trip=trip.trip_id) }}">{{ '%.2f'|format([trip_due, 0]|max) }} · View history</a></div>
+                        <div><span>Approved trip expenses:</span> <a href="{{ url_for('expenses', trip=trip.trip_id) }}#expense-history">{{ '%.2f'|format(trip.approved_expenses) }} · View</a></div>
+                        {% if trip.pending_expenses > 0 %}
+                        <div><span>Pending review:</span> <a href="{{ url_for('expenses', trip=trip.trip_id, status='Pending') }}#expense-history">{{ '%.2f'|format(trip.pending_expenses) }} · View</a></div>
+                        {% endif %}
+                        <div><span>Trip margin:</span> <span class="{% if trip.freight_amount - trip.approved_expenses > 0 %}profit-loss-positive{% elif trip.freight_amount - trip.approved_expenses < 0 %}profit-loss-negative{% endif %}">{{ '%.2f'|format(trip.freight_amount - trip.approved_expenses) }}</span></div>
+                        <div><a href="{{ url_for('payments', trip=trip.trip_id) }}">View payment history →</a></div>
+                        {% if can_dispatch %}
+                        <details class="trip-freight-edit">
+                            <summary>Update customer freight charge</summary>
+                            <form action="{{ url_for('update_trip_freight', id=trip.trip_id) }}" method="POST" class="trip-payment-form">
+                                <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                                <label class="visually-hidden" for="freight-amount-{{ trip.trip_id }}">Freight charge for trip {{ trip.trip_id }}</label>
+                                <input id="freight-amount-{{ trip.trip_id }}" name="freight_amount" type="number" min="0.01" max="100000000" step="0.01" value="{{ '%.2f'|format(trip.freight_amount) }}" required>
+                                <button type="submit" class="link-button">Save charge</button>
+                            </form>
+                        </details>
+                        {% endif %}
+                        {% if can_dispatch and trip_due > 0 %}
+                        <form action="{{ url_for('record_trip_payment', id=trip.trip_id) }}" method="POST" class="trip-payment-form">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                            <span class="form-help">Balance due: {{ '%.2f'|format(trip_due) }}</span>
+                            <label class="visually-hidden" for="payment-amount-{{ trip.trip_id }}">Payment amount for trip {{ trip.trip_id }}</label>
+                            <input id="payment-amount-{{ trip.trip_id }}" name="amount" type="number" min="0.01" max="{{ '%.2f'|format(trip_due) }}" step="0.01" placeholder="Amount received" required>
+                            <label class="visually-hidden" for="payment-date-{{ trip.trip_id }}">Payment date for trip {{ trip.trip_id }}</label>
+                            <input id="payment-date-{{ trip.trip_id }}" name="payment_date" type="date" value="{{ today }}" required>
+                            <label class="visually-hidden" for="payment-reference-{{ trip.trip_id }}">Payment reference for trip {{ trip.trip_id }}</label>
+                            <input id="payment-reference-{{ trip.trip_id }}" name="reference" maxlength="200" placeholder="Receipt / reference">
+                            <button type="submit" class="link-button">Record payment</button>
+                        </form>
+                        {% endif %}
+                    </td>
+                    <td>{{ trip.start_date }}</td>
+                    <td>{{ trip.end_date or '—' }}</td>
+                    <td>
+                        <span class="status-badge {% if trip.status == 'Completed' %}badge-available{% elif trip.status == 'Cancelled' %}badge-maint{% else %}badge-trip{% endif %}">{{ trip.status }}</span>
+                        {% if can_dispatch and trip.status in ('Scheduled', 'In Progress') %}
+                        <div class="trip-actions">
+                            {% if trip.status == 'Scheduled' %}
+                            <form action="{{ url_for('update_trip_status', id=trip.trip_id) }}" method="POST" class="trip-action-form">
+                                <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                                <input type="hidden" name="status" value="In Progress">
+                                <label for="start-odometer-{{ trip.trip_id }}">Dispatch odometer</label>
+                                <input id="start-odometer-{{ trip.trip_id }}" type="number" min="0" step="1" name="odometer" placeholder="Start km" required>
+                                <button type="submit" class="link-button">Dispatch</button>
+                            </form>
+                            <form action="{{ url_for('update_trip_status', id=trip.trip_id) }}" method="POST" onsubmit="return confirm('Cancel scheduled trip #{{ trip.trip_id }}?');">
+                                <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                                <input type="hidden" name="status" value="Cancelled">
+                                <button type="submit" class="link-button danger-link">Cancel</button>
+                            </form>
+                            {% else %}
+                            <form action="{{ url_for('update_trip_status', id=trip.trip_id) }}" method="POST" class="trip-action-form">
+                                <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                                <input type="hidden" name="status" value="Completed">
+                                <label for="end-odometer-{{ trip.trip_id }}">Return odometer</label>
+                                <input id="end-odometer-{{ trip.trip_id }}" type="number" min="0" step="1" name="odometer" placeholder="End km" required>
+                                <button type="submit" class="link-button">Complete trip</button>
+                            </form>
+                            {% endif %}
+                        </div>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% else %}
+                <tr><td colspan="8" class="user-empty-state">No trips are scheduled yet.</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <section class="recent-trip-payments">
+        <a href="{{ url_for('payments') }}">Open the complete payment ledger →</a>
+    </section>
+</div>
+{% endblock %}

@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}FleetFlow{% endblock %}</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    {% block head %}{% endblock %}
+</head>
+<body class="{{ 'dashboard-body' if block_content == 'dashboard' else '' }}">
+    {% if block_content == 'dashboard' %}
+    <div class="dashboard-layout">
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <span class="brand-icon">🚛</span>
+                <span class="brand-name">FleetFlow</span>
+            </div>
+            <nav class="sidebar-nav">
+                {% if session.get('is_admin') or session.get('role') == 'Admin' %}
+                <span class="nav-section-label">Administration</span>
+                <a href="{{ url_for('admin_dashboard') }}" class="nav-item{% if request.endpoint == 'admin_dashboard' %} active{% endif %}"><span>▦</span> Overview</a>
+                <a href="{{ url_for('trucks') }}" class="nav-item{% if request.endpoint in ('trucks', 'add_truck', 'edit_truck', 'delete_truck') %} active{% endif %}"><span>🚚</span> Trucks</a>
+                <a href="{{ url_for('drivers') }}" class="nav-item{% if request.endpoint in ('drivers', 'add_driver', 'edit_driver', 'upload_driver_document', 'download_driver_document') %} active{% endif %}"><span>♙</span> Drivers</a>
+                <a href="{{ url_for('trips') }}" class="nav-item{% if request.endpoint in ('trips', 'create_trip', 'update_trip_status', 'update_trip_freight', 'record_trip_payment') %} active{% endif %}"><span>↗</span> Trips & Dispatch</a>
+                <a href="{{ url_for('admin_users') }}" class="nav-item{% if request.endpoint in ('admin_users', 'approve_user', 'reject_user') %} active{% endif %}"><span>♙</span> User Access</a>
+                <a href="{{ url_for('expenses') }}" class="nav-item{% if request.endpoint in ('expenses', 'review_expense', 'correct_expense_amount') %} active{% endif %}"><span>₹</span> Expenses</a>
+                <a href="{{ url_for('payments') }}" class="nav-item{% if request.endpoint in ('payments', 'correct_payment_amount') %} active{% endif %}"><span>▤</span> Payments</a>
+                <a href="{{ url_for('admin_audit') }}" class="nav-item{% if request.endpoint == 'admin_audit' %} active{% endif %}"><span>≡</span> Audit Log</a>
+                {% else %}
+                <span class="nav-section-label">Operations</span>
+                <a href="{{ url_for('trucks') }}" class="nav-item{% if request.endpoint in ('trucks', 'add_truck', 'edit_truck') %} active{% endif %}"><span>🚚</span> Fleet View</a>
+                <a href="{{ url_for('drivers') }}" class="nav-item{% if request.endpoint == 'drivers' %} active{% endif %}"><span>♙</span> Drivers</a>
+                <a href="{{ url_for('trips') }}" class="nav-item{% if request.endpoint == 'trips' %} active{% endif %}"><span>↗</span> Trips</a>
+                <a href="{{ url_for('expenses') }}" class="nav-item{% if request.endpoint in ('expenses', 'review_expense', 'correct_expense_amount') %} active{% endif %}"><span>₹</span> Expenses</a>
+                <a href="{{ url_for('payments') }}" class="nav-item{% if request.endpoint in ('payments', 'correct_payment_amount') %} active{% endif %}"><span>▤</span> Payments</a>
+                <a href="{{ url_for('maintenance') }}" class="nav-item{% if request.endpoint == 'maintenance' %} active{% endif %}"><span>⚙</span> Maintenance</a>
+                {% endif %}
+            </nav>
+            <div class="sidebar-footer">
+                <a href="{{ url_for('account') }}" class="nav-item{% if request.endpoint == 'account' %} active{% endif %}"><span>👤</span> My Account</a>
+            </div>
+        </aside>
+
+        <div class="app-container">
+            <nav class="top-bar">
+                <div class="breadcrumbs">
+                    <span style="color: var(--ink-muted);">FleetFlow</span> /
+                    <span style="color: var(--ink); font-weight: 500;">{% block breadcrumb %}Dashboard{% endblock %}</span>
+                </div>
+                <div class="user-profile" style="display: flex; align-items: center; gap: 1rem;">
+                    {% set profile_name = session.get('full_name') or session.get('email', 'Account') %}
+                    <span style="font-size: 0.85rem; color: var(--ink-muted);">{{ profile_name }}</span>
+                    <div aria-label="{{ profile_name }}" title="{{ profile_name }}" style="width: 32px; height: 32px; border-radius: 50%; background: var(--industry-blue); color: white; display: flex; align-items: center; justify-content: center; font-size: 0.8rem; font-weight: 600;">{{ session.get('avatar_initials') or profile_name[:1]|upper }}</div>
+                </div>
+            </nav>
+            <main class="main-content" style="padding: 2rem;">
+                {% with messages = get_flashed_messages(with_categories=true) %}
+                {% if messages %}
+                <div class="flash-messages" role="status" aria-live="polite">
+                    {% for category, message in messages %}
+                    <div class="flash-message {{ category }}">{{ message }}</div>
+                    {% endfor %}
+                </div>
+                {% endif %}
+                {% endwith %}
+                {% block content_dashboard %}{% endblock %}
+            </main>
+        </div>
+    </div>
+    {% else %}
+    <nav class="navbar">
+        <div class="nav-inner">
+            <a href="{{ url_for('landing') }}" class="nav-brand">
+                <span class="brand-icon">🚛</span>
+                <span class="brand-name">FleetFlow</span>
+            </a>
+            <div class="nav-links">
+                <a href="{{ url_for('trucks') }}">Fleet</a>
+                <a href="{{ url_for('login') }}">Sign in</a>
+                <a href="{{ url_for('register') }}" class="nav-cta">Get started</a>
+            </div>
+        </div>
+    </nav>
+    <main class="main-content">
+        {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+        <div class="flash-messages" role="status" aria-live="polite">
+            {% for category, message in messages %}
+            <div class="flash-message {{ category }}">{{ message }}</div>
+            {% endfor %}
+        </div>
+        {% endif %}
+        {% endwith %}
+        {% block content %}{% endblock %}
+    </main>
+    <footer class="footer">
+        <div class="footer-inner">
+            <span class="brand-icon">🚛</span>
+            <span class="footer-name">FleetFlow</span>
+            <p class="footer-copy">Manage your fleet. Optimize your logistics.</p>
+            <div class="footer-links">
+                <div class="footer-link-item">
+                    <a href="{{ url_for('terms') }}">Terms and Conditions</a>
+                    <p class="footer-link-context">By using FleetFlow, you agree to our terms of service.</p>
+                </div>
+                <div class="footer-link-item">
+                    <a href="{{ url_for('privacy') }}">Privacy Policy</a>
+                    <p class="footer-link-context">We value your privacy and protect your operational data.</p>
+                </div>
+            </div>
+        </div>
+    </footer>
+    {% endif %}
+
+    <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+    {% block scripts %}{% endblock %}
+</body>
+</html>
