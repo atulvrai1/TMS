@@ -53,6 +53,23 @@ def init_db():
             conn.execute("ALTER TABLE users ADD COLUMN terminated_at DATETIME")
         if "job_role" not in user_columns:
             conn.execute("ALTER TABLE users ADD COLUMN job_role TEXT NOT NULL DEFAULT 'User'")
+        conn.execute('''
+            CREATE TABLE IF NOT EXISTS password_reset_tokens (
+                reset_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                token_hash TEXT NOT NULL UNIQUE,
+                expires_at DATETIME NOT NULL,
+                created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                used_at DATETIME,
+                requested_by INTEGER,
+                FOREIGN KEY (user_id) REFERENCES users(user_id),
+                FOREIGN KEY (requested_by) REFERENCES users(user_id)
+            )
+        ''')
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_password_reset_user "
+            "ON password_reset_tokens(user_id, expires_at, used_at)"
+        )
 
         # User Logs Table (Audit Trail)
         conn.execute('''

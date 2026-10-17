@@ -61,6 +61,12 @@
                     <td style="text-align: right;">
                         {% if not user.is_terminated and user.user_id != current_user_id and not (super_admin_email and user.email == super_admin_email) %}
                         <div class="admin-user-actions">
+                        {% if user.role == 'User' and user.is_approved and not user.is_rejected %}
+                        <form action="{{ url_for('admin_user_password_reset', id=user.user_id) }}" method="POST">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                            <button type="submit" class="btn-ghost" style="padding: 0.4rem 0.8rem; font-size: 0.8rem;">Send password reset link</button>
+                        </form>
+                        {% endif %}
                         {% if not user.is_approved and not user.is_rejected %}
                         <form action="{{ url_for('approve_user', id=user.user_id) }}" method="POST" style="display: inline;">
                             <button type="submit" class="btn-primary" style="padding: 0.4rem 0.8rem; font-size: 0.8rem; cursor: pointer; border: none;">Approve Access</button>

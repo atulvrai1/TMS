@@ -1,4 +1,5 @@
 import os
+import hashlib
 import re
 import secrets
 import sqlite3
@@ -15,6 +16,7 @@ from werkzeug.utils import secure_filename
 load_dotenv(Path(__file__).resolve().parent / ".env")
 
 from database.db import get_db, init_db, log_activity
+from controller.notification_service import NotificationService
 from controller.access_controller import (
     SUPER_ADMIN_EMAIL,
     UserAccessController,
@@ -23,6 +25,7 @@ from controller.access_controller import (
 )
 
 app = Flask(__name__)
+app.config["PUBLIC_BASE_URL"] = os.environ.get("FLEETFLOW_PUBLIC_URL", "").rstrip("/")
 app.config["MAX_CONTENT_LENGTH"] = 11 * 1024 * 1024
 DRIVER_DOCUMENT_MAX_SIZE = 10 * 1024 * 1024
 DRIVER_DOCUMENT_TYPES = {
@@ -127,6 +130,56 @@ def _store_driver_document(file_storage):
     return original_name, storage_name, len(content)
 
 
+def _issue_password_reset(conn, user, requested_by):
+    token = secrets.token_urlsafe(32)
+    token_hash = hashlib.sha256(token.encode("utf-8")).hexdigest()
+    conn.execute("BEGIN IMMEDIATE")
+    conn.execute(
+        "UPDATE password_reset_tokens SET used_at = CURRENT_TIMESTAMP "
+        "WHERE user_id = ? AND used_at IS NULL",
+        (user["user_id"],)
+    )
+    conn.execute(
+        "INSERT INTO password_reset_tokens (user_id, token_hash, expires_at, requested_by) "
+        "VALUES (?, ?, datetime('now', '+30 minutes'), ?)",
+        (user["user_id"], token_hash, requested_by)
+    )
+    action = (
+        "Admin Password Reset Requested"
+        if requested_by is not None
+        else "Password Reset Requested"
+    )
+    details = (
+        f"Administrator requested a password reset link for {user['email']}."
+        if requested_by is not None
+        else "Requested a password reset link."
+    )
+    conn.execute(
+        "INSERT INTO user_logs (user_id, action, details, actor_user_id) "
+        "VALUES (?, ?, ?, ?)",
+        (user["user_id"], action, details, requested_by)
+    )
+    conn.commit()
+
+    reset_path = url_for("reset_password", token=token)
+    reset_url = (
+        f"{app.config['PUBLIC_BASE_URL']}{reset_path}"
+        if app.config["PUBLIC_BASE_URL"]
+        else request.url_root.rstrip("/") + reset_path
+    )
+    try:
+        NotificationService.send_password_reset_email(user["email"], reset_url)
+    except Exception:
+        conn.execute(
+            "UPDATE password_reset_tokens SET used_at = CURRENT_TIMESTAMP "
+            "WHERE token_hash = ? AND used_at IS NULL",
+            (token_hash,)
+        )
+        conn.commit()
+        raise
+    return token_hash
+
+
 # Initialize database on startup
 with app.app_context():
     init_db()
@@ -143,12 +196,20 @@ def landing():
 
 @app.route("/login", methods=["GET", "POST"])
 def login():
+    session.setdefault("csrf_token", secrets.token_urlsafe(32))
     login_role = request.form.get("login_role", "user") if request.method == "POST" else request.args.get("role", "user")
     login_role = login_role.lower()
     if login_role not in ("user", "admin"):
         login_role = "user"
 
     if request.method == "POST":
+        if not _valid_csrf_token():
+            return render_template(
+                "login.html",
+                error="Your session token is invalid. Reload the page and try again.",
+                login_role=login_role,
+                csrf_token=session["csrf_token"]
+            )
         email = request.form.get("email")
         password = request.form.get("password")
 
@@ -167,14 +228,16 @@ def login():
                 return render_template(
                     "login.html",
                     error="Your registration was rejected. Please contact the administrator.",
-                    login_role=login_role
+                    login_role=login_role,
+                    csrf_token=session["csrf_token"]
                 )
             if user['is_terminated']:
                 conn.close()
                 return render_template(
                     "login.html",
                     error="This account has been terminated. Contact an administrator if you believe this is a mistake.",
-                    login_role=login_role
+                    login_role=login_role,
+                    csrf_token=session["csrf_token"]
                 )
             is_admin = (
                 user['role'] == 'Admin'
@@ -185,7 +248,8 @@ def login():
                 return render_template(
                     "login.html",
                     error=f"These credentials are not valid for {login_role} login.",
-                    login_role=login_role
+                    login_role=login_role,
+                    csrf_token=session["csrf_token"]
                 )
             session['user_id'] = user['user_id']
             session['email'] = user['email']
@@ -201,9 +265,146 @@ def login():
             return redirect(url_for("admin_dashboard" if is_admin else "trucks"))
 
         conn.close()
-        return render_template("login.html", error="Invalid email or password", login_role=login_role)
+        return render_template(
+            "login.html",
+            error="Invalid email or password",
+            login_role=login_role,
+            csrf_token=session["csrf_token"]
+        )
 
-    return render_template("login.html", login_role=login_role)
+    return render_template(
+        "login.html",
+        login_role=login_role,
+        csrf_token=session["csrf_token"]
+    )
+
+
+@app.route("/forgot-password", methods=["GET", "POST"])
+def forgot_password():
+    session.setdefault("csrf_token", secrets.token_urlsafe(32))
+    error = None
+    requested = False
+    if request.method == "POST":
+        if not _valid_csrf_token():
+            error = "Your session token is invalid. Reload the page and try again."
+        else:
+            email = request.form.get("email", "").strip().lower()
+            conn = get_db()
+            user = conn.execute(
+                "SELECT user_id, email FROM users "
+                "WHERE lower(email) = ? AND is_approved = 1 "
+                "AND is_rejected = 0 AND is_terminated = 0",
+                (email,)
+            ).fetchone() if email else None
+            try:
+                if user:
+                    _issue_password_reset(conn, user, None)
+                requested = True
+            except Exception:
+                app.logger.exception("Failed to issue a self-service password reset.")
+                error = "Password recovery is temporarily unavailable. Please contact an administrator."
+            finally:
+                conn.close()
+    return render_template(
+        "forgot_password.html",
+        csrf_token=session["csrf_token"],
+        error=error,
+        requested=requested
+    )
+
+
+@app.route("/reset-password/<token>", methods=["GET", "POST"])
+def reset_password(token):
+    session.setdefault("csrf_token", secrets.token_urlsafe(32))
+    token_hash = hashlib.sha256(token.encode("utf-8")).hexdigest()
+    conn = get_db()
+    reset = conn.execute(
+        "SELECT password_reset_tokens.user_id, users.role "
+        "FROM password_reset_tokens "
+        "JOIN users ON users.user_id = password_reset_tokens.user_id "
+        "WHERE password_reset_tokens.token_hash = ? "
+        "AND password_reset_tokens.used_at IS NULL "
+        "AND password_reset_tokens.expires_at > CURRENT_TIMESTAMP "
+        "AND users.is_approved = 1 AND users.is_rejected = 0 "
+        "AND users.is_terminated = 0",
+        (token_hash,)
+    ).fetchone()
+    conn.close()
+    if not reset:
+        return render_template(
+            "reset_password.html",
+            invalid=True,
+            csrf_token=session["csrf_token"]
+        ), 400
+
+    error = None
+    if request.method == "POST":
+        if not _valid_csrf_token():
+            error = "Your session token is invalid. Reload this page and try again."
+        else:
+            new_password = request.form.get("new_password", "")
+            confirm_password = request.form.get("confirm_password", "")
+            if len(new_password) < 8:
+                error = "Password must be at least 8 characters."
+            elif len(new_password) > 256:
+                error = "Password must be 256 characters or fewer."
+            elif new_password != confirm_password:
+                error = "Password and confirmation do not match."
+
+            if not error:
+                conn = get_db()
+                try:
+                    conn.execute("BEGIN IMMEDIATE")
+                    current_reset = conn.execute(
+                        "SELECT password_reset_tokens.user_id FROM password_reset_tokens "
+                        "JOIN users ON users.user_id = password_reset_tokens.user_id "
+                        "WHERE token_hash = ? AND used_at IS NULL "
+                        "AND expires_at > CURRENT_TIMESTAMP "
+                        "AND users.is_approved = 1 AND users.is_rejected = 0 "
+                        "AND users.is_terminated = 0",
+                        (token_hash,)
+                    ).fetchone()
+                    if not current_reset:
+                        conn.rollback()
+                        error = "This password reset link has expired or has already been used."
+                    else:
+                        conn.execute(
+                            "UPDATE users SET password = ? WHERE user_id = ?",
+                            (generate_password_hash(new_password), current_reset["user_id"])
+                        )
+                        conn.execute(
+                            "UPDATE password_reset_tokens SET used_at = CURRENT_TIMESTAMP "
+                            "WHERE token_hash = ?",
+                            (token_hash,)
+                        )
+                        conn.execute(
+                            "UPDATE password_reset_tokens SET used_at = CURRENT_TIMESTAMP "
+                            "WHERE user_id = ? AND used_at IS NULL",
+                            (current_reset["user_id"],)
+                        )
+                        conn.execute(
+                            "INSERT INTO user_logs (user_id, action, details) "
+                            "VALUES (?, 'Password Reset Completed', 'Reset password using a one-time recovery link.')",
+                            (current_reset["user_id"],)
+                        )
+                        conn.commit()
+                        login_role = "admin" if reset["role"] == "Admin" else "user"
+                        conn.close()
+                        flash("Your password has been reset. Sign in with your new password.", "success")
+                        return redirect(url_for("login", role=login_role))
+                except Exception:
+                    conn.rollback()
+                    raise
+                finally:
+                    if conn:
+                        conn.close()
+
+    return render_template(
+        "reset_password.html",
+        invalid=False,
+        csrf_token=session["csrf_token"],
+        error=error
+    )
 
 
 @app.route("/register", methods=["GET", "POST"])
@@ -1832,6 +2033,37 @@ def admin_users():
         csrf_token=session["csrf_token"],
         block_content='dashboard'
     )
+
+
+@app.route("/admin/users/<int:id>/password-reset", methods=["POST"])
+@admin_required
+def admin_user_password_reset(id):
+    if not _valid_csrf_token():
+        flash("Your session token is invalid. Reload the user list and try again.", "error")
+        return redirect(url_for("admin_users"))
+
+    conn = get_db()
+    user = conn.execute(
+        "SELECT user_id, email, full_name FROM users "
+        "WHERE user_id = ? AND role = 'User' AND is_approved = 1 "
+        "AND is_rejected = 0 AND is_terminated = 0",
+        (id,)
+    ).fetchone()
+    if not user:
+        conn.close()
+        flash("Password reset is available only for active, approved user accounts.", "error")
+        return redirect(url_for("admin_users"))
+    try:
+        _issue_password_reset(conn, user, session["user_id"])
+    except Exception:
+        conn.rollback()
+        app.logger.exception("Administrator password reset email could not be sent.")
+        flash("Could not send a password reset link. Check email configuration and try again.", "error")
+    else:
+        flash(f"A one-time password reset link was sent to {user['email']}.", "success")
+    finally:
+        conn.close()
+    return redirect(url_for("admin_users"))
 
 
 @app.route("/account", methods=["GET", "POST"])
