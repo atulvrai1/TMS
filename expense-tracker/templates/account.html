@@ -25,7 +25,11 @@
                 <dt style="color: var(--ink-muted);">Email</dt>
                 <dd>{{ user.email }}</dd>
                 <dt style="color: var(--ink-muted);">Role</dt>
-                <dd>{{ 'Admin' if user.role == 'Admin' else user.job_role }}</dd>
+                <dd>{{ 'Admin' if user.role == 'Admin' else 'Driver' }}</dd>
+                {% if user.role == 'User' %}
+                <dt style="color: var(--ink-muted);">Driver record</dt>
+                <dd>{{ user.driver_name or 'Not linked — contact an administrator' }}</dd>
+                {% endif %}
                 <dt style="color: var(--ink-muted);">Status</dt>
                 <dd>
                     {% if user.is_rejected %}

@@ -8,7 +8,18 @@ from datetime import date, datetime
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 from pathlib import Path
 
-from flask import Flask, abort, render_template, request, redirect, url_for, session, flash, send_file
+from flask import (
+    Flask,
+    abort,
+    flash,
+    jsonify,
+    redirect,
+    render_template,
+    request,
+    send_file,
+    session,
+    url_for,
+)
 from dotenv import load_dotenv
 from werkzeug.security import check_password_hash, generate_password_hash
 from werkzeug.utils import secure_filename
@@ -90,13 +101,65 @@ def _avatar_initials(full_name, email):
     return email_name[:2].upper() or "A"
 
 
-def _record_user_activity(conn, action, details):
-    user_id = session["user_id"]
+def _record_user_activity(conn, action, details, owner_user_id=None):
     conn.execute(
         "INSERT INTO user_logs (user_id, action, details, actor_user_id) "
         "VALUES (?, ?, ?, ?)",
-        (user_id, action, details, user_id)
+        (owner_user_id or session["user_id"], action, details, session["user_id"])
     )
+
+
+def _is_admin_user():
+    return bool(session.get("is_admin") or session.get("role") == "Admin")
+
+
+def _record_owner_filter(alias, owner_column="owner_user_id"):
+    if session.get("email", "").lower() == SUPER_ADMIN_EMAIL.lower():
+        return "1 = 1", []
+    if _is_admin_user():
+        return (
+            f"({alias}.{owner_column} IN "
+            "(SELECT user_id FROM users WHERE role = 'User') "
+            f"OR {alias}.{owner_column} = ?)",
+            [session["user_id"]]
+        )
+    if alias == "trips":
+        return (
+            f"({alias}.{owner_column} = ? AND {alias}.driver_id = "
+            f"(SELECT driver_id FROM users WHERE user_id = {alias}.{owner_column}))",
+            [session["user_id"]]
+        )
+    return f"{alias}.{owner_column} = ?", [session["user_id"]]
+
+
+def _load_assignable_users(conn):
+    if session.get("email", "").lower() == SUPER_ADMIN_EMAIL.lower():
+        role_filter = ""
+        params = []
+    else:
+        role_filter = "AND (role = 'User' OR user_id = ?) "
+        params = [session["user_id"]]
+    return conn.execute(
+        "SELECT user_id, full_name, email, role, driver_id FROM users "
+        "WHERE is_approved = 1 AND is_rejected = 0 AND is_terminated = 0 "
+        + role_filter
+        + "ORDER BY full_name COLLATE NOCASE, email COLLATE NOCASE",
+        params
+    ).fetchall()
+
+
+def _is_assignable_owner(conn, owner_user_id):
+    owner_scope = ""
+    params = [owner_user_id]
+    if session.get("email", "").lower() != SUPER_ADMIN_EMAIL.lower():
+        owner_scope = "AND (role = 'User' OR user_id = ?) "
+        params.append(session["user_id"])
+    return conn.execute(
+        "SELECT 1 FROM users WHERE user_id = ? AND is_approved = 1 "
+        "AND is_rejected = 0 AND is_terminated = 0 "
+        + owner_scope,
+        params
+    ).fetchone() is not None
 
 
 def _store_driver_document(file_storage):
@@ -135,7 +198,7 @@ def _issue_password_reset(conn, user, requested_by):
     token_hash = hashlib.sha256(token.encode("utf-8")).hexdigest()
     conn.execute("BEGIN IMMEDIATE")
     conn.execute(
-        "UPDATE password_reset_tokens SET used_at = CURRENT_TIMESTAMP "
+        "UPDATE password_reset_tokens SET used_at = CURRENT_TIMESTAMP, admin_reset_url = NULL "
         "WHERE user_id = ? AND used_at IS NULL",
         (user["user_id"],)
     )
@@ -168,7 +231,7 @@ def _issue_password_reset(conn, user, requested_by):
         else request.url_root.rstrip("/") + reset_path
     )
     try:
-        NotificationService.send_password_reset_email(user["email"], reset_url)
+        delivered_by_email = NotificationService.send_password_reset_email(user["email"], reset_url)
     except Exception:
         conn.execute(
             "UPDATE password_reset_tokens SET used_at = CURRENT_TIMESTAMP "
@@ -177,7 +240,19 @@ def _issue_password_reset(conn, user, requested_by):
         )
         conn.commit()
         raise
-    return token_hash
+    delivery_status = "email" if delivered_by_email else "admin_queue"
+    conn.execute(
+        "UPDATE password_reset_tokens SET delivery_status = ?, "
+        "admin_reset_url = CASE "
+        "WHEN ? = 'admin_queue' AND ? IS NULL AND EXISTS "
+        "(SELECT 1 FROM users WHERE users.user_id = password_reset_tokens.user_id "
+        "AND users.is_approved = 1 AND users.is_rejected = 0 "
+        "AND users.is_terminated = 0) THEN ? ELSE NULL END "
+        "WHERE token_hash = ?",
+        (delivery_status, delivery_status, requested_by, reset_url, token_hash)
+    )
+    conn.commit()
+    return token_hash, delivered_by_email, reset_url
 
 
 # Initialize database on startup
@@ -255,6 +330,7 @@ def login():
             session['email'] = user['email']
             session['role'] = user['role']
             session['job_role'] = user['job_role']
+            session['driver_id'] = user['driver_id']
             session['full_name'] = user['full_name']
             session['avatar_initials'] = _avatar_initials(user['full_name'], user['email'])
             session['is_admin'] = bool(is_admin)
@@ -262,7 +338,7 @@ def login():
             conn.commit()
             conn.close()
             flash("Welcome back to FleetFlow!", "success")
-            return redirect(url_for("admin_dashboard" if is_admin else "trucks"))
+            return redirect(url_for("admin_dashboard" if is_admin else "trips"))
 
         conn.close()
         return render_template(
@@ -374,12 +450,12 @@ def reset_password(token):
                         )
                         conn.execute(
                             "UPDATE password_reset_tokens SET used_at = CURRENT_TIMESTAMP "
-                            "WHERE token_hash = ?",
+                            ", admin_reset_url = NULL WHERE token_hash = ?",
                             (token_hash,)
                         )
                         conn.execute(
                             "UPDATE password_reset_tokens SET used_at = CURRENT_TIMESTAMP "
-                            "WHERE user_id = ? AND used_at IS NULL",
+                            ", admin_reset_url = NULL WHERE user_id = ? AND used_at IS NULL",
                             (current_reset["user_id"],)
                         )
                         conn.execute(
@@ -409,36 +485,100 @@ def reset_password(token):
 
 @app.route("/register", methods=["GET", "POST"])
 def register():
+    session.setdefault("csrf_token", secrets.token_urlsafe(32))
+    requested_role = "User"
     if request.method == "POST":
         full_name = request.form.get("full_name", "").strip()
-        email = request.form.get("email")
+        email = request.form.get("email", "").strip().lower()
         password = request.form.get("password")
+        requested_role = request.form.get("requested_role", "User")
 
-        print(f"DEBUG: Registration attempt for email: {email}")
+        if not _valid_csrf_token():
+            return render_template(
+                "register.html",
+                error="Your session token is invalid. Reload the page and try again.",
+                csrf_token=session["csrf_token"],
+                requested_role=requested_role
+            )
 
         if not full_name or not email or not password:
-            return render_template("register.html", error="Full name, email, and password are required")
+            return render_template(
+                "register.html",
+                error="Full name, email, and password are required",
+                csrf_token=session["csrf_token"],
+                requested_role=requested_role
+            )
+        if (
+            len(full_name) > 120
+            or len(email) > 254
+            or not re.fullmatch(r"[^@\s]+@[^@\s]+\.[^@\s]+", email)
+        ):
+            return render_template(
+                "register.html",
+                error="Enter a valid name and email address.",
+                csrf_token=session["csrf_token"],
+                requested_role=requested_role
+            )
+        if len(password) < 8:
+            return render_template(
+                "register.html",
+                error="Password must be at least 8 characters.",
+                csrf_token=session["csrf_token"],
+                requested_role=requested_role
+            )
+        if len(password) > 128:
+            return render_template(
+                "register.html",
+                error="Password must be 128 characters or fewer.",
+                csrf_token=session["csrf_token"],
+                requested_role=requested_role
+            )
+        if requested_role not in ("User", "Admin"):
+            return render_template(
+                "register.html",
+                error="Select a valid account access level.",
+                csrf_token=session["csrf_token"],
+                requested_role="User"
+            )
 
         conn = get_db()
         try:
             cursor = conn.execute(
-                "INSERT INTO users (full_name, email, password, is_approved) VALUES (?, ?, ?, 0)",
-                (full_name, email, generate_password_hash(password))
+                "INSERT INTO users (full_name, email, password, is_approved, requested_role) "
+                "VALUES (?, ?, ?, 0, ?)",
+                (full_name, email, generate_password_hash(password), requested_role)
             )
             user_id = cursor.lastrowid
             conn.commit()
-            log_activity(user_id, "Account Registered", f"User {email} registered.")
-            print(f"DEBUG: Successfully registered {email}")
-        except Exception as e:
-            print(f"DEBUG: Registration error: {e}")
+            log_activity(
+                user_id,
+                "Account Registered",
+                f"User {email} registered requesting {requested_role} access."
+            )
+        except Exception:
+            app.logger.exception("Account registration failed.")
             conn.close()
-            return render_template("register.html", error="Registration failed. Email might already exist.")
+            return render_template(
+                "register.html",
+                error="Registration failed. Email might already exist.",
+                csrf_token=session["csrf_token"],
+                requested_role=requested_role
+            )
         finally:
             conn.close()
 
-        return render_template("register.html", success="Registration successful! Please wait for admin approval.")
+        return render_template(
+            "register.html",
+            success="Registration submitted. An administrator must approve your requested access before you can sign in.",
+            csrf_token=session["csrf_token"],
+            requested_role=requested_role
+        )
 
-    return render_template("register.html")
+    return render_template(
+        "register.html",
+        csrf_token=session["csrf_token"],
+        requested_role=requested_role
+    )
 
 
 @app.route("/logout", methods=["GET", "POST"])
@@ -484,10 +624,14 @@ def privacy():
 @app.route("/trucks")
 @access_required
 def trucks():
+    if not _is_admin_user():
+        abort(403)
     session.setdefault("csrf_token", secrets.token_urlsafe(32))
-    is_admin = bool(session.get("is_admin") or session.get("role") == "Admin")
+    is_admin = _is_admin_user()
     conn = get_db()
-    trucks = conn.execute("SELECT * FROM trucks").fetchall()
+    trucks = conn.execute(
+        "SELECT * FROM trucks ORDER BY registration_number"
+    ).fetchall()
 
     total_trucks = len(trucks)
     available_trucks = len([t for t in trucks if t['status'] == 'Available'])
@@ -508,13 +652,16 @@ def trucks():
 @app.route("/drivers")
 @access_required
 def drivers():
+    if not _is_admin_user():
+        abort(403)
     session.setdefault("csrf_token", secrets.token_urlsafe(32))
-    is_admin = bool(session.get("is_admin") or session.get("role") == "Admin")
+    is_admin = _is_admin_user()
     conn = get_db()
     if is_admin:
         rows = conn.execute(
-            "SELECT driver_id, name, license_number, contact_info, status, "
-            "is_terminated, terminated_at, termination_reason "
+            "SELECT drivers.driver_id, drivers.name, drivers.license_number, "
+            "drivers.contact_info, drivers.status, drivers.is_terminated, "
+            "drivers.terminated_at, drivers.termination_reason "
             "FROM drivers ORDER BY name COLLATE NOCASE"
         ).fetchall()
     else:
@@ -567,7 +714,11 @@ def add_driver():
                 "VALUES (?, ?, ?, ?)",
                 (name, license_number, contact_info or None, status)
             )
-            _record_user_activity(conn, "Driver Added", f"Added driver {name}.")
+            _record_user_activity(
+                conn,
+                "Driver Added",
+                f"Added driver {name}."
+            )
             conn.commit()
         except sqlite3.IntegrityError:
             conn.rollback()
@@ -578,6 +729,8 @@ def add_driver():
         flash(f"Driver {name} added successfully.", "success")
         return redirect(url_for("drivers"))
 
+    conn = get_db()
+    conn.close()
     return render_template(
         "driver_form.html",
         driver=None,
@@ -630,7 +783,6 @@ def edit_driver(id):
             conn.close()
             flash("Enter a departure reason in 5 to 300 characters.", "error")
             return redirect(url_for("edit_driver", id=id))
-
         try:
             conn.execute("BEGIN IMMEDIATE")
             if status in {"On Leave", "Departed"}:
@@ -764,7 +916,9 @@ def upload_driver_document(id):
 def download_driver_document(document_id):
     conn = get_db()
     document = conn.execute(
-        "SELECT storage_name, original_name FROM driver_documents WHERE document_id = ?",
+        "SELECT driver_documents.storage_name, driver_documents.original_name "
+        "FROM driver_documents JOIN drivers ON drivers.driver_id = driver_documents.driver_id "
+        "WHERE driver_documents.document_id = ?",
         (document_id,)
     ).fetchone()
     conn.close()
@@ -795,6 +949,11 @@ def download_driver_document(document_id):
 def trips():
     session.setdefault("csrf_token", secrets.token_urlsafe(32))
     conn = get_db()
+    if not _is_admin_user() and not session.get("driver_id"):
+        conn.close()
+        flash("Your account is not linked to a driver yet. Contact an administrator.", "info")
+        return redirect(url_for("account"))
+    trip_scope, trip_scope_params = _record_owner_filter("trips")
     rows = conn.execute(
         "SELECT trips.trip_id, trips.start_date, trips.end_date, trips.route_from, "
         "trips.route_to, trips.status, trips.freight_amount, drivers.name AS driver_name, "
@@ -810,13 +969,15 @@ def trips():
         "SUM(CASE WHEN status = 'Approved' THEN amount ELSE 0 END) AS approved_expenses, "
         "SUM(CASE WHEN status = 'Pending' THEN amount ELSE 0 END) AS pending_expenses "
         "FROM expenses GROUP BY trip_id) AS costs ON costs.trip_id = trips.trip_id "
-        "ORDER BY trips.trip_id DESC"
+        f"WHERE {trip_scope} ORDER BY trips.trip_id DESC",
+        trip_scope_params
     ).fetchall()
     counts = conn.execute(
         "SELECT COUNT(*) AS total, "
         "SUM(CASE WHEN status IN ('Scheduled', 'In Progress') THEN 1 ELSE 0 END) AS active, "
         "SUM(CASE WHEN status = 'Completed' THEN 1 ELSE 0 END) AS completed "
-        "FROM trips"
+        f"FROM trips WHERE {trip_scope}",
+        trip_scope_params
     ).fetchone()
     active_truck_ids = conn.execute(
         "SELECT DISTINCT truck_id FROM trips WHERE status IN ('Scheduled', 'In Progress')"
@@ -841,6 +1002,7 @@ def trips():
         ).fetchall()
         if row['driver_id'] not in active_driver_ids
     ]
+    assignable_users = _load_assignable_users(conn) if _is_admin_user() else []
     conn.close()
     return render_template(
         "trips.html",
@@ -848,12 +1010,11 @@ def trips():
         counts=counts,
         available_trucks=available_trucks,
         available_drivers=available_drivers,
+        assignable_users=assignable_users,
+        current_user_id=session["user_id"],
+        has_driver_link=bool(session.get("driver_id") or _is_admin_user()),
         today=date.today().isoformat(),
-        can_dispatch=bool(
-            session.get('is_admin')
-            or session.get('role') == 'Admin'
-            or session.get('job_role') == 'Dispatcher'
-        ),
+        can_dispatch=_is_admin_user(),
         csrf_token=session.get('csrf_token'),
         block_content='dashboard'
     )
@@ -862,24 +1023,31 @@ def trips():
 @app.route("/payments")
 @access_required
 def payments():
+    if not _is_admin_user():
+        abort(403)
     session.setdefault("csrf_token", secrets.token_urlsafe(32))
     selected_trip_id = request.args.get("trip", type=int)
     due_only = request.args.get("due") == "1"
     conn = get_db()
+    trip_scope, trip_scope_params = _record_owner_filter("trips")
     payment_rows = conn.execute(
         "SELECT trip_payments.payment_id, trip_payments.trip_id, trip_payments.amount, "
         "trip_payments.payment_date, trip_payments.recorded_at, trip_payments.reference, "
         "users.full_name AS recorder_name, users.email AS recorder_email "
         "FROM trip_payments "
+        "JOIN trips ON trips.trip_id = trip_payments.trip_id "
         "LEFT JOIN users ON users.user_id = trip_payments.recorded_by "
-        "ORDER BY trip_payments.recorded_at DESC, trip_payments.payment_id DESC"
+        f"WHERE {trip_scope} "
+        "ORDER BY trip_payments.recorded_at DESC, trip_payments.payment_id DESC",
+        trip_scope_params
     ).fetchall()
     totals = conn.execute(
         "SELECT COUNT(DISTINCT trip_payments.trip_id) AS trip_count, "
         "COALESCE(SUM(trip_payments.amount), 0) AS amount_received "
         "FROM trip_payments "
         "JOIN trips ON trips.trip_id = trip_payments.trip_id "
-        "WHERE trips.status != 'Cancelled'"
+        f"WHERE trips.status != 'Cancelled' AND {trip_scope}",
+        trip_scope_params
     ).fetchone()
     payment_trip_rows = conn.execute(
         "SELECT trips.trip_id, trips.route_from, trips.route_to, trips.freight_amount, "
@@ -889,8 +1057,9 @@ def payments():
         "LEFT JOIN trucks ON trucks.truck_id = trips.truck_id "
         "LEFT JOIN (SELECT trip_id, SUM(amount) AS amount_received "
         "FROM trip_payments GROUP BY trip_id) AS payments ON payments.trip_id = trips.trip_id "
-        "WHERE trips.status != 'Cancelled' "
-        "ORDER BY trips.trip_id DESC"
+        f"WHERE trips.status != 'Cancelled' AND {trip_scope} "
+        "ORDER BY trips.trip_id DESC",
+        trip_scope_params
     ).fetchall()
     payment_history = conn.execute(
         "SELECT financial_corrections.correction_id, financial_corrections.record_id, "
@@ -944,11 +1113,7 @@ def payments():
     outstanding_due_total = sum(
         (trip["balance_due"] for trip in trip_totals), Decimal("0.00")
     )
-    can_correct_payments = bool(
-        session.get("is_admin")
-        or session.get("role") == "Admin"
-        or session.get("job_role") == "Dispatcher"
-    )
+    can_correct_payments = _is_admin_user()
     conn.close()
     return render_template(
         "payments.html",
@@ -975,7 +1140,15 @@ def _valid_csrf_token():
     )
 
 
-def _get_trip_financials(conn):
+def _get_trip_financials(conn, owner_user_id=None):
+    owner_filter = ""
+    owner_params = []
+    if owner_user_id == "scoped":
+        owner_filter, owner_params = _record_owner_filter("trips")
+        owner_filter = f"WHERE {owner_filter} "
+    elif owner_user_id is not None:
+        owner_filter = "WHERE trips.owner_user_id = ? "
+        owner_params.append(owner_user_id)
     rows = conn.execute(
         "SELECT trips.trip_id, trips.route_from, trips.route_to, trips.start_date, "
         "trips.status, trips.freight_amount, trucks.registration_number, "
@@ -990,7 +1163,9 @@ def _get_trip_financials(conn):
         "SUM(CASE WHEN status = 'Approved' THEN amount ELSE 0 END) AS approved_expenses, "
         "SUM(CASE WHEN status = 'Pending' THEN amount ELSE 0 END) AS pending_expenses "
         "FROM expenses GROUP BY trip_id) AS costs ON costs.trip_id = trips.trip_id "
-        "ORDER BY trips.trip_id DESC"
+        f"{owner_filter}"
+        "ORDER BY trips.trip_id DESC",
+        owner_params
     ).fetchall()
 
     zero = Decimal("0.00")
@@ -1024,11 +1199,12 @@ def _get_trip_financials(conn):
     return summary, trip_finances
 
 
-def _log_trip_action(conn, action, details):
+def _log_trip_action(conn, action, details, owner_user_id=None):
+    owner_user_id = owner_user_id or session["user_id"]
     conn.execute(
         "INSERT INTO user_logs (user_id, action, details, actor_user_id) "
         "VALUES (?, ?, ?, ?)",
-        (session['user_id'], action, details, session['user_id'])
+        (owner_user_id, action, details, session['user_id'])
     )
 
 
@@ -1043,6 +1219,10 @@ def expenses():
 
     expense_filters = []
     expense_params = []
+    is_admin = _is_admin_user()
+    trip_scope, trip_scope_params = _record_owner_filter("trips")
+    expense_filters.append(trip_scope)
+    expense_params.extend(trip_scope_params)
     if selected_trip_id is not None:
         expense_filters.append("expenses.trip_id = ?")
         expense_params.append(selected_trip_id)
@@ -1088,7 +1268,6 @@ def expenses():
         corrections_by_expense.setdefault(correction["record_id"], []).append(dict(correction))
     expense_rows = []
     current_user_id = session["user_id"]
-    is_admin = bool(session.get("is_admin") or session.get("role") == "Admin")
     for row in rows:
         expense = dict(row)
         expense["corrections"] = corrections_by_expense.get(expense["expense_id"], [])
@@ -1127,19 +1306,25 @@ def expenses():
             trip_group["rejected_total"] += amount
     totals = conn.execute(
         "SELECT COUNT(*) AS count, "
-        "COALESCE(SUM(CASE WHEN status = 'Pending' THEN amount ELSE 0 END), 0) AS pending, "
-        "COALESCE(SUM(CASE WHEN status = 'Approved' THEN amount ELSE 0 END), 0) AS approved "
-        "FROM expenses"
+        "COALESCE(SUM(CASE WHEN expenses.status = 'Pending' THEN expenses.amount ELSE 0 END), 0) AS pending, "
+        "COALESCE(SUM(CASE WHEN expenses.status = 'Approved' THEN expenses.amount ELSE 0 END), 0) AS approved "
+        "FROM expenses JOIN trips ON trips.trip_id = expenses.trip_id "
+        f"WHERE {trip_scope}",
+        trip_scope_params
     ).fetchone()
-    finance_summary, trip_finances = _get_trip_financials(conn)
+    finance_summary, trip_finances = _get_trip_financials(
+        conn,
+        None if session.get("email", "").lower() == SUPER_ADMIN_EMAIL.lower() else "scoped"
+    )
     trips = conn.execute(
         "SELECT trips.trip_id, trips.route_from, trips.route_to, "
         "trucks.registration_number, drivers.name AS driver_name "
         "FROM trips "
         "LEFT JOIN trucks ON trucks.truck_id = trips.truck_id "
         "LEFT JOIN drivers ON drivers.driver_id = trips.driver_id "
-        "WHERE trips.status != 'Cancelled' "
-        "ORDER BY trips.trip_id DESC"
+        f"WHERE trips.status != 'Cancelled' AND {trip_scope} "
+        "ORDER BY trips.trip_id DESC",
+        trip_scope_params
     ).fetchall()
     conn.close()
     return render_template(
@@ -1192,15 +1377,17 @@ def create_expense():
         return redirect(url_for("expenses"))
 
     conn = get_db()
+    trip_owner_clause, trip_owner_params = _record_owner_filter("trips")
     trip = conn.execute(
-        "SELECT trip_id FROM trips WHERE trip_id = ? AND status != 'Cancelled'",
-        (trip_id,)
+        "SELECT trip_id, owner_user_id FROM trips WHERE trip_id = ? AND status != 'Cancelled' "
+        f"AND {trip_owner_clause}",
+        [trip_id, *trip_owner_params]
     ).fetchone()
     if not trip:
         conn.close()
         flash("Choose an existing, non-cancelled trip.", "error")
         return redirect(url_for("expenses"))
-    is_admin = bool(session.get("is_admin") or session.get("role") == "Admin")
+    is_admin = _is_admin_user()
     expense_status = "Approved" if is_admin else "Pending"
     reviewer_id = session["user_id"] if is_admin else None
     cursor = conn.execute(
@@ -1219,7 +1406,7 @@ def create_expense():
         "INSERT INTO user_logs (user_id, action, details, actor_user_id) "
         "VALUES (?, ?, ?, ?)",
         (
-            session["user_id"],
+            trip["owner_user_id"],
             "Expense Recorded" if is_admin else "Expense Submitted",
             f"Expense #{expense_id} recorded for trip #{trip_id}: {category}, "
             f"{amount:.2f}, status {expense_status.lower()}.",
@@ -1263,10 +1450,12 @@ def correct_expense_amount(id):
     try:
         conn.execute("BEGIN IMMEDIATE")
         expense = conn.execute(
-            "SELECT trip_id, amount, status, created_by FROM expenses WHERE expense_id = ?",
-            (id,)
+            "SELECT expenses.trip_id, expenses.amount, expenses.status, expenses.created_by, "
+            "trips.owner_user_id FROM expenses JOIN trips ON trips.trip_id = expenses.trip_id "
+            "WHERE expenses.expense_id = ? AND " + _record_owner_filter("trips")[0],
+            [id, *_record_owner_filter("trips")[1]]
         ).fetchone()
-        is_admin = bool(session.get("is_admin") or session.get("role") == "Admin")
+        is_admin = _is_admin_user()
         if not expense or not (
             is_admin or expense["created_by"] == session["user_id"]
         ):
@@ -1302,7 +1491,7 @@ def correct_expense_amount(id):
             "INSERT INTO user_logs (user_id, action, details, actor_user_id) "
             "VALUES (?, 'Expense Amount Corrected', ?, ?)",
             (
-                session["user_id"],
+                expense["owner_user_id"],
                 f"Corrected expense #{id} on trip #{expense['trip_id']} from "
                 f"{old_amount:.2f} to {new_amount:.2f}. Reason: {reason}",
                 session["user_id"]
@@ -1338,9 +1527,11 @@ def review_expense(id):
     try:
         conn.execute("BEGIN IMMEDIATE")
         expense = conn.execute(
-            "SELECT trip_id, category, amount FROM expenses "
-            "WHERE expense_id = ? AND status = 'Pending'",
-            (id,)
+            "SELECT expenses.trip_id, expenses.category, expenses.amount, trips.owner_user_id "
+            "FROM expenses JOIN trips ON trips.trip_id = expenses.trip_id "
+            "WHERE expenses.expense_id = ? AND expenses.status = 'Pending' AND "
+            + _record_owner_filter("trips")[0],
+            [id, *_record_owner_filter("trips")[1]]
         ).fetchone()
         if not expense:
             conn.rollback()
@@ -1359,7 +1550,7 @@ def review_expense(id):
             "INSERT INTO user_logs (user_id, action, details, actor_user_id) "
             "VALUES (?, 'Expense Reviewed', ?, ?)",
             (
-                session["user_id"],
+                expense["owner_user_id"],
                 f"Expense #{id} for trip #{expense['trip_id']} ({expense['category']}, "
                 f"{expense['amount']:.2f}) was {decision.lower()}.",
                 session["user_id"]
@@ -1378,12 +1569,8 @@ def review_expense(id):
 @app.route("/trips/create", methods=["POST"])
 @access_required
 def create_trip():
-    if not (
-        session.get('is_admin')
-        or session.get('role') == 'Admin'
-        or session.get('job_role') == 'Dispatcher'
-    ):
-        return "Access denied: dispatcher privileges required.", 403
+    if not _is_admin_user():
+        return "Access denied: administrator privileges required.", 403
     if not _valid_csrf_token():
         flash("Your session token is invalid. Reload the trips page and try again.", "error")
         return redirect(url_for("trips"))
@@ -1393,11 +1580,13 @@ def create_trip():
     start_date = request.form.get("start_date", "").strip()
     truck_id = request.form.get("truck_id", "").strip()
     driver_id = request.form.get("driver_id", "").strip()
+    trip_owner_id = request.form.get("owner_user_id", str(session["user_id"]))
     raw_freight_amount = request.form.get("freight_amount", "").strip()
 
     try:
         truck_id = int(truck_id)
         driver_id = int(driver_id)
+        trip_owner_id = int(trip_owner_id)
         datetime.strptime(start_date, "%Y-%m-%d")
         freight_amount = Decimal(raw_freight_amount).quantize(
             Decimal("0.01"), rounding=ROUND_HALF_UP
@@ -1416,6 +1605,24 @@ def create_trip():
     conn = get_db()
     try:
         conn.execute("BEGIN IMMEDIATE")
+        if not _is_admin_user():
+            trip_owner_id = session["user_id"]
+        elif not _is_assignable_owner(conn, trip_owner_id):
+            conn.rollback()
+            flash("Assign the trip to an active user account.", "error")
+            return redirect(url_for("trips"))
+        trip_owner = conn.execute(
+            "SELECT role, driver_id FROM users WHERE user_id = ? "
+            "AND is_approved = 1 AND is_rejected = 0 AND is_terminated = 0",
+            (trip_owner_id,)
+        ).fetchone()
+        if not trip_owner or (
+            trip_owner["role"] == "User"
+            and trip_owner["driver_id"] != driver_id
+        ):
+            conn.rollback()
+            flash("A Driver account can only be assigned trips for its linked driver record.", "error")
+            return redirect(url_for("trips"))
         truck = conn.execute(
             "SELECT registration_number FROM trucks "
             "WHERE truck_id = ? AND status = 'Available'",
@@ -1438,9 +1645,9 @@ def create_trip():
 
         cursor = conn.execute(
             "INSERT INTO trips "
-            "(truck_id, driver_id, start_date, route_from, route_to, freight_amount, status) "
-            "VALUES (?, ?, ?, ?, ?, ?, 'Scheduled')",
-            (truck_id, driver_id, start_date, route_from, route_to, float(freight_amount))
+            "(truck_id, driver_id, start_date, route_from, route_to, freight_amount, status, owner_user_id) "
+            "VALUES (?, ?, ?, ?, ?, ?, 'Scheduled', ?)",
+            (truck_id, driver_id, start_date, route_from, route_to, float(freight_amount), trip_owner_id)
         )
         trip_id = cursor.lastrowid
         _log_trip_action(
@@ -1448,7 +1655,8 @@ def create_trip():
             "Trip Scheduled",
             f"Trip #{trip_id}: {route_from} to {route_to}; "
             f"truck {truck['registration_number']}; driver {driver['name']}; "
-            f"freight charge {freight_amount:.2f}."
+            f"freight charge {freight_amount:.2f}.",
+            trip_owner_id
         )
         conn.commit()
         flash(f"Trip #{trip_id} scheduled.", "success")
@@ -1463,12 +1671,8 @@ def create_trip():
 @app.route("/trips/<int:id>/freight", methods=["POST"])
 @access_required
 def update_trip_freight(id):
-    if not (
-        session.get('is_admin')
-        or session.get('role') == 'Admin'
-        or session.get('job_role') == 'Dispatcher'
-    ):
-        return "Access denied: dispatcher privileges required.", 403
+    if not _is_admin_user():
+        return "Access denied: administrator privileges required.", 403
     if not _valid_csrf_token():
         flash("Your session token is invalid. Reload the trips page and try again.", "error")
         return redirect(url_for("trips"))
@@ -1488,8 +1692,9 @@ def update_trip_freight(id):
     try:
         conn.execute("BEGIN IMMEDIATE")
         trip = conn.execute(
-            "SELECT freight_amount, route_from, route_to FROM trips WHERE trip_id = ?",
-            (id,)
+            "SELECT freight_amount, route_from, route_to, owner_user_id FROM trips "
+            "WHERE trip_id = ? AND " + _record_owner_filter("trips")[0],
+            [id, *_record_owner_filter("trips")[1]]
         ).fetchone()
         if not trip:
             conn.rollback()
@@ -1512,7 +1717,8 @@ def update_trip_freight(id):
             conn,
             "Trip Freight Updated",
             f"Updated trip #{id} freight charge from {trip['freight_amount']:.2f} "
-            f"to {freight_amount:.2f}."
+            f"to {freight_amount:.2f}.",
+            trip["owner_user_id"]
         )
         conn.commit()
         flash(f"Freight charge for trip #{id} updated.", "success")
@@ -1527,12 +1733,8 @@ def update_trip_freight(id):
 @app.route("/trips/<int:id>/payments", methods=["POST"])
 @access_required
 def record_trip_payment(id):
-    if not (
-        session.get('is_admin')
-        or session.get('role') == 'Admin'
-        or session.get('job_role') == 'Dispatcher'
-    ):
-        return "Access denied: dispatcher privileges required.", 403
+    if not _is_admin_user():
+        return "Access denied: administrator privileges required.", 403
     return_to_due = request.form.get("return_to") == "due"
     return_url = (
         url_for("payments", due="1", trip=id)
@@ -1564,8 +1766,9 @@ def record_trip_payment(id):
     try:
         conn.execute("BEGIN IMMEDIATE")
         trip = conn.execute(
-            "SELECT freight_amount, route_from, route_to FROM trips WHERE trip_id = ?",
-            (id,)
+            "SELECT freight_amount, route_from, route_to, owner_user_id FROM trips "
+            "WHERE trip_id = ? AND " + _record_owner_filter("trips")[0],
+            [id, *_record_owner_filter("trips")[1]]
         ).fetchone()
         if not trip:
             conn.rollback()
@@ -1592,7 +1795,8 @@ def record_trip_payment(id):
             "Trip Payment Recorded",
             f"Recorded payment {amount:.2f} for trip #{id} "
             f"({trip['route_from']} to {trip['route_to']})."
-            + (f" Reference: {reference}" if reference else "")
+            + (f" Reference: {reference}" if reference else ""),
+            trip["owner_user_id"]
         )
         conn.commit()
         flash(f"Payment of {amount:.2f} recorded for trip #{id}.", "success")
@@ -1607,12 +1811,8 @@ def record_trip_payment(id):
 @app.route("/payments/<int:id>/amount", methods=["POST"])
 @access_required
 def correct_payment_amount(id):
-    if not (
-        session.get("is_admin")
-        or session.get("role") == "Admin"
-        or session.get("job_role") == "Dispatcher"
-    ):
-        return "Access denied: dispatcher privileges required.", 403
+    if not _is_admin_user():
+        return "Access denied: administrator privileges required.", 403
     if not _valid_csrf_token():
         flash("Your session token is invalid. Reload the payments page and try again.", "error")
         return redirect(url_for("payments"))
@@ -1637,10 +1837,11 @@ def correct_payment_amount(id):
     try:
         conn.execute("BEGIN IMMEDIATE")
         payment = conn.execute(
-            "SELECT trip_payments.trip_id, trip_payments.amount, trips.freight_amount "
+            "SELECT trip_payments.trip_id, trip_payments.amount, trips.freight_amount, "
+            "trips.owner_user_id "
             "FROM trip_payments JOIN trips ON trips.trip_id = trip_payments.trip_id "
-            "WHERE trip_payments.payment_id = ?",
-            (id,)
+            "WHERE trip_payments.payment_id = ? AND " + _record_owner_filter("trips")[0],
+            [id, *_record_owner_filter("trips")[1]]
         ).fetchone()
         if not payment:
             conn.rollback()
@@ -1677,7 +1878,7 @@ def correct_payment_amount(id):
             "INSERT INTO user_logs (user_id, action, details, actor_user_id) "
             "VALUES (?, 'Payment Amount Corrected', ?, ?)",
             (
-                session["user_id"],
+                payment["owner_user_id"],
                 f"Corrected payment #{id} for trip #{payment['trip_id']} from "
                 f"{old_amount:.2f} to {new_amount:.2f}. Reason: {reason}",
                 session["user_id"]
@@ -1696,12 +1897,8 @@ def correct_payment_amount(id):
 @app.route("/trips/<int:id>/status", methods=["POST"])
 @access_required
 def update_trip_status(id):
-    if not (
-        session.get('is_admin')
-        or session.get('role') == 'Admin'
-        or session.get('job_role') == 'Dispatcher'
-    ):
-        return "Access denied: dispatcher privileges required.", 403
+    if not _is_admin_user():
+        return "Access denied: administrator privileges required.", 403
     if not _valid_csrf_token():
         flash("Your session token is invalid. Reload the trips page and try again.", "error")
         return redirect(url_for("trips"))
@@ -1727,10 +1924,10 @@ def update_trip_status(id):
         conn.execute("BEGIN IMMEDIATE")
         trip = conn.execute(
             "SELECT trips.trip_id, trips.truck_id, trips.driver_id, trips.status, "
-            "trips.start_odometer, trucks.registration_number "
+            "trips.start_odometer, trips.owner_user_id, trucks.registration_number "
             "FROM trips JOIN trucks ON trucks.truck_id = trips.truck_id "
-            "WHERE trips.trip_id = ?",
-            (id,)
+            "WHERE trips.trip_id = ? AND " + _record_owner_filter("trips")[0],
+            [id, *_record_owner_filter("trips")[1]]
         ).fetchone()
         if not trip:
             conn.rollback()
@@ -1799,7 +1996,8 @@ def update_trip_status(id):
             conn,
             "Trip Status Updated",
             f"Trip #{id} for truck {trip['registration_number']} changed "
-            f"from {current_status} to {requested_status}."
+            f"from {current_status} to {requested_status}.",
+            trip["owner_user_id"]
         )
         conn.commit()
         flash(f"Trip #{id} is now {requested_status.lower()}.", "success")
@@ -1814,18 +2012,23 @@ def update_trip_status(id):
 @app.route("/maintenance")
 @access_required
 def maintenance():
+    if not _is_admin_user():
+        abort(403)
     conn = get_db()
+    owner_clause, owner_params = _record_owner_filter("maintenance")
     rows = conn.execute(
         "SELECT maintenance.maintenance_id, maintenance.service_date, "
         "maintenance.service_type, maintenance.cost, maintenance.notes, "
         "trucks.registration_number "
         "FROM maintenance "
         "LEFT JOIN trucks ON trucks.truck_id = maintenance.truck_id "
-        "ORDER BY maintenance.service_date DESC, maintenance.maintenance_id DESC"
+        f"WHERE {owner_clause} ORDER BY maintenance.service_date DESC, maintenance.maintenance_id DESC",
+        owner_params
     ).fetchall()
     counts = conn.execute(
         "SELECT COUNT(*) AS total, COALESCE(SUM(cost), 0) AS total_cost "
-        "FROM maintenance"
+        f"FROM maintenance WHERE {owner_clause}",
+        owner_params
     ).fetchone()
     conn.close()
     return render_template(
@@ -1854,10 +2057,15 @@ def add_truck():
         conn = get_db()
         try:
             conn.execute(
-                "INSERT INTO trucks (registration_number, model, year, capacity_tons, status, last_service_date) VALUES (?, ?, ?, ?, ?, ?)",
+                "INSERT INTO trucks (registration_number, model, year, capacity_tons, status, "
+                "last_service_date) VALUES (?, ?, ?, ?, ?, ?)",
                 (reg, model, year, capacity, status, last_service)
             )
-            _record_user_activity(conn, "Truck Added", f"Added truck {reg}.")
+            _record_user_activity(
+                conn,
+                "Truck Added",
+                f"Added truck {reg}."
+            )
             conn.commit()
             flash(f"Truck {reg} added successfully!", "success")
         except Exception as e:
@@ -1867,6 +2075,8 @@ def add_truck():
             conn.close()
         return redirect(url_for("trucks"))
 
+    conn = get_db()
+    conn.close()
     return render_template(
         "truck_form.html",
         truck=None,
@@ -1880,7 +2090,10 @@ def add_truck():
 def edit_truck(id):
     session.setdefault("csrf_token", secrets.token_urlsafe(32))
     conn = get_db()
-    truck = conn.execute("SELECT * FROM trucks WHERE truck_id = ?", (id,)).fetchone()
+    truck = conn.execute(
+        "SELECT * FROM trucks WHERE truck_id = ?",
+        (id,)
+    ).fetchone()
     if not truck:
         conn.close()
         return "Truck not found.", 404
@@ -1896,13 +2109,17 @@ def edit_truck(id):
         capacity = request.form.get("capacity_tons")
         status = request.form.get("status")
         last_service = request.form.get("last_service_date")
-
         try:
             conn.execute(
-                "UPDATE trucks SET registration_number=?, model=?, year=?, capacity_tons=?, status=?, last_service_date=? WHERE truck_id=?",
+                "UPDATE trucks SET registration_number=?, model=?, year=?, capacity_tons=?, "
+                "status=?, last_service_date=? WHERE truck_id=?",
                 (reg, model, year, capacity, status, last_service, id)
             )
-            _record_user_activity(conn, "Truck Updated", f"Updated truck {reg}.")
+            _record_user_activity(
+                conn,
+                "Truck Updated",
+                f"Updated truck {reg}."
+            )
             conn.commit()
             flash("Truck updated successfully!", "success")
         except Exception as e:
@@ -1933,7 +2150,10 @@ def delete_truck(id):
             "SELECT registration_number FROM trucks WHERE truck_id = ?",
             (id,)
         ).fetchone()
-        conn.execute("DELETE FROM trucks WHERE truck_id = ?", (id,))
+        conn.execute(
+            "DELETE FROM trucks WHERE truck_id = ?",
+            (id,)
+        )
         if truck:
             _record_user_activity(
                 conn,
@@ -1959,6 +2179,7 @@ def delete_truck(id):
 @admin_required
 def admin_dashboard():
     conn = get_db()
+    admin_notifications = _load_admin_notifications(conn)
     user_counts = conn.execute(
         "SELECT COUNT(*) AS total, "
         "SUM(CASE WHEN is_approved = 1 AND is_rejected = 0 AND is_terminated = 0 THEN 1 ELSE 0 END) AS approved, "
@@ -1974,7 +2195,14 @@ def admin_dashboard():
         "SUM(CASE WHEN status = 'Maintenance' THEN 1 ELSE 0 END) AS maintenance "
         "FROM trucks"
     ).fetchone()
-    finance_summary, trip_finances = _get_trip_financials(conn)
+    finance_summary, trip_finances = _get_trip_financials(
+        conn,
+        None if session.get("email", "").lower() == SUPER_ADMIN_EMAIL.lower() else "scoped"
+    )
+    activity_scope = (
+        "" if session.get("email", "").lower() == SUPER_ADMIN_EMAIL.lower()
+        else "WHERE subject.role = 'User' "
+    )
     recent_activity = conn.execute(
         "SELECT logs.action, logs.details, logs.timestamp, "
         "subject.full_name AS subject_name, subject.email AS subject_email, "
@@ -1982,6 +2210,7 @@ def admin_dashboard():
         "FROM user_logs AS logs "
         "LEFT JOIN users AS subject ON subject.user_id = logs.user_id "
         "LEFT JOIN users AS actor ON actor.user_id = logs.actor_user_id "
+        f"{activity_scope}"
         "ORDER BY logs.timestamp DESC, logs.log_id DESC LIMIT 8"
     ).fetchall()
     conn.close()
@@ -1992,14 +2221,120 @@ def admin_dashboard():
         finance_summary=finance_summary,
         trip_finances=trip_finances[:10],
         recent_activity=recent_activity,
+        admin_notifications=admin_notifications,
         block_content='dashboard'
     )
+
+
+def _load_admin_notifications(conn):
+    pending_users = conn.execute(
+        "SELECT user_id, full_name, email, requested_role, created_at "
+        "FROM users WHERE is_approved = 0 AND is_rejected = 0 AND is_terminated = 0 "
+        "ORDER BY created_at DESC, user_id DESC LIMIT 50"
+    ).fetchall()
+    expense_scope, expense_scope_params = _record_owner_filter("trips")
+    pending_expenses = conn.execute(
+        "SELECT expenses.expense_id, expenses.trip_id, expenses.category, "
+        "expenses.amount, expenses.created_at, users.full_name, users.email, "
+        "trips.route_from, trips.route_to "
+        "FROM expenses "
+        "LEFT JOIN users ON users.user_id = expenses.created_by "
+        "LEFT JOIN trips ON trips.trip_id = expenses.trip_id "
+        "WHERE expenses.status = 'Pending' AND " + expense_scope + " "
+        "ORDER BY expenses.created_at DESC, expenses.expense_id DESC LIMIT 50"
+        , expense_scope_params
+    ).fetchall()
+    reset_links = conn.execute(
+        "SELECT password_reset_tokens.reset_id, users.user_id, "
+        "password_reset_tokens.admin_reset_url, "
+        "password_reset_tokens.expires_at, password_reset_tokens.created_at, "
+        "users.full_name, users.email "
+        "FROM password_reset_tokens "
+        "JOIN users ON users.user_id = password_reset_tokens.user_id "
+        "WHERE users.role = 'User' "
+        "AND users.is_approved = 1 "
+        "AND users.is_rejected = 0 AND users.is_terminated = 0 "
+        "AND password_reset_tokens.requested_by IS NULL "
+        "AND password_reset_tokens.delivery_status = 'admin_queue' "
+        "AND password_reset_tokens.used_at IS NULL "
+        "AND password_reset_tokens.expires_at > CURRENT_TIMESTAMP "
+        "ORDER BY password_reset_tokens.created_at DESC LIMIT 50"
+    ).fetchall()
+    return {
+        "pending_users": pending_users,
+        "pending_expenses": pending_expenses,
+        "reset_links": reset_links,
+    }
+
+
+def _count_admin_notifications(conn):
+    expense_scope, expense_scope_params = _record_owner_filter("trips")
+    counts = conn.execute(
+        "SELECT "
+        "(SELECT COUNT(*) FROM users "
+        "WHERE is_approved = 0 AND is_rejected = 0 AND is_terminated = 0) AS pending_users, "
+        "(SELECT COUNT(*) FROM expenses JOIN trips ON trips.trip_id = expenses.trip_id "
+        "WHERE expenses.status = 'Pending' AND " + expense_scope + ") AS pending_expenses, "
+        "(SELECT COUNT(*) FROM password_reset_tokens "
+        "JOIN users ON users.user_id = password_reset_tokens.user_id "
+        "WHERE users.role = 'User' AND users.is_approved = 1 "
+        "AND users.is_rejected = 0 AND users.is_terminated = 0 "
+        "AND password_reset_tokens.requested_by IS NULL "
+        "AND password_reset_tokens.delivery_status = 'admin_queue' "
+        "AND password_reset_tokens.used_at IS NULL "
+        "AND password_reset_tokens.expires_at > CURRENT_TIMESTAMP) AS reset_links"
+        , expense_scope_params
+    ).fetchone()
+    return {key: counts[key] for key in ("pending_users", "pending_expenses", "reset_links")}
+
+
+@app.context_processor
+def inject_admin_notification_count():
+    if not (session.get("is_admin") or session.get("role") == "Admin"):
+        return {"admin_notification_count": 0}
+
+    conn = get_db()
+    try:
+        counts = _count_admin_notifications(conn)
+    finally:
+        conn.close()
+    return {"admin_notification_count": sum(counts.values())}
+
+
+@app.route("/admin/notifications")
+@admin_required
+def admin_notifications():
+    session.setdefault("csrf_token", secrets.token_urlsafe(32))
+    conn = get_db()
+    notifications = _load_admin_notifications(conn)
+    conn.close()
+    return render_template(
+        "admin_notifications.html",
+        notifications=notifications,
+        csrf_token=session["csrf_token"],
+        block_content="dashboard"
+    )
+
+
+@app.route("/admin/notifications/count")
+@admin_required
+def admin_notification_count():
+    conn = get_db()
+    try:
+        counts = _count_admin_notifications(conn)
+    finally:
+        conn.close()
+    return jsonify(count=sum(counts.values()), breakdown=counts)
 
 
 @app.route("/admin/audit")
 @admin_required
 def admin_audit():
     conn = get_db()
+    activity_scope = (
+        "" if session.get("email", "").lower() == SUPER_ADMIN_EMAIL.lower()
+        else "WHERE subject.role = 'User' "
+    )
     activity = conn.execute(
         "SELECT logs.action, logs.details, logs.timestamp, "
         "subject.full_name AS subject_name, subject.email AS subject_email, "
@@ -2007,10 +2342,92 @@ def admin_audit():
         "FROM user_logs AS logs "
         "LEFT JOIN users AS subject ON subject.user_id = logs.user_id "
         "LEFT JOIN users AS actor ON actor.user_id = logs.actor_user_id "
+        f"{activity_scope}"
         "ORDER BY logs.timestamp DESC, logs.log_id DESC LIMIT 200"
     ).fetchall()
     conn.close()
     return render_template("admin_audit.html", activity=activity, block_content='dashboard')
+
+
+@app.route("/admin/users/create", methods=["POST"])
+@admin_required
+def create_driver_account():
+    if not _valid_csrf_token():
+        flash("Your session token is invalid. Reload the user list and try again.", "error")
+        return redirect(url_for("admin_users"))
+
+    full_name = request.form.get("full_name", "").strip()
+    email = request.form.get("email", "").strip().lower()
+    password = request.form.get("password", "")
+    raw_driver_id = request.form.get("driver_id", "").strip()
+    if not full_name or not email or not password:
+        flash("Name, email, password, and driver record are required.", "error")
+        return redirect(url_for("admin_users"))
+    if (
+        len(full_name) > 120
+        or len(email) > 254
+        or not re.fullmatch(r"[^@\s]+@[^@\s]+\.[^@\s]+", email)
+    ):
+        flash("Enter a valid name and email address.", "error")
+        return redirect(url_for("admin_users"))
+    if len(password) < 8:
+        flash("Password must be at least 8 characters.", "error")
+        return redirect(url_for("admin_users"))
+    if len(password) > 128:
+        flash("Password must be 128 characters or fewer.", "error")
+        return redirect(url_for("admin_users"))
+    if not raw_driver_id.isdigit():
+        flash("Select an active, unlinked driver record.", "error")
+        return redirect(url_for("admin_users"))
+
+    driver_id = int(raw_driver_id)
+    conn = get_db()
+    try:
+        conn.execute("BEGIN IMMEDIATE")
+        driver = conn.execute(
+            "SELECT name FROM drivers WHERE driver_id = ? "
+            "AND is_terminated = 0 AND status = 'Active'",
+            (driver_id,)
+        ).fetchone()
+        linked_user = conn.execute(
+            "SELECT user_id FROM users WHERE driver_id = ?",
+            (driver_id,)
+        ).fetchone()
+        if not driver or linked_user:
+            conn.rollback()
+            flash("Choose an active driver who is not linked to another account.", "error")
+            return redirect(url_for("admin_users"))
+
+        cursor = conn.execute(
+            "INSERT INTO users "
+            "(full_name, email, password, is_approved, is_rejected, is_terminated, "
+            "role, job_role, requested_role, driver_id) "
+            "VALUES (?, ?, ?, 1, 0, 0, 'User', 'User', 'User', ?)",
+            (full_name, email, generate_password_hash(password), driver_id)
+        )
+        user_id = cursor.lastrowid
+        conn.execute(
+            "INSERT INTO user_logs (user_id, action, details, actor_user_id) "
+            "VALUES (?, 'Driver Account Created', ?, ?)",
+            (
+                user_id,
+                f"Driver account created and linked to driver record #{driver_id}.",
+                session["user_id"]
+            )
+        )
+        conn.commit()
+    except sqlite3.IntegrityError:
+        conn.rollback()
+        flash("That email address is already registered. Use a different email.", "error")
+        return redirect(url_for("admin_users"))
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+
+    flash(f"Driver account created for {driver['name']}.", "success")
+    return redirect(url_for("admin_users"))
 
 
 @app.route("/admin/users")
@@ -2019,15 +2436,42 @@ def admin_users():
     session.setdefault("csrf_token", secrets.token_urlsafe(32))
     conn = get_db()
     rows = conn.execute(
-        "SELECT user_id, full_name, email, created_at, is_approved, is_rejected, "
-        "is_terminated, terminated_at, role, job_role "
-        "FROM users ORDER BY created_at DESC, user_id DESC"
+        "SELECT users.user_id, users.full_name, users.email, users.created_at, "
+        "users.is_approved, users.is_rejected, "
+        "users.is_terminated, users.terminated_at, users.role, users.job_role, "
+        "users.requested_role, users.driver_id, drivers.name AS driver_name "
+        "FROM users LEFT JOIN drivers ON drivers.driver_id = users.driver_id "
+        "ORDER BY users.created_at DESC, users.user_id DESC"
     ).fetchall()
     users = [dict(row) for row in rows]
+    drivers = conn.execute(
+        "SELECT drivers.driver_id, drivers.name, drivers.license_number, "
+        "drivers.status, users.user_id AS linked_user_id "
+        "FROM drivers LEFT JOIN users ON users.driver_id = drivers.driver_id "
+        "WHERE (drivers.is_terminated = 0 AND drivers.status = 'Active') "
+        "OR users.user_id IS NOT NULL "
+        "ORDER BY drivers.name COLLATE NOCASE"
+    ).fetchall()
+    reset_requests = conn.execute(
+        "SELECT users.user_id, users.full_name, users.email, "
+        "MAX(password_reset_tokens.created_at) AS requested_at "
+        "FROM password_reset_tokens "
+        "JOIN users ON users.user_id = password_reset_tokens.user_id "
+        "WHERE users.role = 'User' AND users.is_approved = 1 "
+        "AND users.is_rejected = 0 AND users.is_terminated = 0 "
+        "AND password_reset_tokens.requested_by IS NULL "
+        "AND password_reset_tokens.delivery_status = 'admin_queue' "
+        "AND password_reset_tokens.used_at IS NULL "
+        "AND password_reset_tokens.expires_at > CURRENT_TIMESTAMP "
+        "GROUP BY users.user_id, users.full_name, users.email "
+        "ORDER BY requested_at DESC LIMIT 50"
+    ).fetchall()
     conn.close()
     return render_template(
         "admin_users.html",
         users=users,
+        drivers=drivers,
+        reset_requests=reset_requests,
         current_user_id=session['user_id'],
         super_admin_email=SUPER_ADMIN_EMAIL,
         csrf_token=session["csrf_token"],
@@ -2054,15 +2498,30 @@ def admin_user_password_reset(id):
         flash("Password reset is available only for active, approved user accounts.", "error")
         return redirect(url_for("admin_users"))
     try:
-        _issue_password_reset(conn, user, session["user_id"])
+        _, delivered_by_email, reset_url = _issue_password_reset(
+            conn,
+            user,
+            session["user_id"]
+        )
     except Exception:
         conn.rollback()
         app.logger.exception("Administrator password reset email could not be sent.")
         flash("Could not send a password reset link. Check email configuration and try again.", "error")
     else:
-        flash(f"A one-time password reset link was sent to {user['email']}.", "success")
+        if delivered_by_email:
+            flash(f"A one-time password reset link was sent to {user['email']}.", "success")
+            return redirect(url_for("admin_users"))
+        else:
+            return render_template(
+                "admin_reset_link.html",
+                reset_url=reset_url,
+                user_email=user["email"],
+                csrf_token=session["csrf_token"],
+                block_content="dashboard"
+            )
     finally:
-        conn.close()
+        if conn:
+            conn.close()
     return redirect(url_for("admin_users"))
 
 
@@ -2075,9 +2534,11 @@ def account():
 
     conn = get_db()
     user = conn.execute(
-        "SELECT user_id, full_name, email, role, job_role, created_at, is_approved, is_rejected, "
-        "is_terminated, password "
-        "FROM users WHERE user_id = ?",
+        "SELECT users.user_id, users.full_name, users.email, users.role, users.job_role, "
+        "users.driver_id, drivers.name AS driver_name, users.created_at, "
+        "users.is_approved, users.is_rejected, users.is_terminated, users.password "
+        "FROM users LEFT JOIN drivers ON drivers.driver_id = users.driver_id "
+        "WHERE users.user_id = ?",
         (user_id,)
     ).fetchone()
     if not user:
@@ -2137,15 +2598,19 @@ def account():
             error = "Choose a valid account action."
 
     profile = conn.execute(
-        "SELECT user_id, full_name, email, role, job_role, created_at, is_approved, is_rejected "
-        "FROM users WHERE user_id = ?",
+        "SELECT users.user_id, users.full_name, users.email, users.role, users.job_role, "
+        "users.driver_id, drivers.name AS driver_name, users.created_at, "
+        "users.is_approved, users.is_rejected "
+        "FROM users LEFT JOIN drivers ON drivers.driver_id = users.driver_id "
+        "WHERE users.user_id = ?",
         (user_id,)
     ).fetchone()
     profile = dict(profile)
     recent_activity = conn.execute(
         "SELECT action, details, timestamp FROM user_logs "
-        "WHERE user_id = ? ORDER BY timestamp DESC, log_id DESC LIMIT 20",
-        (user_id,)
+        "WHERE user_id = ? OR actor_user_id = ? "
+        "ORDER BY timestamp DESC, log_id DESC LIMIT 20",
+        (user_id, user_id)
     ).fetchall()
     conn.close()
     return render_template(
@@ -2163,11 +2628,40 @@ def account():
 @admin_required
 def approve_user(id):
     if request.method == "POST":
+        if not _valid_csrf_token():
+            flash("Your session token is invalid. Reload the user list and try again.", "error")
+            return redirect(url_for("admin_users"))
+        approved_role = request.form.get("approved_role", "User")
+        if approved_role not in ("User", "Admin"):
+            flash("Select a valid account access level.", "error")
+            return redirect(url_for("admin_users"))
+        driver_id = request.form.get("driver_id", "").strip()
+        if approved_role == "User":
+            if not driver_id.isdigit():
+                flash("Select a driver before approving a Driver account.", "error")
+                return redirect(url_for("admin_users"))
+            driver_id = int(driver_id)
+        else:
+            driver_id = None
         conn = get_db()
         controller = UserAccessController(conn)
-        approved = controller.approve_user(id, session['user_id'])
+        try:
+            approved = controller.approve_user(
+                id,
+                session['user_id'],
+                approved_role,
+                driver_id
+            )
+        except ValueError as error:
+            conn.close()
+            flash(str(error), "error")
+            return redirect(url_for("admin_users"))
         conn.close()
-        flash("User approved." if approved else "This account is no longer pending.", "success" if approved else "info")
+        flash(
+            f"User approved with {approved_role} access."
+            if approved else "This account is no longer pending.",
+            "success" if approved else "info"
+        )
         return redirect(url_for("admin_users"))
 
     return redirect(url_for("admin_users"))
@@ -2176,11 +2670,99 @@ def approve_user(id):
 @app.route("/admin/reject/<int:id>", methods=["POST"])
 @admin_required
 def reject_user(id):
+    if not _valid_csrf_token():
+        flash("Your session token is invalid. Reload the user list and try again.", "error")
+        return redirect(url_for("admin_users"))
     conn = get_db()
     controller = UserAccessController(conn)
     rejected = controller.reject_user(id, session['user_id'])
     conn.close()
     flash("User registration rejected." if rejected else "This account is no longer pending.", "success" if rejected else "info")
+    return redirect(url_for("admin_users"))
+
+
+@app.route("/admin/users/<int:id>/driver", methods=["POST"])
+@admin_required
+def assign_user_driver(id):
+    if not _valid_csrf_token():
+        flash("Your session token is invalid. Reload the user list and try again.", "error")
+        return redirect(url_for("admin_users"))
+
+    raw_driver_id = request.form.get("driver_id", "").strip()
+    driver_id = int(raw_driver_id) if raw_driver_id.isdigit() else None
+    if raw_driver_id and driver_id is None:
+        flash("Select a valid driver.", "error")
+        return redirect(url_for("admin_users"))
+
+    conn = get_db()
+    try:
+        conn.execute("BEGIN IMMEDIATE")
+        user = conn.execute(
+            "SELECT role, is_approved, is_rejected, is_terminated, driver_id "
+            "FROM users WHERE user_id = ?",
+            (id,)
+        ).fetchone()
+        if (
+            not user
+            or user["role"] != "User"
+            or not user["is_approved"]
+            or user["is_rejected"]
+            or user["is_terminated"]
+        ):
+            conn.rollback()
+            flash("Only active, approved Driver accounts can be linked.", "error")
+            return redirect(url_for("admin_users"))
+
+        if driver_id is not None:
+            driver = conn.execute(
+                "SELECT driver_id FROM drivers WHERE driver_id = ? "
+                "AND is_terminated = 0 AND status = 'Active'",
+                (driver_id,)
+            ).fetchone()
+            linked_user = conn.execute(
+                "SELECT user_id FROM users WHERE driver_id = ? AND user_id != ?",
+                (driver_id, id)
+            ).fetchone()
+            if not driver or linked_user:
+                conn.rollback()
+                flash("Choose an active driver who is not linked to another account.", "error")
+                return redirect(url_for("admin_users"))
+
+        active_trip = conn.execute(
+            "SELECT trip_id FROM trips WHERE owner_user_id = ? "
+            "AND status IN ('Scheduled', 'In Progress') LIMIT 1",
+            (id,)
+        ).fetchone()
+        if active_trip:
+            conn.rollback()
+            flash(
+                f"Driver assignment cannot change while Trip #{active_trip['trip_id']} is active.",
+                "error"
+            )
+            return redirect(url_for("admin_users"))
+
+        conn.execute("UPDATE users SET driver_id = ? WHERE user_id = ?", (driver_id, id))
+        conn.execute(
+            "INSERT INTO user_logs (user_id, action, details, actor_user_id) "
+            "VALUES (?, 'Driver Account Linked', ?, ?)",
+            (
+                id,
+                f"Driver account linked to driver record #{driver_id}."
+                if driver_id else "Driver record unlinked from account.",
+                session["user_id"]
+            )
+        )
+        conn.commit()
+    except sqlite3.IntegrityError:
+        conn.rollback()
+        flash("That driver is already linked to another account.", "error")
+        return redirect(url_for("admin_users"))
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+    flash("Driver account assignment saved.", "success")
     return redirect(url_for("admin_users"))
 
 
@@ -2192,7 +2774,7 @@ def update_user_job_role(id):
         return redirect(url_for("admin_users"))
 
     job_role = request.form.get("job_role", "")
-    allowed_roles = {"User", "Dispatcher"}
+    allowed_roles = {"User"}
     if job_role not in allowed_roles:
         flash("Select a valid operational role.", "error")
         return redirect(url_for("admin_users"))

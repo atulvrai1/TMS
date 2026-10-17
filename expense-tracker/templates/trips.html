@@ -8,7 +8,7 @@
     <div class="panel-header">
     <div>
         <h1 class="dashboard-title">Trips & Dispatch</h1>
-        <p class="dashboard-subtitle">Plan trips, follow dispatch progress, and see what each trip earns and spends.</p>
+        <p class="dashboard-subtitle">{% if can_dispatch %}Plan trips, follow dispatch progress, and see what each trip earns and spends.{% else %}View trips assigned to your driver account and submit trip expenses for approval.{% endif %}</p>
     </div>
     </div>
 
@@ -19,6 +19,22 @@
     {% if available_trucks and available_drivers %}
     <form action="{{ url_for('create_trip') }}" method="POST" class="dispatch-form">
         <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        {% if assignable_users %}
+        <div class="form-group">
+            <label for="owner_user_id">Trip owner</label>
+            <select class="form-input" id="owner_user_id" name="owner_user_id" required>
+                {% for user in assignable_users %}
+                <option value="{{ user.user_id }}"
+                        data-role="{{ user.role }}"
+                        data-driver-id="{{ user.driver_id or '' }}"
+                        {% if current_user_id == user.user_id %}selected{% endif %}>
+                    {{ user.full_name or user.email }} ({{ user.email }})
+                </option>
+                {% endfor %}
+            </select>
+            <p class="form-help">Driver accounts must be linked to their driver record in User Access before trips can be assigned.</p>
+        </div>
+        {% endif %}
         <div class="form-group">
             <label for="route_from">Pickup / origin</label>
             <input class="form-input" id="route_from" name="route_from" maxlength="120" placeholder="Where the load starts" required>
@@ -49,7 +65,7 @@
             <select class="form-input" id="driver_id" name="driver_id" required>
                 <option value="">Select a driver</option>
                 {% for driver in available_drivers %}
-                <option value="{{ driver.driver_id }}">{{ driver.name }}</option>
+                <option value="{{ driver.driver_id }}" data-driver-id="{{ driver.driver_id }}">{{ driver.name }}</option>
                 {% endfor %}
             </select>
         </div>
@@ -61,12 +77,18 @@
     </details>
     {% endif %}
 
+    {% if can_dispatch %}
     <div class="dispatch-transparency-note">
     Trip status and odometer readings are entered manually (not live GPS). Enter driver spend under Expenses; approved costs are counted in trip P/L. Record customer payments on this page or view the full ledger in Payments.
     </div>
+    {% else %}
+    <div class="dispatch-transparency-note">Submit receipts and trip costs under Expenses. An administrator will review each request.</div>
+    {% endif %}
     <div class="trip-page-links">
-        <a class="btn-ghost" href="{{ url_for('expenses') }}">Record / review expenses</a>
+        <a class="btn-ghost" href="{{ url_for('expenses') }}">{% if can_dispatch %}Record / review expenses{% else %}Submit an expense request{% endif %}</a>
+        {% if can_dispatch %}
         <a class="btn-ghost" href="{{ url_for('payments') }}">View all payments</a>
+        {% endif %}
     </div>
 
     <div class="stats-grid">
@@ -77,7 +99,7 @@
 
     <div class="table-container">
         <table class="fleet-table">
-            <thead><tr><th>Trip</th><th>Route</th><th>Truck</th><th>Driver</th><th>Trip finances</th><th>Start</th><th>End</th><th>Status</th></tr></thead>
+            <thead><tr><th>Trip</th><th>Route</th><th>Truck</th><th>Driver</th>{% if can_dispatch %}<th>Trip finances</th>{% endif %}<th>Start</th><th>End</th><th>Status</th></tr></thead>
             <tbody>
                 {% for trip in trips %}
                 {% set trip_due = trip.freight_amount - trip.amount_received %}
@@ -86,6 +108,7 @@
                     <td>{{ trip.route_from }} → {{ trip.route_to }}</td>
                     <td>{{ trip.registration_number or 'Unassigned' }}</td>
                     <td>{{ trip.driver_name or 'Unassigned' }}</td>
+                    {% if can_dispatch %}
                     <td class="trip-finances">
                         <div><span>Customer freight charge:</span> {{ '%.2f'|format(trip.freight_amount) }}</div>
                         <div><span>Received:</span> {{ '%.2f'|format(trip.amount_received) }}</div>
@@ -122,6 +145,7 @@
                         </form>
                         {% endif %}
                     </td>
+                    {% endif %}
                     <td>{{ trip.start_date }}</td>
                     <td>{{ trip.end_date or '—' }}</td>
                     <td>
@@ -155,14 +179,41 @@
                     </td>
                 </tr>
                 {% else %}
-                <tr><td colspan="8" class="user-empty-state">No trips are scheduled yet.</td></tr>
+                <tr><td colspan="{{ 8 if can_dispatch else 7 }}" class="user-empty-state">No trips are scheduled yet.</td></tr>
                 {% endfor %}
             </tbody>
         </table>
     </div>
 
+    {% if can_dispatch %}
     <section class="recent-trip-payments">
         <a href="{{ url_for('payments') }}">Open the complete payment ledger →</a>
     </section>
+    {% endif %}
 </div>
+{% endblock %}
+
+{% block scripts %}
+{% if can_dispatch and assignable_users %}
+<script>
+    const tripOwnerSelect = document.getElementById("owner_user_id");
+    const tripDriverSelect = document.getElementById("driver_id");
+    const driverOptions = Array.from(tripDriverSelect.options);
+    const updateAvailableDrivers = () => {
+        const selectedOwner = tripOwnerSelect.selectedOptions[0];
+        const linkedDriverId = selectedOwner.dataset.driverId;
+        const requiresLinkedDriver = selectedOwner.dataset.role === "User";
+        driverOptions.forEach((option) => {
+            if (!option.value) return;
+            option.hidden = requiresLinkedDriver && option.value !== linkedDriverId;
+            option.disabled = option.hidden;
+        });
+        if (requiresLinkedDriver && tripDriverSelect.value !== linkedDriverId) {
+            tripDriverSelect.value = "";
+        }
+    };
+    tripOwnerSelect.addEventListener("change", updateAvailableDrivers);
+    updateAvailableDrivers();
+</script>
+{% endif %}
 {% endblock %}

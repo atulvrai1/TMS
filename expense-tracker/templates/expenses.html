@@ -7,12 +7,14 @@
 <div class="dashboard-page">
     <div class="panel-header">
         <div>
-            <h1 class="dashboard-title">Trip Expenses</h1>
-            <p class="dashboard-subtitle">Record trip costs against the correct trip. Expenses are grouped by trip, with a complete history for each one.</p>
+            <h1 class="dashboard-title">{{ 'Trip Expenses' if can_review else 'My Expense Requests' }}</h1>
+            <p class="dashboard-subtitle">{% if can_review %}Record and review trip costs. Expenses are grouped by trip, with a complete history for each one.{% else %}Submit expenses from your assigned trips. Each request will be reviewed by an administrator.{% endif %}</p>
         </div>
         <div class="trip-page-links">
             <a class="btn-ghost" href="{{ url_for('trips') }}">Back to trips & dispatch</a>
+            {% if can_review %}
             <a class="btn-ghost" href="{{ url_for('payments') }}">View customer payments</a>
+            {% endif %}
         </div>
     </div>
 
@@ -27,7 +29,7 @@
     </div>
 
     <details class="dispatch-panel" open>
-        <summary class="dispatch-panel-summary">Record an expense</summary>
+        <summary class="dispatch-panel-summary">{{ 'Record an expense' if can_review else 'Submit an expense request' }}</summary>
         {% if trips %}
         <form action="{{ url_for('create_expense') }}" method="POST" class="expense-form">
             <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
@@ -64,13 +66,14 @@
                 <label for="description">Notes / receipt reference (optional)</label>
                 <input class="form-input" id="description" name="description" maxlength="500" placeholder="What was purchased? Bill number, if available">
             </div>
-            <button type="submit" class="btn-primary dispatch-submit">Save expense</button>
+            <button type="submit" class="btn-primary dispatch-submit">{{ 'Save expense' if can_review else 'Submit for admin review' }}</button>
         </form>
         {% else %}
         <p class="account-help">Schedule a trip before recording a trip expense.</p>
         {% endif %}
     </details>
 
+    {% if can_review %}
     <section class="financial-overview" aria-labelledby="expense-financial-heading">
         <h2 class="admin-section-title" id="expense-financial-heading">Overall fleet P/L — all trips</h2>
         <p class="financial-definition">
@@ -100,7 +103,9 @@
             {% endif %}
         </div>
     </section>
+    {% endif %}
 
+    {% if can_review %}
     <section class="trip-profitability" aria-labelledby="trip-profitability-heading">
         <h2 class="admin-section-title" id="trip-profitability-heading">Profit / loss by trip</h2>
         <div class="table-container">
@@ -132,6 +137,7 @@
         </div>
         <p class="admin-section-link"><a href="{{ url_for('trips') }}">Open trips and record customer payments →</a></p>
     </section>
+    {% endif %}
 
     <details id="expense-history" class="expense-history-section" {% if selected_trip_id or selected_status %}open{% endif %}>
     <summary class="expense-history-toggle">{% if selected_trip_id %}Show expense history for Trip #{{ selected_trip_id }}{% elif selected_status %}Show {{ selected_status|lower }} expense history{% else %}Show expense history{% endif %}</summary>

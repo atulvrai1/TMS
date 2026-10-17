@@ -10,6 +10,21 @@
         <p style="color: var(--ink-muted); margin-top: 0.25rem;">A transparent summary of access decisions and fleet operations</p>
     </div>
 
+    <section class="table-container" style="padding: 1.5rem; margin-bottom: 2rem;" aria-labelledby="notification-summary-heading">
+        <div style="display: flex; justify-content: space-between; align-items: center; gap: 1rem; flex-wrap: wrap;">
+            <div>
+                <h2 class="admin-section-title" id="notification-summary-heading" style="margin-top: 0;">Notifications</h2>
+                <p style="color: var(--ink-muted); margin-bottom: 0;">Items needing administrator attention</p>
+            </div>
+            <a class="btn-primary" href="{{ url_for('admin_notifications') }}">Open notification panel</a>
+        </div>
+        <div class="stats-grid" style="margin-top: 1rem;">
+            <div class="stat-tile"><span class="stat-label">Pending registrations</span><span class="stat-value">{{ admin_notifications.pending_users|length }}</span></div>
+            <div class="stat-tile"><span class="stat-label">Expenses to review</span><span class="stat-value">{{ admin_notifications.pending_expenses|length }}</span></div>
+            <div class="stat-tile"><span class="stat-label">Password reset links</span><span class="stat-value">{{ admin_notifications.reset_links|length }}</span></div>
+        </div>
+    </section>
+
     <section aria-labelledby="access-summary-heading">
         <h2 class="admin-section-title" id="access-summary-heading">Account access</h2>
         <div class="stats-grid">

@@ -25,18 +25,22 @@
                 <a href="{{ url_for('trucks') }}" class="nav-item{% if request.endpoint in ('trucks', 'add_truck', 'edit_truck', 'delete_truck') %} active{% endif %}"><span>🚚</span> Trucks</a>
                 <a href="{{ url_for('drivers') }}" class="nav-item{% if request.endpoint in ('drivers', 'add_driver', 'edit_driver', 'upload_driver_document', 'download_driver_document') %} active{% endif %}"><span>♙</span> Drivers</a>
                 <a href="{{ url_for('trips') }}" class="nav-item{% if request.endpoint in ('trips', 'create_trip', 'update_trip_status', 'update_trip_freight', 'record_trip_payment') %} active{% endif %}"><span>↗</span> Trips & Dispatch</a>
+                <a href="{{ url_for('admin_notifications') }}" class="nav-item{% if request.endpoint in ('admin_notifications', 'admin_notification_count') %} active{% endif %}">
+                    <span>🔔</span> Notifications
+                    <span class="notification-badge" id="notification-count"
+                          data-count="{{ admin_notification_count }}"
+                          data-count-url="{{ url_for('admin_notification_count') }}"
+                          aria-label="{{ admin_notification_count }} pending notifications"
+                          {% if not admin_notification_count %}hidden{% endif %}>{{ "99+" if admin_notification_count > 99 else admin_notification_count }}</span>
+                </a>
                 <a href="{{ url_for('admin_users') }}" class="nav-item{% if request.endpoint in ('admin_users', 'approve_user', 'reject_user') %} active{% endif %}"><span>♙</span> User Access</a>
                 <a href="{{ url_for('expenses') }}" class="nav-item{% if request.endpoint in ('expenses', 'review_expense', 'correct_expense_amount') %} active{% endif %}"><span>₹</span> Expenses</a>
                 <a href="{{ url_for('payments') }}" class="nav-item{% if request.endpoint in ('payments', 'correct_payment_amount') %} active{% endif %}"><span>▤</span> Payments</a>
                 <a href="{{ url_for('admin_audit') }}" class="nav-item{% if request.endpoint == 'admin_audit' %} active{% endif %}"><span>≡</span> Audit Log</a>
                 {% else %}
                 <span class="nav-section-label">Operations</span>
-                <a href="{{ url_for('trucks') }}" class="nav-item{% if request.endpoint in ('trucks', 'add_truck', 'edit_truck') %} active{% endif %}"><span>🚚</span> Fleet View</a>
-                <a href="{{ url_for('drivers') }}" class="nav-item{% if request.endpoint == 'drivers' %} active{% endif %}"><span>♙</span> Drivers</a>
                 <a href="{{ url_for('trips') }}" class="nav-item{% if request.endpoint == 'trips' %} active{% endif %}"><span>↗</span> Trips</a>
                 <a href="{{ url_for('expenses') }}" class="nav-item{% if request.endpoint in ('expenses', 'review_expense', 'correct_expense_amount') %} active{% endif %}"><span>₹</span> Expenses</a>
-                <a href="{{ url_for('payments') }}" class="nav-item{% if request.endpoint in ('payments', 'correct_payment_amount') %} active{% endif %}"><span>▤</span> Payments</a>
-                <a href="{{ url_for('maintenance') }}" class="nav-item{% if request.endpoint == 'maintenance' %} active{% endif %}"><span>⚙</span> Maintenance</a>
                 {% endif %}
             </nav>
             <div class="sidebar-footer">
@@ -57,6 +61,11 @@
                 </div>
             </nav>
             <main class="main-content" style="padding: 2rem;">
+                <div class="notification-toast" id="notification-toast" role="status" aria-live="polite" hidden>
+                    <span id="notification-toast-message"></span>
+                    <a href="{{ url_for('admin_notifications') }}">View notifications</a>
+                    <button type="button" id="notification-toast-dismiss" aria-label="Dismiss notification alert">&times;</button>
+                </div>
                 {% with messages = get_flashed_messages(with_categories=true) %}
                 {% if messages %}
                 <div class="flash-messages" role="status" aria-live="polite">
@@ -115,7 +124,7 @@
     </footer>
     {% endif %}
 
-    <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/main.js', v='notifications-1') }}"></script>
     {% block scripts %}{% endblock %}
 </body>
 </html>

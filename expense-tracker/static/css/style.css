@@ -682,6 +682,63 @@ a { color: inherit; text-decoration: none; }
     color: var(--paper);
 }
 
+.notification-badge {
+    align-items: center;
+    background: #dc2626;
+    border: 2px solid var(--industry-dark);
+    border-radius: 999px;
+    color: white;
+    display: inline-flex;
+    font-size: 0.7rem;
+    font-weight: 700;
+    justify-content: center;
+    line-height: 1;
+    margin-left: auto;
+    min-width: 1.4rem;
+    padding: 0.2rem 0.35rem;
+}
+
+.notification-badge[hidden] {
+    display: none;
+}
+
+.notification-toast {
+    align-items: center;
+    background: var(--industry-dark);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-left: 4px solid var(--industry-accent);
+    border-radius: var(--radius-md);
+    bottom: 1.5rem;
+    box-shadow: 0 12px 32px rgba(15, 23, 42, 0.24);
+    color: white;
+    display: flex;
+    gap: 1rem;
+    max-width: min(38rem, calc(100vw - 2rem));
+    padding: 1rem 1.25rem;
+    position: fixed;
+    right: 1.5rem;
+    z-index: 200;
+}
+
+.notification-toast[hidden] {
+    display: none;
+}
+
+.notification-toast a {
+    color: #fde68a;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.notification-toast button {
+    background: none;
+    border: 0;
+    color: white;
+    cursor: pointer;
+    font-size: 1.4rem;
+    line-height: 1;
+}
+
 .nav-section-label {
     padding: 0.75rem 1rem 0.35rem;
     color: rgba(255, 255, 255, 0.45);

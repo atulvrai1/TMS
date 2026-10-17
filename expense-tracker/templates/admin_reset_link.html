@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+
+{% block title %}Password Reset Link — FleetFlow{% endblock %}
+{% block breadcrumb %}Admin / Password Reset Link{% endblock %}
+
+{% block content_dashboard %}
+<div class="dashboard-page">
+    <section class="table-container" style="max-width: 760px; margin: 0 auto; padding: 2rem;">
+        <h1 style="margin-top: 0;">Password reset link generated</h1>
+        <p>
+            Email delivery failed. Share this one-time link with <strong>{{ user_email }}</strong> through a trusted channel.
+            It expires in 30 minutes. Generating this link invalidated any earlier reset links for this account.
+        </p>
+        <div class="form-group">
+            <label for="reset-link">One-time reset link</label>
+            <input id="reset-link" class="form-input" type="url" value="{{ reset_url }}" readonly>
+        </div>
+        <button type="button" class="btn-primary" onclick="navigator.clipboard.writeText(document.getElementById('reset-link').value)">Copy link</button>
+        <a class="btn-ghost" href="{{ url_for('admin_users') }}">Back to User Access</a>
+    </section>
+</div>
+{% endblock %}

@@ -39,8 +39,10 @@ class UserAccessController:
         user = self.db.execute("SELECT role FROM users WHERE user_id = ?", (user_id,)).fetchone()
         return user and user['role'] == 'Admin'
 
-    def approve_user(self, user_id, actor_user_id=None, role='User'):
+    def approve_user(self, user_id, actor_user_id=None, role='User', driver_id=None):
         """Grants access to a user and assigns a role."""
+        if role not in ('Admin', 'User'):
+            raise ValueError("Approved account role must be Admin or User.")
         user = self.db.execute(
             "SELECT email, full_name FROM users "
             "WHERE user_id = ? AND is_approved = 0 AND is_rejected = 0 AND is_terminated = 0",
@@ -49,22 +51,48 @@ class UserAccessController:
         if not user:
             return False
 
+        if role == 'User':
+            if driver_id is None:
+                raise ValueError("Assign an active driver before approving a Driver account.")
+            driver = self.db.execute(
+                "SELECT driver_id FROM drivers "
+                "WHERE driver_id = ? AND is_terminated = 0 AND status = 'Active'",
+                (driver_id,)
+            ).fetchone()
+            linked_user = self.db.execute(
+                "SELECT user_id FROM users WHERE driver_id = ? AND user_id != ?",
+                (driver_id, user_id)
+            ).fetchone()
+            if not driver or linked_user:
+                raise ValueError("Choose an active driver who is not linked to another account.")
+        else:
+            driver_id = None
+
         self.db.execute(
-            "UPDATE users SET is_approved = 1, is_rejected = 0, role = ? WHERE user_id = ?",
-            (role, user_id)
+            "UPDATE users SET is_approved = 1, is_rejected = 0, role = ?, driver_id = ? "
+            "WHERE user_id = ?",
+            (role, driver_id, user_id)
         )
         self.db.commit()
 
         NotificationService.send_email(
             recipient_email=user['email'],
             subject="Account Approved - FleetFlow",
-            body=f"Hello {user['full_name'] or 'User'},\n\nYour account has been approved. You can now log in and manage your fleet."
+            body=(
+                f"Hello {user['full_name'] or 'User'},\n\n" +
+                (
+                    "Your Driver account has been approved. Sign in to view your assigned trips "
+                    "and submit expenses for administrator review."
+                    if role == 'User' else
+                    "Your Administrator account has been approved. Sign in to manage the fleet."
+                )
+            )
         )
 
         log_activity(
             user_id,
             "Account Approved",
-            f"User {user['email']} was approved.",
+            f"User {user['email']} was approved with {role} access.",
             actor_user_id=actor_user_id
         )
         return True
@@ -136,7 +164,7 @@ def access_required(f):
         authorized = controller.is_authorized(session['user_id'])
         terminated = controller.is_terminated(session['user_id'])
         user = conn.execute(
-            "SELECT email, role, job_role FROM users WHERE user_id = ?",
+            "SELECT email, role, job_role, driver_id FROM users WHERE user_id = ?",
             (session['user_id'],)
         ).fetchone()
         conn.close()
@@ -150,6 +178,7 @@ def access_required(f):
         session['email'] = user['email']
         session['role'] = user['role']
         session['job_role'] = user['job_role']
+        session['driver_id'] = user['driver_id']
         session['is_admin'] = (
             user['role'] == 'Admin'
             or controller.is_super_admin(user['email'])

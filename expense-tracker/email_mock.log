@@ -46,3 +46,34 @@ Body: Hello test-admin,
 Your account has been approved. You can now log in and manage your fleet.
 ------------------
 
+--- MOCK EMAIL ---
+To: test3@test.com
+Subject: Account Approved - FleetFlow
+Body: Hello test3,
+
+Your account has been approved. You can now log in and manage your fleet.
+------------------
+--- MOCK EMAIL ---
+To: test-admin@test.com
+Subject: Account Approved - FleetFlow
+Body: Hello test-admin,
+
+Your account has been approved with Admin access. You can now log in and manage your fleet.
+------------------
+
+--- MOCK EMAIL ---
+To: self@example.com
+Subject: Account Approved - FleetFlow
+Body: Hello Self Signup,
+
+Your Driver account has been approved. Sign in to view your assigned trips and submit expenses for administrator review.
+------------------
+
+--- MOCK EMAIL ---
+To: test@test.com
+Subject: Account Approved - FleetFlow
+Body: Hello test,
+
+Your Driver account has been approved. Sign in to view your assigned trips and submit expenses for administrator review.
+------------------
+

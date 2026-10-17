@@ -53,6 +53,8 @@ def init_db():
             conn.execute("ALTER TABLE users ADD COLUMN terminated_at DATETIME")
         if "job_role" not in user_columns:
             conn.execute("ALTER TABLE users ADD COLUMN job_role TEXT NOT NULL DEFAULT 'User'")
+        if "requested_role" not in user_columns:
+            conn.execute("ALTER TABLE users ADD COLUMN requested_role TEXT NOT NULL DEFAULT 'User'")
         conn.execute('''
             CREATE TABLE IF NOT EXISTS password_reset_tokens (
                 reset_id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -62,10 +64,24 @@ def init_db():
                 created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
                 used_at DATETIME,
                 requested_by INTEGER,
+                delivery_status TEXT NOT NULL DEFAULT 'unknown',
+                admin_reset_url TEXT,
                 FOREIGN KEY (user_id) REFERENCES users(user_id),
                 FOREIGN KEY (requested_by) REFERENCES users(user_id)
             )
         ''')
+        reset_token_columns = {
+            row["name"] for row in conn.execute("PRAGMA table_info(password_reset_tokens)")
+        }
+        if "delivery_status" not in reset_token_columns:
+            conn.execute(
+                "ALTER TABLE password_reset_tokens "
+                "ADD COLUMN delivery_status TEXT NOT NULL DEFAULT 'unknown'"
+            )
+        if "admin_reset_url" not in reset_token_columns:
+            conn.execute(
+                "ALTER TABLE password_reset_tokens ADD COLUMN admin_reset_url TEXT"
+            )
         conn.execute(
             "CREATE INDEX IF NOT EXISTS idx_password_reset_user "
             "ON password_reset_tokens(user_id, expires_at, used_at)"
@@ -97,9 +113,13 @@ def init_db():
                 year INTEGER NOT NULL,
                 capacity_tons REAL,
                 status TEXT CHECK(status IN ('Available', 'In Trip', 'Maintenance')) DEFAULT 'Available',
-                last_service_date DATE
+                last_service_date DATE,
+                owner_user_id INTEGER REFERENCES users(user_id)
             )
         ''')
+        truck_columns = {row["name"] for row in conn.execute("PRAGMA table_info(trucks)")}
+        if "owner_user_id" not in truck_columns:
+            conn.execute("ALTER TABLE trucks ADD COLUMN owner_user_id INTEGER REFERENCES users(user_id)")
 
         # Drivers Table
         conn.execute('''
@@ -123,6 +143,20 @@ def init_db():
             conn.execute("ALTER TABLE drivers ADD COLUMN terminated_at DATETIME")
         if "termination_reason" not in driver_columns:
             conn.execute("ALTER TABLE drivers ADD COLUMN termination_reason TEXT")
+        user_columns = {row["name"] for row in conn.execute("PRAGMA table_info(users)")}
+        if "driver_id" not in user_columns:
+            conn.execute(
+                "ALTER TABLE users ADD COLUMN driver_id INTEGER REFERENCES drivers(driver_id)"
+            )
+        conn.execute(
+            "CREATE UNIQUE INDEX IF NOT EXISTS idx_users_driver "
+            "ON users(driver_id) WHERE driver_id IS NOT NULL"
+        )
+        conn.execute(
+            "UPDATE users SET job_role = 'User' WHERE role = 'User' AND job_role != 'User'"
+        )
+        if "owner_user_id" not in driver_columns:
+            conn.execute("ALTER TABLE drivers ADD COLUMN owner_user_id INTEGER REFERENCES users(user_id)")
         conn.execute('''
             CREATE TABLE IF NOT EXISTS driver_documents (
                 document_id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -156,6 +190,7 @@ def init_db():
                 route_from TEXT NOT NULL,
                 route_to TEXT NOT NULL,
                 status TEXT CHECK(status IN ('Scheduled', 'In Progress', 'Completed', 'Cancelled')) DEFAULT 'Scheduled',
+                owner_user_id INTEGER REFERENCES users(user_id),
                 FOREIGN KEY (truck_id) REFERENCES trucks(truck_id),
                 FOREIGN KEY (driver_id) REFERENCES drivers(driver_id)
             )
@@ -165,6 +200,8 @@ def init_db():
             conn.execute(
                 "ALTER TABLE trips ADD COLUMN freight_amount REAL NOT NULL DEFAULT 0"
             )
+        if "owner_user_id" not in trip_columns:
+            conn.execute("ALTER TABLE trips ADD COLUMN owner_user_id INTEGER REFERENCES users(user_id)")
 
         # Expenses Table
         conn.execute('''
@@ -281,9 +318,54 @@ def init_db():
                 service_type TEXT NOT NULL,
                 cost REAL NOT NULL,
                 notes TEXT,
+                owner_user_id INTEGER REFERENCES users(user_id),
                 FOREIGN KEY (truck_id) REFERENCES trucks(truck_id)
             )
         ''')
+        maintenance_columns = {
+            row["name"] for row in conn.execute("PRAGMA table_info(maintenance)")
+        }
+        if "owner_user_id" not in maintenance_columns:
+            conn.execute("ALTER TABLE maintenance ADD COLUMN owner_user_id INTEGER REFERENCES users(user_id)")
+
+        super_admin = conn.execute(
+            "SELECT user_id FROM users WHERE lower(email) = lower(?)",
+            (SUPER_ADMIN_EMAIL,)
+        ).fetchone()
+        if super_admin:
+            super_admin_id = super_admin["user_id"]
+            for table in ("trips", "maintenance"):
+                conn.execute(
+                    f"UPDATE {table} SET owner_user_id = ? WHERE owner_user_id IS NULL",
+                    (super_admin_id,)
+                )
+        # Trucks and drivers are shared fleet resources, not user-owned records.
+        conn.execute("UPDATE trucks SET owner_user_id = NULL WHERE owner_user_id IS NOT NULL")
+        conn.execute("UPDATE drivers SET owner_user_id = NULL WHERE owner_user_id IS NOT NULL")
+        if super_admin:
+            super_admin_id = super_admin["user_id"]
+            conn.execute(
+                "UPDATE expenses SET created_by = ? WHERE created_by IS NULL",
+                (super_admin_id,)
+            )
+            conn.execute(
+                "UPDATE trip_payments SET recorded_by = ? WHERE recorded_by IS NULL",
+                (super_admin_id,)
+            )
+            conn.execute(
+                "UPDATE financial_corrections SET changed_by = ? WHERE changed_by IS NULL",
+                (super_admin_id,)
+            )
+            conn.execute(
+                "UPDATE driver_documents SET uploaded_by = ? WHERE uploaded_by IS NULL",
+                (super_admin_id,)
+            )
+
+        for table in ("trucks", "drivers", "trips", "maintenance"):
+            conn.execute(
+                f"CREATE INDEX IF NOT EXISTS idx_{table}_owner "
+                f"ON {table}(owner_user_id)"
+            )
         conn.commit()
 
 def seed_db():
@@ -302,7 +384,9 @@ def seed_db():
             ('KA-03-ZZ-9999', 'BharatBenz', 2023, 30.0, 'Maintenance', '2026-10-01'),
         ]
         conn.executemany(
-            'INSERT OR IGNORE INTO trucks (registration_number, model, year, capacity_tons, status, last_service_date) VALUES (?, ?, ?, ?, ?, ?)',
+            'INSERT OR IGNORE INTO trucks '
+            '(registration_number, model, year, capacity_tons, status, last_service_date) '
+            'VALUES (?, ?, ?, ?, ?, ?)',
             trucks
         )
 
@@ -313,7 +397,8 @@ def seed_db():
             ('Amit Singh', 'DL-1122334', '9876543212', 'On Leave'),
         ]
         conn.executemany(
-            'INSERT OR IGNORE INTO drivers (name, license_number, contact_info, status) VALUES (?, ?, ?, ?)',
+            'INSERT OR IGNORE INTO drivers '
+            '(name, license_number, contact_info, status) VALUES (?, ?, ?, ?)',
             drivers
         )
         conn.commit()

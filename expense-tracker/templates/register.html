@@ -14,29 +14,39 @@
 
         <div class="auth-card">
             {% if error %}
-            <div class="auth-error">{{ error }}</div>
+            <div class="auth-error" role="alert">{{ error }}</div>
             {% endif %}
             {% if success %}
-            <div class="auth-success">{{ success }}</div>
+            <div class="auth-success" role="status">{{ success }}</div>
             {% endif %}
 
-            <form method="POST" action="/register">
+            <form method="POST" action="{{ url_for('register') }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
                 <div class="form-group">
                     <label for="full_name">Full name</label>
                     <input type="text" id="full_name" name="full_name"
                            class="form-input" placeholder="Your full name"
-                           autocomplete="name" required autofocus>
+                           autocomplete="name" maxlength="120" required autofocus>
                 </div>
                 <div class="form-group">
                     <label for="email">Email address</label>
                     <input type="email" id="email" name="email"
                            class="form-input" placeholder="email@example.com"
-                           autocomplete="email" required>
+                           autocomplete="email" maxlength="254" required>
+                </div>
+                <div class="form-group">
+                    <label for="requested_role">Account type</label>
+                    <select id="requested_role" name="requested_role" class="form-input">
+                        <option value="User" {% if requested_role != 'Admin' %}selected{% endif %}>Driver</option>
+                        <option value="Admin" {% if requested_role == 'Admin' %}selected{% endif %}>Administrator</option>
+                    </select>
+                    <p class="form-help">Driver sign-ups remain pending until an administrator approves the account and links it to a driver record. Administrator access is granted only after an existing administrator reviews and approves the request.</p>
                 </div>
                 <div class="form-group">
                     <label for="password">Password</label>
                     <input type="password" id="password" name="password"
                            class="form-input" placeholder="Min. 8 characters"
+                           minlength="8" maxlength="128"
                            required>
                 </div>
                 <button type="submit" class="btn-submit">Create account</button>

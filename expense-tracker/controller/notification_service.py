@@ -1,3 +1,4 @@
+import logging
 import os
 import smtplib
 import ssl
@@ -28,33 +29,39 @@ class NotificationService:
     def send_password_reset_email(recipient_email, reset_url):
         smtp_host = os.environ.get("SMTP_HOST")
         if smtp_host:
-            sender = os.environ.get("SMTP_FROM")
-            if not sender:
-                raise RuntimeError("SMTP_FROM must be configured when SMTP_HOST is set.")
-            smtp_port = int(os.environ.get("SMTP_PORT", "587"))
-            message = EmailMessage()
-            message["Subject"] = "Reset your FleetFlow password"
-            message["From"] = sender
-            message["To"] = recipient_email
-            message.set_content(
-                "Use the following one-time link to reset your FleetFlow password. "
-                "It expires in 30 minutes.\n\n"
-                f"{reset_url}\n\n"
-                "If you did not request this reset, you can ignore this message."
-            )
-            context = ssl.create_default_context()
-            with smtplib.SMTP(smtp_host, smtp_port, timeout=15) as server:
-                server.starttls(context=context)
-                username = os.environ.get("SMTP_USERNAME")
-                password = os.environ.get("SMTP_PASSWORD")
-                if username:
-                    if not password:
-                        raise RuntimeError(
-                            "SMTP_PASSWORD must be configured when SMTP_USERNAME is set."
-                        )
-                    server.login(username, password)
-                server.send_message(message)
-            return
+            try:
+                sender = os.environ.get("SMTP_FROM")
+                if not sender:
+                    raise RuntimeError("SMTP_FROM must be configured when SMTP_HOST is set.")
+                smtp_port = int(os.environ.get("SMTP_PORT", "587"))
+                message = EmailMessage()
+                message["Subject"] = "Reset your FleetFlow password"
+                message["From"] = sender
+                message["To"] = recipient_email
+                message.set_content(
+                    "Use the following one-time link to reset your FleetFlow password. "
+                    "It expires in 30 minutes.\n\n"
+                    f"{reset_url}\n\n"
+                    "If you did not request this reset, you can ignore this message."
+                )
+                context = ssl.create_default_context()
+                with smtplib.SMTP(smtp_host, smtp_port, timeout=15) as server:
+                    server.starttls(context=context)
+                    username = os.environ.get("SMTP_USERNAME")
+                    password = os.environ.get("SMTP_PASSWORD")
+                    if username:
+                        if not password:
+                            raise RuntimeError(
+                                "SMTP_PASSWORD must be configured when SMTP_USERNAME is set."
+                            )
+                        server.login(username, password)
+                    server.send_message(message)
+                return True
+            except (OSError, RuntimeError, ValueError, smtplib.SMTPException) as exc:
+                logging.getLogger(__name__).warning(
+                    "SMTP password-reset delivery failed (%s); saving the link to the private local mail log.",
+                    type(exc).__name__
+                )
 
         mock_dir = Path(__file__).resolve().parents[1] / "instance"
         mock_dir.mkdir(mode=0o700, parents=True, exist_ok=True)
@@ -71,3 +78,4 @@ class NotificationService:
                 f"Password reset email for {recipient_email}; link expires in 30 minutes:\n"
                 f"{reset_url}\n\n"
             )
+        return False

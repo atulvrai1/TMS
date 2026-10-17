@@ -1,0 +1,103 @@
+{% extends "base.html" %}
+
+{% block title %}Notifications — FleetFlow{% endblock %}
+{% block breadcrumb %}Administration / Notifications{% endblock %}
+
+{% block content_dashboard %}
+<div class="dashboard-page">
+    <div class="panel-header" style="margin-bottom: 2rem;">
+        <h1 style="font-family: var(--font-display); font-size: 2rem; color: var(--ink); margin: 0;">Notifications</h1>
+        <p style="color: var(--ink-muted); margin-top: 0.25rem;">Review pending account requests, expenses, and password recovery links.</p>
+    </div>
+
+    <section class="table-container" style="padding: 1.5rem; margin-bottom: 1.5rem;" aria-labelledby="reset-notifications-heading">
+        <h2 id="reset-notifications-heading">Password reset links</h2>
+        <p style="color: var(--ink-muted);">Links for regular users who need admin assistance are shown here. Administrator recovery links are never displayed in notifications; use the configured email account, or retrieve the link from the private server log in a local setup. Share user links over a trusted channel. Links expire after 30 minutes and work once.</p>
+        {% if notifications.reset_links %}
+        <div style="display: grid; gap: 1rem;">
+            {% for item in notifications.reset_links %}
+            <article style="padding: 1rem; border: 1px solid var(--border); border-radius: 0.5rem;">
+                {% if item.user_id == session.get('user_id') %}
+                <strong>Your administrator account</strong>
+                {% else %}
+                <strong>{{ item.full_name or item.email }}</strong>
+                <span style="color: var(--ink-muted);">{{ item.email }}</span>
+                {% endif %}
+                <div style="font-size: 0.85rem; color: var(--ink-muted); margin: 0.35rem 0 0.75rem;">
+                    Requested {{ item.created_at }} · Expires {{ item.expires_at }}
+                </div>
+                {% if item.admin_reset_url %}
+                <div class="form-group">
+                    <label for="reset-link-{{ item.reset_id }}">One-time reset link</label>
+                    <input id="reset-link-{{ item.reset_id }}" class="form-input" type="url" value="{{ item.admin_reset_url }}" readonly>
+                </div>
+                <button type="button" class="btn-primary" onclick="navigator.clipboard.writeText(document.getElementById('reset-link-{{ item.reset_id }}').value)">Copy link</button>
+                {% else %}
+                <p>Email delivery failed before a link could be queued. Generate a new one-time link for this user.</p>
+                <form action="{{ url_for('admin_user_password_reset', id=item.user_id) }}" method="POST">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                    <button type="submit" class="btn-primary">Generate reset link</button>
+                </form>
+                {% endif %}
+            </article>
+            {% endfor %}
+        </div>
+        {% else %}
+        <p class="user-empty-state">No pending reset links.</p>
+        {% endif %}
+    </section>
+
+    <section class="table-container" style="padding: 1.5rem; margin-bottom: 1.5rem;" aria-labelledby="registration-notifications-heading">
+        <div style="display: flex; justify-content: space-between; align-items: center; gap: 1rem;">
+            <h2 id="registration-notifications-heading">Pending registrations ({{ notifications.pending_users|length }})</h2>
+            <a href="{{ url_for('admin_users') }}">Review user access</a>
+        </div>
+        {% if notifications.pending_users %}
+        <div class="table-container">
+            <table class="fleet-table">
+                <thead><tr><th>Name</th><th>Email</th><th>Requested access</th><th>Registered</th></tr></thead>
+                <tbody>
+                    {% for item in notifications.pending_users %}
+                    <tr>
+                        <td>{{ item.full_name or item.email }}</td>
+                        <td>{{ item.email }}</td>
+                        <td>{{ item.requested_role or 'User' }}</td>
+                        <td>{{ item.created_at }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <p class="user-empty-state">No registrations are waiting for approval.</p>
+        {% endif %}
+    </section>
+
+    <section class="table-container" style="padding: 1.5rem;" aria-labelledby="expense-notifications-heading">
+        <div style="display: flex; justify-content: space-between; align-items: center; gap: 1rem;">
+            <h2 id="expense-notifications-heading">Expenses awaiting review ({{ notifications.pending_expenses|length }})</h2>
+            <a href="{{ url_for('expenses', status='Pending') }}#expense-history">Review expenses</a>
+        </div>
+        {% if notifications.pending_expenses %}
+        <div class="table-container">
+            <table class="fleet-table">
+                <thead><tr><th>Submitted by</th><th>Trip</th><th>Category</th><th>Amount</th><th>Submitted</th></tr></thead>
+                <tbody>
+                    {% for item in notifications.pending_expenses %}
+                    <tr>
+                        <td>{{ item.full_name or item.email or 'Unknown user' }}</td>
+                        <td>#{{ item.trip_id }} · {{ item.route_from }} → {{ item.route_to }}</td>
+                        <td>{{ item.category }}</td>
+                        <td>{{ '%.2f'|format(item.amount) }}</td>
+                        <td>{{ item.created_at }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <p class="user-empty-state">No expenses are waiting for review.</p>
+        {% endif %}
+    </section>
+</div>
+{% endblock %}
