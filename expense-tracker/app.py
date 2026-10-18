@@ -141,9 +141,10 @@ def _record_owner_filter(alias, owner_column="owner_user_id"):
             [session["user_id"]]
         )
     if alias == "trips":
+        # Drivers should access trips assigned to their linked driver record,
+        # even when an administrator owns/created the trip.
         return (
-            f"({alias}.{owner_column} = ? AND {alias}.driver_id = "
-            f"(SELECT driver_id FROM users WHERE user_id = {alias}.{owner_column}))",
+            f"{alias}.driver_id = (SELECT driver_id FROM users WHERE user_id = ?)",
             [session["user_id"]]
         )
     return f"{alias}.{owner_column} = ?", [session["user_id"]]
