@@ -47,6 +47,10 @@
             </nav>
             <div class="sidebar-footer">
                 <a href="{{ url_for('account') }}" class="nav-item{% if request.endpoint == 'account' %} active{% endif %}"><span>👤</span> My Account</a>
+                <form action="{{ url_for('logout') }}" method="POST" class="sidebar-logout-form">
+                    <input type="hidden" name="csrf_token" value="{{ session.get('csrf_token', '') }}">
+                    <button type="submit" class="nav-item sidebar-logout-button">↪ Sign out</button>
+                </form>
             </div>
         </aside>
 
