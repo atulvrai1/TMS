@@ -601,8 +601,11 @@ def register():
     )
 
 
-@app.route("/logout", methods=["GET", "POST"])
+@app.route("/logout", methods=["POST"])
 def logout():
+    if not _valid_csrf_token():
+        flash("Your session token is invalid. Refresh the page and try again.", "error")
+        return redirect(url_for("account"))
     if session.get('user_id') is not None:
         conn = get_db()
         _record_user_activity(conn, "Account Logout", "Signed out.")
