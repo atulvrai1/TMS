@@ -90,6 +90,13 @@ def _ensure_schema(get_db):
             "UPDATE maintenance SET created_at = CURRENT_TIMESTAMP "
             "WHERE created_at IS NULL"
         )
+        # Preserve legacy total costs when the old schema has no cost breakdown.
+        conn.execute(
+            "UPDATE maintenance SET parts_cost = cost "
+            "WHERE COALESCE(parts_cost, 0) = 0 "
+            "AND COALESCE(labour_cost, 0) = 0 "
+            "AND COALESCE(tax_cost, 0) = 0 AND COALESCE(cost, 0) > 0"
+        )
         conn.execute(
             "CREATE INDEX IF NOT EXISTS idx_maintenance_truck_date "
             "ON maintenance(truck_id, service_date DESC)"
@@ -131,10 +138,11 @@ def register_maintenance_module(app, ns):
             "ORDER BY service_date DESC, maintenance_id DESC LIMIT 1",
             (truck_id,),
         ).fetchone()
-        conn.execute(
-            "UPDATE trucks SET last_service_date = ? WHERE truck_id = ?",
-            (latest["service_date"] if latest else None, truck_id),
-        )
+        if latest:
+            conn.execute(
+                "UPDATE trucks SET last_service_date = ? WHERE truck_id = ?",
+                (latest["service_date"], truck_id),
+            )
         active = conn.execute(
             "SELECT 1 FROM maintenance WHERE truck_id = ? "
             "AND status = 'In Progress' LIMIT 1",
