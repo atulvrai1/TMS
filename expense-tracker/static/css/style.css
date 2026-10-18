@@ -1677,3 +1677,84 @@ body:not(.dashboard-body) > .footer {
     }
 }
 
+
+
+/* Sidebar fit: keep every navigation tab reachable on shorter screens. */
+.dashboard-layout {
+    min-height: 100vh;
+    min-height: 100dvh;
+    align-items: stretch;
+}
+
+.sidebar {
+    height: 100vh;
+    height: 100dvh;
+    min-height: 0;
+    padding: 1rem;
+    overflow: hidden;
+}
+
+.sidebar-header {
+    flex: 0 0 auto;
+    margin-bottom: 1rem;
+    font-size: 1.3rem;
+}
+
+.sidebar-nav {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    overflow-x: hidden;
+    gap: 0.25rem;
+    padding-right: 0.15rem;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255,255,255,.3) transparent;
+}
+
+.sidebar-nav::-webkit-scrollbar {
+    width: 6px;
+}
+
+.sidebar-nav::-webkit-scrollbar-thumb {
+    background: rgba(255,255,255,.3);
+    border-radius: 999px;
+}
+
+.sidebar-nav .nav-item {
+    flex: 0 0 auto;
+    min-height: 2.5rem;
+    padding: 0.55rem 0.75rem;
+    line-height: 1.3;
+}
+
+.sidebar-nav .nav-section-label {
+    flex: 0 0 auto;
+    padding: 0.5rem 0.75rem 0.25rem;
+}
+
+.sidebar-footer {
+    flex: 0 0 auto;
+    padding-top: 0.5rem;
+    margin-top: 0.5rem;
+}
+
+@media (max-height: 760px) and (min-width: 769px) {
+    .sidebar {
+        padding: 0.75rem;
+    }
+
+    .sidebar-header {
+        margin-bottom: 0.5rem;
+    }
+
+    .sidebar-nav .nav-item {
+        min-height: 2.2rem;
+        padding: 0.45rem 0.65rem;
+        font-size: 0.9rem;
+    }
+
+    .sidebar-footer {
+        padding-top: 0.35rem;
+        margin-top: 0.35rem;
+    }
+}
