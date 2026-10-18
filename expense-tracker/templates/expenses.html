@@ -43,7 +43,7 @@
                 </select>
             </div>
             <div class="form-group">
-                <label for="category">What was the expense?</label>
+                <label for="category">Expense subcategory</label>
                 <select class="form-input" id="category" name="category" required>
                     <option value="">Select category</option>
                     <option>Fuel</option>
@@ -78,91 +78,9 @@
         {% endif %}
     </details>
 
-    <nav class="expense-subnav" aria-label="Expense sections">
-        <a href="#expense-categories">Expense subcategories</a>
-        {% if can_review %}<a href="{{ url_for('expenses', view='pl') }}#overall-fleet-pl">Overall Fleet P/L</a>{% endif %}
-        <a href="#expense-history">Expense history</a>
-        <a href="{{ url_for('export_expenses_csv', trip=selected_trip_id, status=selected_status, category=selected_category, date_from=date_from, date_to=date_to) }}">Export current report</a>
-    </nav>
-
-    <form action="{{ url_for('expenses') }}" method="GET" class="expense-filter-form">
-        <div class="expense-filter-field">
-            <label for="filter-trip">Trip</label>
-            <select class="form-input" id="filter-trip" name="trip">
-                <option value="">All accessible trips</option>
-                {% for trip in trips %}
-                <option value="{{ trip.trip_id }}" {% if selected_trip_id == trip.trip_id %}selected{% endif %}>#{{ trip.trip_id }} · {{ trip.route_from }} → {{ trip.route_to }}</option>
-                {% endfor %}
-            </select>
-        </div>
-        <div class="expense-filter-field">
-            <label for="filter-status">Status</label>
-            <select class="form-input" id="filter-status" name="status">
-                <option value="">All statuses</option>
-                {% for status in ['Pending', 'Approved', 'Rejected'] %}
-                <option value="{{ status }}" {% if selected_status == status %}selected{% endif %}>{{ status }}</option>
-                {% endfor %}
-            </select>
-        </div>
-        <div class="expense-filter-field">
-            <label for="filter-category">Category</label>
-            <select class="form-input" id="filter-category" name="category">
-                <option value="">All categories</option>
-                {% for category in ['Fuel', 'Toll', 'Meals/Allowance', 'Maintenance/Repairs', 'Loading/Unloading', 'Other', 'Food', 'Maintenance'] %}
-                <option value="{{ category }}" {% if selected_category == category %}selected{% endif %}>{{ category }}</option>
-                {% endfor %}
-            </select>
-        </div>
-        <div class="expense-filter-field">
-            <label for="filter-date-from">From date</label>
-            <input class="form-input" id="filter-date-from" type="date" name="date_from" value="{{ date_from }}">
-        </div>
-        <div class="expense-filter-field">
-            <label for="filter-date-to">To date</label>
-            <input class="form-input" id="filter-date-to" type="date" name="date_to" value="{{ date_to }}">
-        </div>
-        <div class="expense-filter-actions">
-            <button type="submit" class="btn-primary">Apply filters</button>
-            <a class="btn-ghost" href="{{ url_for('expenses') }}">Clear</a>
-            <a class="btn-ghost" href="{{ url_for('export_expenses_csv', trip=selected_trip_id, status=selected_status, category=selected_category, date_from=date_from, date_to=date_to) }}">Export CSV</a>
-        </div>
-    </form>
-
-    <section id="expense-categories" class="expense-category-workspace" aria-labelledby="expense-category-heading">
-        <div class="expense-category-workspace-heading">
-            <div>
-                <h2 class="admin-section-title" id="expense-category-heading">Expense subcategories</h2>
-                <p class="financial-definition">Choose a category to open its records. Amounts below respect the selected trip and date range, so you can quickly compare spend across expense types.</p>
-            </div>
-            {% if selected_category %}
-            <a class="btn-ghost" href="{{ url_for('expenses', trip=selected_trip_id, date_from=date_from, date_to=date_to, status=selected_status) }}#expense-categories">Clear category</a>
-            {% endif %}
-        </div>
-        <div class="expense-category-grid">
-            {% for item in category_summary %}
-            <a class="expense-category-card{% if selected_category == item.category %} active{% endif %}"
-               href="{{ url_for('expenses', category=item.category, trip=selected_trip_id, date_from=date_from, date_to=date_to, status=selected_status) }}#expense-history"
-               {% if selected_category == item.category %}aria-current="page"{% endif %}>
-                <div class="expense-category-card-heading">
-                    <strong>{{ item.category }}</strong>
-                    <span>{{ item.count }} record{{ '' if item.count == 1 else 's' }}</span>
-                </div>
-                <div class="expense-category-total">{{ '%.2f'|format(item.total) }}</div>
-                <div class="expense-category-stats">
-                    <span>Approved <strong>{{ '%.2f'|format(item.approved_total) }}</strong></span>
-                    <span>Pending <strong>{{ '%.2f'|format(item.pending_total) }}</strong></span>
-                    <span>Rejected <strong>{{ '%.2f'|format(item.rejected_total) }}</strong></span>
-                </div>
-                <span class="expense-category-open">Open category records →</span>
-            </a>
-            {% endfor %}
-        </div>
-        <p class="financial-definition">Older records under Food or Maintenance are retained as separate legacy categories; nothing is removed or renamed.</p>
-    </section>
-
     {% if can_review %}
-    <details id="overall-fleet-pl" class="expense-subsection-panel" {% if selected_view == 'pl' %}open{% endif %}>
-        <summary class="expense-subsection-summary">Overall Fleet P/L and trip profitability</summary>
+    <details id="overall-fleet-pl" class="expense-pl-tab" open>
+        <summary class="expense-pl-tab-summary">Profit / Loss</summary>
     <section class="financial-overview" aria-labelledby="expense-financial-heading">
         <h2 class="admin-section-title" id="expense-financial-heading">Overall fleet P/L — all trips</h2>
         <p class="financial-definition">
@@ -224,14 +142,92 @@
         </div>
         <p class="admin-section-link"><a href="{{ url_for('trips') }}">Open trips and record customer payments →</a></p>
     </section>
+
+        {% if category_summary %}
+        <details class="expense-subcategory-panel" open>
+            <summary class="expense-subcategory-summary">Expense subcategory breakdown</summary>
+            <p class="financial-definition">Compare recorded spend by subcategory. Only approved amounts reduce profit/loss; pending and rejected records remain separate.</p>
+            <div class="table-container">
+                <table class="fleet-table">
+                    <thead><tr><th>Expense subcategory</th><th>Records</th><th>Approved</th><th>Pending</th><th>Rejected</th><th>Total recorded</th></tr></thead>
+                    <tbody>
+                        {% for item in category_summary %}
+                        <tr>
+                            <td><a href="{{ url_for('expenses', category=item.category, trip=selected_trip_id, status=selected_status, date_from=date_from, date_to=date_to) }}#expense-history">{{ item.category }}</a></td>
+                            <td>{{ item.count }}</td>
+                            <td>{{ '%.2f'|format(item.approved_total) }}</td>
+                            <td>{{ '%.2f'|format(item.pending_total) }}</td>
+                            <td>{{ '%.2f'|format(item.rejected_total) }}</td>
+                            <td>{{ '%.2f'|format(item.total) }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            <p class="financial-definition">Only approved expenses reduce profit/loss. Pending and rejected amounts remain separately visible for review and reconciliation.</p>
+        </details>
     </details>
     {% endif %}
 
+
+
+    
+
     <details id="expense-history" class="expense-history-section" {% if selected_trip_id or selected_status or selected_category or date_from or date_to %}open{% endif %}>
     <summary class="expense-history-toggle">{% if selected_trip_id %}Show expense history for Trip #{{ selected_trip_id }}{% elif selected_status %}Show {{ selected_status|lower }} expense history{% elif selected_category %}Show {{ selected_category }} expense history{% elif date_from or date_to %}Show date-filtered expense history{% else %}Show expense history{% endif %}</summary>
+    <form action="{{ url_for('expenses') }}" method="GET" class="expense-filter-form">
+        <div class="expense-filter-field">
+            <label for="filter-trip">Trip</label>
+            <select class="form-input" id="filter-trip" name="trip">
+                <option value="">All accessible trips</option>
+                {% for trip in trips %}
+                <option value="{{ trip.trip_id }}" {% if selected_trip_id == trip.trip_id %}selected{% endif %}>#{{ trip.trip_id }} · {{ trip.route_from }} → {{ trip.route_to }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="expense-filter-field">
+            <label for="filter-status">Status</label>
+            <select class="form-input" id="filter-status" name="status">
+                <option value="">All statuses</option>
+                {% for status in ['Pending', 'Approved', 'Rejected'] %}
+                <option value="{{ status }}" {% if selected_status == status %}selected{% endif %}>{{ status }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="expense-filter-field">
+            <label for="filter-category">Category</label>
+            <select class="form-input" id="filter-category" name="category">
+                <option value="">All categories</option>
+                {% for category in ['Fuel', 'Toll', 'Meals/Allowance', 'Maintenance/Repairs', 'Loading/Unloading', 'Other', 'Food', 'Maintenance'] %}
+                <option value="{{ category }}" {% if selected_category == category %}selected{% endif %}>{{ category }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="expense-filter-field">
+            <label for="filter-date-from">From date</label>
+            <input class="form-input" id="filter-date-from" type="date" name="date_from" value="{{ date_from }}">
+        </div>
+        <div class="expense-filter-field">
+            <label for="filter-date-to">To date</label>
+            <input class="form-input" id="filter-date-to" type="date" name="date_to" value="{{ date_to }}">
+        </div>
+        <div class="expense-filter-actions">
+            <button type="submit" class="btn-primary">Apply filters</button>
+            <a class="btn-ghost" href="{{ url_for('expenses') }}">Clear</a>
+            <a class="btn-ghost" href="{{ url_for('export_expenses_csv', trip=selected_trip_id, status=selected_status, category=selected_category, date_from=date_from, date_to=date_to) }}">Export CSV</a>
+        </div>
+    </form>
+
+    <nav class="expense-history-subcategories" aria-label="Filter history by expense subcategory">
+        <a href="{{ url_for('expenses', trip=selected_trip_id, status=selected_status, date_from=date_from, date_to=date_to) }}#expense-history" {% if not selected_category %}aria-current="page"{% endif %}>All subcategories</a>
+        {% for item in category_summary %}
+        <a href="{{ url_for('expenses', category=item.category, trip=selected_trip_id, status=selected_status, date_from=date_from, date_to=date_to) }}#expense-history" {% if selected_category == item.category %}aria-current="page"{% endif %}>{{ item.category }}</a>
+        {% endfor %}
+    </nav>
+
     <div class="expense-history-heading">
         <div>
-            <h2 class="admin-section-title" id="expense-history-heading">{% if selected_trip_id %}Expense history — Trip #{{ selected_trip_id }}{% elif selected_status %}{{ selected_status }} expense history{% else %}Expense history{% endif %}</h2>
+            <h2 class="admin-section-title" id="expense-history-heading">{% if selected_trip_id %}Expense history — Trip #{{ selected_trip_id }}{% elif selected_category %}{{ selected_category }} expense history{% elif selected_status %}{{ selected_status }} expense history{% else %}Expense history{% endif %}</h2>
             {% if selected_trip_id %}
             <p class="financial-definition">Showing every expense for Trip #{{ selected_trip_id }}, including expenses awaiting admin review, approved/rejected entries, and correction history.</p>
             {% elif selected_status %}
