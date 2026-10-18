@@ -105,7 +105,18 @@
                 {% set trip_due = trip.freight_amount - trip.amount_received %}
                 <tr>
                     <td>#{{ trip.trip_id }}</td>
-                    <td>{{ trip.route_from }} → {{ trip.route_to }}</td>
+                    <td class="trip-route-cell">
+                        <div class="trip-route">
+                            <div class="trip-route-point">
+                                <span class="trip-route-label">Pickup</span>
+                                <span class="trip-route-value">{{ trip.route_from or '—' }}</span>
+                            </div>
+                            <div class="trip-route-point trip-route-destination">
+                                <span class="trip-route-label">Destination</span>
+                                <span class="trip-route-value">{{ trip.route_to or '—' }}</span>
+                            </div>
+                        </div>
+                    </td>
                     <td>{{ trip.registration_number or 'Unassigned' }}</td>
                     <td>{{ trip.driver_name or 'Unassigned' }}</td>
                     {% if can_dispatch %}
