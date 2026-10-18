@@ -57,3 +57,97 @@ if (notificationCount) {
         }
     }, 30000);
 }
+
+
+// Accessible mobile navigation: keep the operations menu out of the way on small screens.
+(() => {
+    const toggle = document.getElementById("mobile-menu-toggle");
+    const navigation = document.getElementById("sidebar-navigation");
+    if (!toggle || !navigation) return;
+
+    const closeMenu = () => {
+        document.body.classList.remove("menu-open");
+        toggle.setAttribute("aria-expanded", "false");
+        toggle.innerHTML = "☰ <span>Menu</span>";
+    };
+    toggle.addEventListener("click", () => {
+        const open = !document.body.classList.contains("menu-open");
+        document.body.classList.toggle("menu-open", open);
+        toggle.setAttribute("aria-expanded", String(open));
+        toggle.innerHTML = open ? "✕ <span>Close</span>" : "☰ <span>Menu</span>";
+    });
+    document.addEventListener("keydown", (event) => {
+        if (event.key === "Escape") closeMenu();
+    });
+    navigation.addEventListener("click", (event) => {
+        if (event.target.closest("a")) closeMenu();
+    });
+})();
+
+// Quick, client-side filtering makes long operational and finance tables easier to scan.
+// It only filters rows already rendered by the server; it does not change stored data.
+(() => {
+    const tables = document.querySelectorAll(".fleet-table");
+    tables.forEach((table, index) => {
+        const body = table.tBodies && table.tBodies[0];
+        if (!body) return;
+        const rows = Array.from(body.rows);
+        if (rows.length < 8) return;
+
+        const container = table.closest(".table-container");
+        if (!container || container.querySelector(".table-quick-search")) return;
+
+        const wrapper = document.createElement("div");
+        wrapper.className = "table-quick-search";
+        const label = document.createElement("label");
+        const input = document.createElement("input");
+        const inputId = `table-search-${index + 1}`;
+        label.htmlFor = inputId;
+        label.textContent = "Quick find";
+        input.id = inputId;
+        input.type = "search";
+        input.placeholder = "Search visible rows…";
+        input.autocomplete = "off";
+        input.setAttribute("aria-describedby", `${inputId}-status`);
+        const status = document.createElement("span");
+        status.id = `${inputId}-status`;
+        status.className = "form-help";
+        status.setAttribute("aria-live", "polite");
+        status.textContent = `${rows.length} rows`;
+        wrapper.append(label, input);
+        container.parentNode.insertBefore(wrapper, container);
+        wrapper.appendChild(status);
+
+        const empty = document.createElement("div");
+        empty.className = "table-search-empty";
+        empty.textContent = "No rows match your search. Try another keyword.";
+        empty.setAttribute("role", "status");
+        container.insertAdjacentElement("afterend", empty);
+
+        input.addEventListener("input", () => {
+            const query = input.value.trim().toLocaleLowerCase();
+            let visible = 0;
+            rows.forEach((row) => {
+                const match = row.textContent.toLocaleLowerCase().includes(query);
+                row.hidden = !match;
+                if (match) visible += 1;
+            });
+            status.textContent = `${visible} of ${rows.length} rows`;
+            empty.style.display = visible ? "none" : "block";
+            container.style.display = visible ? "" : "none";
+        });
+    });
+})();
+
+// Prevent accidental double-submission on forms explicitly marked as one-time actions.
+document.querySelectorAll("form[data-disable-on-submit]").forEach((form) => {
+    form.addEventListener("submit", () => {
+        const submit = form.querySelector('button[type="submit"], input[type="submit"]');
+        if (!submit) return;
+        submit.disabled = true;
+        if (submit.tagName === "BUTTON") {
+            submit.dataset.originalText = submit.textContent;
+            submit.textContent = "Saving…";
+        }
+    });
+});
