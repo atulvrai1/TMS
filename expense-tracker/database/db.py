@@ -256,10 +256,6 @@ def init_db():
         ):
             if column_name not in expense_columns:
                 conn.execute(f"ALTER TABLE expenses ADD COLUMN {column_name} {column_type}")
-        conn.execute(
-            "CREATE INDEX IF NOT EXISTS idx_expenses_trip_status_date "
-            "ON expenses(trip_id, status, date)"
-        )
         expense_schema = conn.execute(
             "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'expenses'"
         ).fetchone()["sql"]
@@ -301,6 +297,11 @@ def init_db():
             )
             conn.execute("DROP TABLE expenses")
             conn.execute("ALTER TABLE expenses_new RENAME TO expenses")
+
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_expenses_trip_status_date "
+            "ON expenses(trip_id, status, date)"
+        )
 
         conn.execute('''
             CREATE TABLE IF NOT EXISTS trip_payments (
