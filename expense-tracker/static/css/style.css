@@ -1758,3 +1758,108 @@ body:not(.dashboard-body) > .footer {
         margin-top: 0.35rem;
     }
 }
+
+
+/* Expense management filters, review controls, and private receipt inputs */
+.expense-filter-form {
+    align-items: end;
+    background: var(--paper-card);
+    border: 1px solid var(--border-ui);
+    border-radius: var(--radius-md);
+    display: grid;
+    gap: 1rem;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 170px), 1fr));
+    margin: 1.5rem 0;
+    padding: 1.25rem;
+}
+
+.expense-filter-field {
+    display: grid;
+    gap: 0.45rem;
+    min-width: 0;
+}
+
+.expense-filter-field label {
+    color: var(--ink-muted);
+    font-size: 0.82rem;
+    font-weight: 600;
+}
+
+.expense-filter-form .form-input {
+    min-height: 2.7rem;
+    min-width: 0;
+    width: 100%;
+}
+
+.expense-filter-actions {
+    align-items: center;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.65rem;
+    grid-column: 1 / -1;
+}
+
+.expense-filter-actions .btn-primary,
+.expense-filter-actions .btn-ghost {
+    align-items: center;
+    display: inline-flex;
+    justify-content: center;
+    min-height: 2.6rem;
+    padding: 0.55rem 0.85rem;
+    text-decoration: none;
+}
+
+.expense-category-summary {
+    margin-bottom: 1.5rem;
+}
+
+.expense-review-actions {
+    align-items: start;
+    flex-wrap: wrap;
+}
+
+.expense-review-actions form {
+    align-items: center;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+}
+
+.expense-review-actions input[name="review_note"] {
+    border: 1px solid var(--border-ui);
+    border-radius: var(--radius-sm);
+    font: inherit;
+    max-width: 250px;
+    min-width: min(100%, 190px);
+    padding: 0.45rem 0.55rem;
+}
+
+.expense-form input[type="file"] {
+    max-width: 100%;
+}
+
+.expense-form small {
+    color: var(--ink-muted);
+    font-size: 0.75rem;
+    line-height: 1.45;
+}
+
+@media (max-width: 640px) {
+    .expense-filter-form {
+        padding: 0.9rem;
+    }
+
+    .expense-filter-actions {
+        align-items: stretch;
+    }
+
+    .expense-filter-actions .btn-primary,
+    .expense-filter-actions .btn-ghost {
+        flex: 1 1 130px;
+    }
+
+    .expense-review-actions input[name="review_note"] {
+        max-width: 100%;
+        width: 100%;
+    }
+}
