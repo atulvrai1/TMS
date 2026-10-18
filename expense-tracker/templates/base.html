@@ -11,14 +11,16 @@
     {% block head %}{% endblock %}
 </head>
 <body class="{{ 'dashboard-body' if block_content == 'dashboard' else '' }}">
+    <a class="skip-link" href="#main-content">Skip to main content</a>
     {% if block_content == 'dashboard' %}
     <div class="dashboard-layout">
         <aside class="sidebar">
             <div class="sidebar-header">
                 <span class="brand-icon">🚛</span>
                 <span class="brand-name">FleetFlow</span>
+                <button class="mobile-menu-toggle" type="button" id="mobile-menu-toggle" aria-expanded="false" aria-controls="sidebar-navigation">☰ <span>Menu</span></button>
             </div>
-            <nav class="sidebar-nav">
+            <nav class="sidebar-nav" id="sidebar-navigation">
                 {% if session.get('is_admin') or session.get('role') == 'Admin' %}
                 <span class="nav-section-label">Administration</span>
                 <a href="{{ url_for('admin_dashboard') }}" class="nav-item{% if request.endpoint == 'admin_dashboard' %} active{% endif %}"><span>▦</span> Overview</a>
@@ -60,7 +62,7 @@
                     <div aria-label="{{ profile_name }}" title="{{ profile_name }}" style="width: 32px; height: 32px; border-radius: 50%; background: var(--industry-blue); color: white; display: flex; align-items: center; justify-content: center; font-size: 0.8rem; font-weight: 600;">{{ session.get('avatar_initials') or profile_name[:1]|upper }}</div>
                 </div>
             </nav>
-            <main class="main-content" style="padding: 2rem;">
+            <main class="main-content" id="main-content" tabindex="-1" style="padding: 2rem;">
                 <div class="notification-toast" id="notification-toast" role="status" aria-live="polite" hidden>
                     <span id="notification-toast-message"></span>
                     <a href="{{ url_for('admin_notifications') }}">View notifications</a>
@@ -93,7 +95,7 @@
             </div>
         </div>
     </nav>
-    <main class="main-content">
+    <main class="main-content" id="main-content" tabindex="-1">
         {% with messages = get_flashed_messages(with_categories=true) %}
         {% if messages %}
         <div class="flash-messages" role="status" aria-live="polite">
