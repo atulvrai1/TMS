@@ -2880,6 +2880,10 @@ def terminate_user(id):
 from controller.expense_enhancements import register_expense_enhancements
 register_expense_enhancements(app, globals())
 
+# Register the full maintenance management workflow.
+from controller.maintenance_enhancements import register_maintenance_module
+register_maintenance_module(app, globals())
+
 
 if __name__ == "__main__":
     # Never enable the interactive debugger by default.

@@ -1,37 +1,261 @@
 {% extends "base.html" %}
 
-{% block title %}Maintenance — FleetFlow{% endblock %}
+{% block title %}Maintenance Management — FleetFlow{% endblock %}
 {% block breadcrumb %}Operations / Maintenance{% endblock %}
 
 {% block content_dashboard %}
 <div class="dashboard-page">
-    <div class="panel-header" style="margin-bottom: 2rem;">
-        <h1 class="dashboard-title">Maintenance</h1>
-        <p class="dashboard-subtitle">Review service history and maintenance costs across the fleet.</p>
+    <div class="panel-header">
+        <div>
+            <h1 class="dashboard-title">Maintenance Management</h1>
+            <p class="dashboard-subtitle">Schedule servicing, track repair costs, and keep a complete history for every truck.</p>
+        </div>
+        <div class="trip-page-links">
+            <a class="btn-ghost" href="{{ url_for('trucks') }}">View fleet</a>
+            <a class="btn-primary" href="#add-maintenance">+ Add maintenance</a>
+        </div>
     </div>
 
-    <div class="stats-grid">
-        <div class="stat-tile"><span class="stat-label">Service Records</span><span class="stat-value">{{ counts.total or 0 }}</span></div>
-        <div class="stat-tile"><span class="stat-label">Recorded Cost</span><span class="stat-value">{{ '%.2f'|format(counts.total_cost or 0) }}</span></div>
-    </div>
+    <section class="stats-grid" aria-label="Maintenance summary">
+        <div class="stat-tile">
+            <span class="stat-label">Service records</span>
+            <span class="stat-value">{{ summary.total or 0 }}</span>
+        </div>
+        <div class="stat-tile">
+            <span class="stat-label">Total recorded cost</span>
+            <span class="stat-value">₹{{ '%.2f'|format(summary.total_cost or 0) }}</span>
+        </div>
+        <div class="stat-tile">
+            <span class="stat-label">Scheduled</span>
+            <span class="stat-value">{{ summary.scheduled or 0 }}</span>
+        </div>
+        <div class="stat-tile">
+            <span class="stat-label">In progress</span>
+            <span class="stat-value">{{ summary.in_progress or 0 }}</span>
+        </div>
+        <div class="stat-tile">
+            <span class="stat-label">Upcoming in 30 days</span>
+            <span class="stat-value">{{ due_soon }}</span>
+        </div>
+        <div class="stat-tile">
+            <span class="stat-label">Overdue services</span>
+            <span class="stat-value">{{ overdue }}</span>
+        </div>
+    </section>
 
-    <div class="table-container">
-        <table class="fleet-table">
-            <thead><tr><th>Service Date</th><th>Truck</th><th>Service</th><th>Cost</th><th>Notes</th></tr></thead>
-            <tbody>
-                {% for record in maintenance_records %}
-                <tr>
-                    <td>{{ record.service_date }}</td>
-                    <td>{{ record.registration_number or 'Vehicle unavailable' }}</td>
-                    <td>{{ record.service_type }}</td>
-                    <td>{{ '%.2f'|format(record.cost) }}</td>
-                    <td>{{ record.notes or '—' }}</td>
-                </tr>
-                {% else %}
-                <tr><td colspan="5" class="user-empty-state">No maintenance records have been entered yet.</td></tr>
-                {% endfor %}
-            </tbody>
-        </table>
-    </div>
+    <section class="dispatch-panel" id="add-maintenance" style="margin: 1.5rem 0;">
+        <div class="panel-header">
+            <div>
+                <h2 class="admin-section-title" style="margin: 0;">Add maintenance record</h2>
+                <p class="dashboard-subtitle">Total cost is calculated from parts, labour, and tax.</p>
+            </div>
+        </div>
+        <form action="{{ url_for('maintenance_add') }}" method="POST" class="dispatch-form">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+            <div class="form-group">
+                <label for="add-truck">Truck *</label>
+                <select id="add-truck" name="truck_id" class="form-input" required>
+                    <option value="">Select a truck</option>
+                    {% for truck in trucks %}
+                    <option value="{{ truck.truck_id }}">{{ truck.registration_number }} — {{ truck.model }} ({{ truck.status }})</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="form-group">
+                <label for="add-service-type">Service / repair *</label>
+                <input id="add-service-type" name="service_type" class="form-input" maxlength="100" placeholder="e.g. Oil change, brake repair" required>
+            </div>
+            <div class="form-group">
+                <label for="add-service-date">Service / appointment date *</label>
+                <input id="add-service-date" type="date" name="service_date" class="form-input" value="{{ today }}" required>
+            </div>
+            <div class="form-group">
+                <label for="add-status">Status *</label>
+                <select id="add-status" name="status" class="form-input" required>
+                    <option value="Scheduled" selected>Scheduled</option>
+                    <option value="In Progress">In progress</option>
+                    <option value="Completed">Completed</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label for="add-odometer">Odometer reading (km)</label>
+                <input id="add-odometer" type="number" min="0" step="1" name="odometer_reading" class="form-input" placeholder="Current kilometres">
+            </div>
+            <div class="form-group">
+                <label for="add-next-date">Next service date</label>
+                <input id="add-next-date" type="date" name="next_service_date" class="form-input">
+            </div>
+            <div class="form-group">
+                <label for="add-next-odometer">Next service at (km)</label>
+                <input id="add-next-odometer" type="number" min="0" step="1" name="next_service_odometer" class="form-input" placeholder="e.g. 85000">
+            </div>
+            <div class="form-group">
+                <label for="add-vendor">Workshop / vendor</label>
+                <input id="add-vendor" name="vendor" class="form-input" maxlength="120" placeholder="Workshop or mechanic">
+            </div>
+            <div class="form-group">
+                <label for="add-parts-cost">Parts cost (₹)</label>
+                <input id="add-parts-cost" type="number" name="parts_cost" class="form-input" min="0" max="999999999.99" step="0.01" value="0" required>
+            </div>
+            <div class="form-group">
+                <label for="add-labour-cost">Labour cost (₹)</label>
+                <input id="add-labour-cost" type="number" name="labour_cost" class="form-input" min="0" max="999999999.99" step="0.01" value="0" required>
+            </div>
+            <div class="form-group">
+                <label for="add-tax-cost">Tax / other charges (₹)</label>
+                <input id="add-tax-cost" type="number" name="tax_cost" class="form-input" min="0" max="999999999.99" step="0.01" value="0" required>
+            </div>
+            <div class="form-group">
+                <label for="add-notes">Notes</label>
+                <input id="add-notes" name="notes" class="form-input" maxlength="500" placeholder="Work done, parts replaced, follow-up">
+            </div>
+            <div class="form-actions">
+                <button type="submit" class="btn-primary">Save maintenance record</button>
+            </div>
+        </form>
+    </section>
+
+    <section aria-labelledby="maintenance-history-heading">
+        <div class="panel-header">
+            <div>
+                <h2 class="admin-section-title" id="maintenance-history-heading">Maintenance history</h2>
+                <p class="dashboard-subtitle">Edit existing records or remove records entered in error.</p>
+            </div>
+        </div>
+        <form method="GET" action="{{ url_for('maintenance') }}" class="dispatch-form" style="margin-bottom: 1rem;">
+            <div class="form-group">
+                <label for="maintenance-search">Search truck, service, vendor, or notes</label>
+                <input id="maintenance-search" type="search" name="q" class="form-input" value="{{ search_query }}" placeholder="Search maintenance history">
+            </div>
+            <div class="form-group">
+                <label for="maintenance-status-filter">Status</label>
+                <select id="maintenance-status-filter" name="status" class="form-input">
+                    <option value="">All statuses</option>
+                    {% for status in ['Scheduled', 'In Progress', 'Completed'] %}
+                    <option value="{{ status }}" {% if selected_status == status %}selected{% endif %}>{{ status }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="form-actions">
+                <button class="btn-primary" type="submit">Apply filters</button>
+                <a class="btn-ghost" href="{{ url_for('maintenance') }}">Clear</a>
+            </div>
+        </form>
+
+        <div class="table-container">
+            <table class="fleet-table">
+                <thead>
+                    <tr>
+                        <th>Truck / service</th>
+                        <th>Status</th>
+                        <th>Service date</th>
+                        <th>Next service</th>
+                        <th>Odometer</th>
+                        <th>Workshop</th>
+                        <th>Total cost</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for record in maintenance_records %}
+                    <tr>
+                        <td>
+                            <strong>{{ record.registration_number }}</strong>
+                            <div class="expense-secondary">{{ record.service_type }}</div>
+                            {% if record.notes %}<div class="expense-secondary">{{ record.notes }}</div>{% endif %}
+                        </td>
+                        <td>
+                            <strong>{{ record.status }}</strong>
+                            {% if record.next_service_date and record.next_service_date < today %}
+                            <div class="expense-secondary">Overdue</div>
+                            {% elif record.next_service_date and record.next_service_date == today %}
+                            <div class="expense-secondary">Due today</div>
+                            {% endif %}
+                        </td>
+                        <td>{{ record.service_date }}</td>
+                        <td>
+                            {{ record.next_service_date or '—' }}
+                            {% if record.next_service_odometer %}<div class="expense-secondary">{{ record.next_service_odometer }} km</div>{% endif %}
+                        </td>
+                        <td>{{ record.odometer_reading ~ ' km' if record.odometer_reading is not none else '—' }}</td>
+                        <td>{{ record.vendor or '—' }}</td>
+                        <td>₹{{ '%.2f'|format(record.cost or 0) }}</td>
+                        <td>
+                            <details>
+                                <summary>Edit</summary>
+                                <form action="{{ url_for('maintenance_edit', maintenance_id=record.maintenance_id) }}" method="POST" style="min-width: 260px; padding-top: 0.75rem;">
+                                    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                                    <div class="form-group">
+                                        <label for="truck-{{ record.maintenance_id }}">Truck</label>
+                                        <select id="truck-{{ record.maintenance_id }}" name="truck_id" class="form-input" required>
+                                            {% for truck in trucks %}
+                                            <option value="{{ truck.truck_id }}" {% if truck.truck_id == record.truck_id %}selected{% endif %}>{{ truck.registration_number }} — {{ truck.model }}</option>
+                                            {% endfor %}
+                                        </select>
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="type-{{ record.maintenance_id }}">Service / repair</label>
+                                        <input id="type-{{ record.maintenance_id }}" name="service_type" class="form-input" maxlength="100" value="{{ record.service_type }}" required>
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="date-{{ record.maintenance_id }}">Service date</label>
+                                        <input id="date-{{ record.maintenance_id }}" type="date" name="service_date" class="form-input" value="{{ record.service_date }}" required>
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="status-{{ record.maintenance_id }}">Status</label>
+                                        <select id="status-{{ record.maintenance_id }}" name="status" class="form-input" required>
+                                            {% for status in ['Scheduled', 'In Progress', 'Completed'] %}
+                                            <option value="{{ status }}" {% if record.status == status %}selected{% endif %}>{{ status }}</option>
+                                            {% endfor %}
+                                        </select>
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="odo-{{ record.maintenance_id }}">Odometer (km)</label>
+                                        <input id="odo-{{ record.maintenance_id }}" type="number" min="0" name="odometer_reading" class="form-input" value="{{ record.odometer_reading if record.odometer_reading is not none else '' }}">
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="next-date-{{ record.maintenance_id }}">Next service date</label>
+                                        <input id="next-date-{{ record.maintenance_id }}" type="date" name="next_service_date" class="form-input" value="{{ record.next_service_date or '' }}">
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="next-odo-{{ record.maintenance_id }}">Next service at (km)</label>
+                                        <input id="next-odo-{{ record.maintenance_id }}" type="number" min="0" name="next_service_odometer" class="form-input" value="{{ record.next_service_odometer if record.next_service_odometer is not none else '' }}">
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="vendor-{{ record.maintenance_id }}">Workshop / vendor</label>
+                                        <input id="vendor-{{ record.maintenance_id }}" name="vendor" class="form-input" maxlength="120" value="{{ record.vendor or '' }}">
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="parts-{{ record.maintenance_id }}">Parts cost (₹)</label>
+                                        <input id="parts-{{ record.maintenance_id }}" type="number" min="0" step="0.01" name="parts_cost" class="form-input" value="{{ '%.2f'|format(record.parts_cost or 0) }}" required>
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="labour-{{ record.maintenance_id }}">Labour cost (₹)</label>
+                                        <input id="labour-{{ record.maintenance_id }}" type="number" min="0" step="0.01" name="labour_cost" class="form-input" value="{{ '%.2f'|format(record.labour_cost or 0) }}" required>
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="tax-{{ record.maintenance_id }}">Tax / other charges (₹)</label>
+                                        <input id="tax-{{ record.maintenance_id }}" type="number" min="0" step="0.01" name="tax_cost" class="form-input" value="{{ '%.2f'|format(record.tax_cost or 0) }}" required>
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="notes-{{ record.maintenance_id }}">Notes</label>
+                                        <input id="notes-{{ record.maintenance_id }}" name="notes" class="form-input" maxlength="500" value="{{ record.notes or '' }}">
+                                    </div>
+                                    <button type="submit" class="btn-primary">Save changes</button>
+                                </form>
+                                <form action="{{ url_for('maintenance_delete', maintenance_id=record.maintenance_id) }}" method="POST" style="margin-top: 0.75rem;" onsubmit="return confirm('Delete this maintenance record? This action cannot be undone.');">
+                                    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                                    <button type="submit" class="btn-ghost">Delete record</button>
+                                </form>
+                            </details>
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr><td colspan="8" class="user-empty-state">No maintenance records match these filters. Add a service record above to get started.</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </section>
 </div>
 {% endblock %}
