@@ -1510,37 +1510,7 @@ a { color: inherit; text-decoration: none; }
     padding: 0.5rem 0.7rem;
 }
 
-/* Responsive */
-@media (max-width: 768px) {
-    .dashboard-layout {
-        grid-template-columns: 1fr;
-    }
-    .sidebar {
-        height: auto;
-        padding: 0.75rem;
-        position: relative;
-    }
-    .sidebar-header {
-        font-size: 1.2rem;
-        margin-bottom: 0.5rem;
-    }
-    .sidebar-nav {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
-        gap: 0.25rem;
-    }
-    .nav-section-label {
-        grid-column: 1 / -1;
-    }
-    .nav-item {
-        padding: 0.6rem 0.75rem;
-    }
-    .sidebar-footer {
-        border-top: 0;
-        padding-top: 0.25rem;
-    }
-}
-
+/* Dashboard breakpoints are defined in the consolidated responsive section below. */
 
 /* FleetFlow usability and responsive polish */
 :focus-visible { outline: 3px solid #f59e0b; outline-offset: 3px; }
@@ -1560,31 +1530,8 @@ a { color: inherit; text-decoration: none; }
 button, input, select, textarea { max-width: 100%; }
 button, .btn-primary, .btn-ghost, .nav-item, a { -webkit-tap-highlight-color: transparent; }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; } }
-@media (max-width: 768px) {
-  .dashboard-layout { display: block; }
-  .sidebar { height: auto; min-height: 0; position: sticky; top: 0; z-index: 50; padding: .8rem 1rem; box-shadow: 0 4px 18px #0f172a12; }
-  .sidebar-header { justify-content: space-between; margin-bottom: 0; }
-  .mobile-menu-toggle { display: inline-flex; }
-  .sidebar-nav, .sidebar-footer { display: none; }
-  .dashboard-body.menu-open .sidebar-nav { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .35rem; margin-top: .8rem; }
-  .dashboard-body.menu-open .sidebar-footer { display: block; padding-top: .5rem; }
-  .dashboard-body.menu-open .nav-section-label { grid-column: 1 / -1; }
-  .sidebar-nav .nav-item { min-width: 0; font-size: .88rem; }
-  .app-container { min-width: 0; }
-  .top-bar { top: 0; padding: .75rem 1rem; gap: .5rem; }
-  .breadcrumbs { font-size: .82rem; }
-  .main-content { padding: 1rem !important; }
-  .stats-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .7rem; }
-  .stat-tile { min-width: 0; padding: .9rem; }
-  .stat-value { overflow-wrap: anywhere; }
-  .table-container { overflow-x: auto; -webkit-overflow-scrolling: touch; }
-  .fleet-table { min-width: 680px; }
-  .panel-header { gap: .75rem; flex-wrap: wrap; }
-  .panel-header h1 { font-size: 1.6rem !important; }
-  .notification-toast { right: .75rem; bottom: .75rem; left: .75rem; max-width: none; flex-wrap: wrap; }
-}
+/* The main mobile layout rules live in the consolidated responsive section below. */
 @media (max-width: 420px) {
-  .stats-grid { grid-template-columns: 1fr; }
   .user-profile > span { display: none; }
   .table-quick-search { max-width: 100%; }
 }
@@ -2462,6 +2409,14 @@ button {
 
     body:not(.dashboard-body) .cta-section {
         padding: 3rem 1.25rem;
+    }
+
+    .notification-toast {
+        right: 0.75rem;
+        bottom: 0.75rem;
+        left: 0.75rem;
+        max-width: none;
+        flex-wrap: wrap;
     }
 }
 
