@@ -143,31 +143,6 @@
         <p class="admin-section-link"><a href="{{ url_for('trips') }}">Open trips and record customer payments →</a></p>
     </section>
 
-        {% if category_summary %}
-        <details class="expense-subcategory-panel" open>
-            <summary class="expense-subcategory-summary">Expense subcategory breakdown</summary>
-            <p class="financial-definition">Compare recorded spend by subcategory. Only approved amounts reduce profit/loss; pending and rejected records remain separate.</p>
-            <div class="table-container">
-                <table class="fleet-table">
-                    <thead><tr><th>Expense subcategory</th><th>Records</th><th>Approved</th><th>Pending</th><th>Rejected</th><th>Total recorded</th></tr></thead>
-                    <tbody>
-                        {% for item in category_summary %}
-                        <tr>
-                            <td><a href="{{ url_for('expenses', category=item.category, trip=selected_trip_id, status=selected_status, date_from=date_from, date_to=date_to) }}#expense-history">{{ item.category }}</a></td>
-                            <td>{{ item.count }}</td>
-                            <td>{{ '%.2f'|format(item.approved_total) }}</td>
-                            <td>{{ '%.2f'|format(item.pending_total) }}</td>
-                            <td>{{ '%.2f'|format(item.rejected_total) }}</td>
-                            <td>{{ '%.2f'|format(item.total) }}</td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
-            </div>
-            <p class="financial-definition">Only approved expenses reduce profit/loss. Pending and rejected amounts remain separately visible for review and reconciliation.</p>
-        </details>
-    </details>
-    {% endif %}
 
 
 
