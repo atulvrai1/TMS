@@ -1,7 +1,4 @@
 # Secrets and local configuration
-.env
-.env.*
-!.env.example
 !.github/
 
 # Python
