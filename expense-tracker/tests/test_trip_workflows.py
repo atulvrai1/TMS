@@ -50,6 +50,11 @@ with app.test_client() as client:
         session["user_id"] = admin_id
         session["csrf_token"] = "workflow-csrf-token"
 
+    dashboard = client.get("/trips")
+    assert dashboard.status_code == 200, dashboard.status_code
+    assert b"mobile-menu-toggle" in dashboard.data
+    assert b"Maintenance" in dashboard.data
+
     response = client.post("/trips/create", data={
         "csrf_token": "workflow-csrf-token",
         "route_from": "Indore",
