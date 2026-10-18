@@ -17,7 +17,7 @@
     <summary class="dispatch-panel-summary">Plan a trip</summary>
     <p class="account-help">Choose the route, planned date, truck, driver, and agreed customer freight charge. Enter all amounts in your business currency.</p>
     {% if available_trucks and available_drivers %}
-    <form action="{{ url_for('create_trip') }}" method="POST" class="dispatch-form">
+    <form action="{{ url_for('create_trip') }}" method="POST" class="dispatch-form" data-disable-on-submit>
         <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
         {% if assignable_users %}
         <div class="form-group">
@@ -123,7 +123,7 @@
                         {% if can_dispatch %}
                         <details class="trip-freight-edit">
                             <summary>Update customer freight charge</summary>
-                            <form action="{{ url_for('update_trip_freight', id=trip.trip_id) }}" method="POST" class="trip-payment-form">
+                            <form action="{{ url_for('update_trip_freight', id=trip.trip_id) }}" method="POST" class="trip-payment-form" data-disable-on-submit>
                                 <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
                                 <label class="visually-hidden" for="freight-amount-{{ trip.trip_id }}">Freight charge for trip {{ trip.trip_id }}</label>
                                 <input id="freight-amount-{{ trip.trip_id }}" name="freight_amount" type="number" min="0.01" max="100000000" step="0.01" value="{{ '%.2f'|format(trip.freight_amount) }}" required>
@@ -153,14 +153,14 @@
                         {% if can_dispatch and trip.status in ('Scheduled', 'In Progress') %}
                         <div class="trip-actions">
                             {% if trip.status == 'Scheduled' %}
-                            <form action="{{ url_for('update_trip_status', id=trip.trip_id) }}" method="POST" class="trip-action-form">
+                            <form action="{{ url_for('update_trip_status', id=trip.trip_id) }}" method="POST" class="trip-action-form" data-disable-on-submit>
                                 <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
                                 <input type="hidden" name="status" value="In Progress">
                                 <label for="start-odometer-{{ trip.trip_id }}">Dispatch odometer</label>
                                 <input id="start-odometer-{{ trip.trip_id }}" type="number" min="0" step="1" name="odometer" placeholder="Start km" required>
                                 <button type="submit" class="link-button">Dispatch</button>
                             </form>
-                            <form action="{{ url_for('update_trip_status', id=trip.trip_id) }}" method="POST" onsubmit="return confirm('Cancel scheduled trip #{{ trip.trip_id }}?');">
+                            <form action="{{ url_for('update_trip_status', id=trip.trip_id) }}" method="POST" data-disable-on-submit onsubmit="return confirm('Cancel scheduled trip #{{ trip.trip_id }}?');">
                                 <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
                                 <input type="hidden" name="status" value="Cancelled">
                                 <button type="submit" class="link-button danger-link">Cancel</button>
