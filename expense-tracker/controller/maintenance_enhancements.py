@@ -254,14 +254,13 @@ def register_maintenance_module(app, ns):
         today = date.today().isoformat()
         due_soon = conn.execute(
             "SELECT COUNT(*) AS count FROM maintenance "
-            f"WHERE {scope_sql} AND status != 'Completed' "
-            "AND next_service_date IS NOT NULL "
+            f"WHERE {scope_sql} AND next_service_date IS NOT NULL "
             "AND next_service_date BETWEEN ? AND date(?, '+30 days')",
             [*scope_params, today, today],
         ).fetchone()["count"]
         overdue = conn.execute(
             "SELECT COUNT(*) AS count FROM maintenance "
-            f"WHERE {scope_sql} AND status != 'Completed' AND next_service_date < ?",
+            f"WHERE {scope_sql} AND next_service_date < ?",
             [*scope_params, today],
         ).fetchone()["count"]
         conn.close()
@@ -421,4 +420,4 @@ def register_maintenance_module(app, ns):
 
     # Keep all existing navigation links and url_for('maintenance') calls working.
     # The old read-only route remains registered, but its view now delegates here.
-    app.view_functions["maintenance"] = list_maintenance
+    app.view_functions["maintenance"] = ns["access_required"](list_maintenance)
