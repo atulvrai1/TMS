@@ -288,6 +288,10 @@ def init_db():
                 FOREIGN KEY (recorded_by) REFERENCES users(user_id)
             )
         ''')
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_trip_payments_trip_amount "
+            "ON trip_payments(trip_id, amount)"
+        )
 
         conn.execute('''
             CREATE TABLE IF NOT EXISTS financial_corrections (

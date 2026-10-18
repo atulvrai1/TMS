@@ -145,11 +145,11 @@
         <div>
             <h2 class="admin-section-title" id="expense-history-heading">{% if selected_trip_id %}Expense history — Trip #{{ selected_trip_id }}{% elif selected_status %}{{ selected_status }} expense history{% else %}Expense history{% endif %}</h2>
             {% if selected_trip_id %}
-            <p class="financial-definition">Showing every expense for Trip #{{ selected_trip_id }}, including expenses awaiting admin review, approved/rejected entries, and correction history.</p>
+            <p class="financial-definition">Showing matching expense records for Trip #{{ selected_trip_id }}, including review status and correction history. Use the page controls to view older records.</p>
             {% elif selected_status %}
-            <p class="financial-definition">Showing only {{ selected_status|lower }} expense records across all trips.</p>
+            <p class="financial-definition">Showing only {{ selected_status|lower }} expense records across all trips. Use the page controls to view older records.</p>
             {% else %}
-            <p class="financial-definition">Newest expense records appear first. Expand correction details to review the audit trail.</p>
+            <p class="financial-definition">Newest expense records appear first. Use the page controls to view older records and expand correction details to review the audit trail.</p>
             {% endif %}
         </div>
         {% if selected_trip_id or selected_status %}
@@ -157,7 +157,7 @@
         {% endif %}
     </div>
     <div class="stats-grid">
-        <div class="stat-tile"><span class="stat-label">Trips with matching expenses</span><span class="stat-value">{{ expenses_by_trip|length }}</span></div>
+        <div class="stat-tile"><span class="stat-label">Trips with matching expenses</span><span class="stat-value">{{ matching_trip_count }}</span></div>
         <div class="stat-tile financial-result"><span class="stat-label">Matching expense total</span><span class="stat-value">{{ '%.2f'|format(filtered_expense_total) }}</span></div>
         {% if not selected_status %}
         {% if totals.pending > 0 %}
@@ -192,7 +192,7 @@
                     <td>
                         {{ trip.expenses|length }} record{{ '' if trip.expenses|length == 1 else 's' }}
                         <details class="trip-expense-collapse">
-                            <summary>View complete expense history</summary>
+                            <summary>View expense history on this page</summary>
                             <div class="trip-expense-list">
                                 {% for expense in trip.expenses %}
                                 <article class="trip-expense-item">
@@ -260,6 +260,17 @@
             </tbody>
         </table>
     </div>
+    {% if page_count > 1 %}
+    <nav class="admin-section-link" aria-label="Expense history pages">
+        {% if page > 1 %}
+        <a href="{{ url_for('expenses', trip=selected_trip_id, status=selected_status or None, page=page - 1) }}#expense-history">← Newer expenses</a>
+        {% endif %}
+        <span>Page {{ page }} of {{ page_count }}</span>
+        {% if page < page_count %}
+        <a href="{{ url_for('expenses', trip=selected_trip_id, status=selected_status or None, page=page + 1) }}#expense-history">Older expenses →</a>
+        {% endif %}
+    </nav>
+    {% endif %}
     </details>
 </div>
 {% endblock %}

@@ -27,7 +27,7 @@
 
     <div class="stats-grid">
         {% if due_only %}
-        <div class="stat-tile"><span class="stat-label">{% if selected_trip_id %}Trip with outstanding balance{% else %}Trips with outstanding balances{% endif %}</span><span class="stat-value">{{ trip_totals|length }}</span></div>
+        <div class="stat-tile"><span class="stat-label">{% if selected_trip_id %}Trip with outstanding balance{% else %}Trips with outstanding balances{% endif %}</span><span class="stat-value">{{ matching_trip_count }}</span></div>
         <div class="stat-tile financial-result"><span class="stat-label">{% if selected_trip_id %}Trip balance due{% else %}Total outstanding{% endif %}</span><span class="stat-value">{{ '%.2f'|format(outstanding_due_total) }}</span></div>
         {% else %}
         <div class="stat-tile"><span class="stat-label">{% if selected_trip_id %}Trip with payments{% else %}Trips with payments{% endif %}</span><span class="stat-value">{{ totals.trip_count }}</span></div>
@@ -92,7 +92,7 @@
                         <td>
                             {% if trip.payments %}
                             <details class="payment-trip-history">
-                                <summary>{{ trip.payments|length }} payment{{ '' if trip.payments|length == 1 else 's' }} · View history</summary>
+                                <summary>{{ trip.payment_count }} payment{{ '' if trip.payment_count == 1 else 's' }} · View history</summary>
                                 <div class="payment-history-list">
                                     {% for payment in trip.payments %}
                                     <article class="payment-history-item">
@@ -127,6 +127,11 @@
                                     </article>
                                     {% endfor %}
                                 </div>
+                                {% if not selected_trip_id and trip.payment_count > trip.payments|length %}
+                                <p class="expense-secondary">Showing the latest {{ trip.payments|length }} receipts.
+                                    <a href="{{ url_for('payments', trip=trip.trip_id) }}">Open full trip history</a>
+                                </p>
+                                {% endif %}
                             </details>
                             {% else %}
                             <span class="expense-secondary">No payments received</span>
@@ -140,6 +145,28 @@
                 </tbody>
             </table>
         </div>
+        {% if page_count > 1 %}
+        <nav class="admin-section-link" aria-label="Payment history pages">
+            {% if page > 1 %}
+            <a href="{{ url_for('payments', trip=selected_trip_id, due='1' if due_only else None, page=page - 1) }}">← Newer trips</a>
+            {% endif %}
+            <span>Page {{ page }} of {{ page_count }}</span>
+            {% if page < page_count %}
+            <a href="{{ url_for('payments', trip=selected_trip_id, due='1' if due_only else None, page=page + 1) }}">Older trips →</a>
+            {% endif %}
+        </nav>
+        {% endif %}
+        {% if selected_trip_id and not due_only and receipt_page_count > 1 %}
+        <nav class="admin-section-link" aria-label="Trip receipt pages">
+            {% if receipt_page > 1 %}
+            <a href="{{ url_for('payments', trip=selected_trip_id, receipt_page=receipt_page - 1) }}">← Newer receipts</a>
+            {% endif %}
+            <span>Receipt page {{ receipt_page }} of {{ receipt_page_count }}</span>
+            {% if receipt_page < receipt_page_count %}
+            <a href="{{ url_for('payments', trip=selected_trip_id, receipt_page=receipt_page + 1) }}">Older receipts →</a>
+            {% endif %}
+        </nav>
+        {% endif %}
     </section>
 </div>
 {% endblock %}

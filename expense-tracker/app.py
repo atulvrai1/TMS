@@ -39,6 +39,7 @@ app = Flask(__name__)
 app.config["PUBLIC_BASE_URL"] = os.environ.get("FLEETFLOW_PUBLIC_URL", "").rstrip("/")
 app.config["MAX_CONTENT_LENGTH"] = 11 * 1024 * 1024
 DRIVER_DOCUMENT_MAX_SIZE = 10 * 1024 * 1024
+FINANCIAL_HISTORY_PAGE_SIZE = 50
 DRIVER_DOCUMENT_TYPES = {
     "Driving license": {".pdf", ".jpg", ".jpeg", ".png"},
     "Government ID": {".pdf", ".jpg", ".jpeg", ".png"},
@@ -633,10 +634,14 @@ def trucks():
         "SELECT * FROM trucks ORDER BY registration_number"
     ).fetchall()
 
+    truck_status_counts = {"Available": 0, "In Trip": 0, "Maintenance": 0}
+    for truck in trucks:
+        if truck["status"] in truck_status_counts:
+            truck_status_counts[truck["status"]] += 1
     total_trucks = len(trucks)
-    available_trucks = len([t for t in trucks if t['status'] == 'Available'])
-    in_trip_trucks = len([t for t in trucks if t['status'] == 'In Trip'])
-    maint_trucks = len([t for t in trucks if t['status'] == 'Maintenance'])
+    available_trucks = truck_status_counts["Available"]
+    in_trip_trucks = truck_status_counts["In Trip"]
+    maint_trucks = truck_status_counts["Maintenance"]
 
     conn.close()
     return render_template("trucks.html",
@@ -1028,19 +1033,10 @@ def payments():
     session.setdefault("csrf_token", secrets.token_urlsafe(32))
     selected_trip_id = request.args.get("trip", type=int)
     due_only = request.args.get("due") == "1"
+    page = max(request.args.get("page", 1, type=int), 1)
+    receipt_page = max(request.args.get("receipt_page", 1, type=int), 1)
     conn = get_db()
     trip_scope, trip_scope_params = _record_owner_filter("trips")
-    payment_rows = conn.execute(
-        "SELECT trip_payments.payment_id, trip_payments.trip_id, trip_payments.amount, "
-        "trip_payments.payment_date, trip_payments.recorded_at, trip_payments.reference, "
-        "users.full_name AS recorder_name, users.email AS recorder_email "
-        "FROM trip_payments "
-        "JOIN trips ON trips.trip_id = trip_payments.trip_id "
-        "LEFT JOIN users ON users.user_id = trip_payments.recorded_by "
-        f"WHERE {trip_scope} "
-        "ORDER BY trip_payments.recorded_at DESC, trip_payments.payment_id DESC",
-        trip_scope_params
-    ).fetchall()
     totals = conn.execute(
         "SELECT COUNT(DISTINCT trip_payments.trip_id) AS trip_count, "
         "COALESCE(SUM(trip_payments.amount), 0) AS amount_received "
@@ -1049,42 +1045,130 @@ def payments():
         f"WHERE trips.status != 'Cancelled' AND {trip_scope}",
         trip_scope_params
     ).fetchone()
+    trip_filters = ["trips.status != 'Cancelled'", trip_scope]
+    trip_filter_params = list(trip_scope_params)
+    if selected_trip_id is not None:
+        trip_filters.append("trips.trip_id = ?")
+        trip_filter_params.append(selected_trip_id)
+    if due_only:
+        trip_filters.append(
+            "trips.freight_amount > COALESCE(payments.amount_received, 0)"
+        )
+    trip_where = " AND ".join(trip_filters)
+    payment_summary = conn.execute(
+        "SELECT COUNT(*) AS trip_count, "
+        "COALESCE(SUM(MAX(COALESCE(trips.freight_amount, 0) "
+        "- COALESCE(payments.amount_received, 0), 0)), 0) AS outstanding_due_total "
+        "FROM trips "
+        "LEFT JOIN (SELECT trip_id, SUM(amount) AS amount_received "
+        "FROM trip_payments GROUP BY trip_id) AS payments "
+        "ON payments.trip_id = trips.trip_id "
+        f"WHERE {trip_where}",
+        trip_filter_params
+    ).fetchone()
+    payment_page_count = (
+        payment_summary["trip_count"] + FINANCIAL_HISTORY_PAGE_SIZE - 1
+    ) // FINANCIAL_HISTORY_PAGE_SIZE
+    payment_page_count = max(payment_page_count, 1)
+    page = min(page, payment_page_count)
     payment_trip_rows = conn.execute(
         "SELECT trips.trip_id, trips.route_from, trips.route_to, trips.freight_amount, "
         "trips.status, trucks.registration_number, "
-        "COALESCE(payments.amount_received, 0) AS amount_received "
+        "COALESCE(payments.amount_received, 0) AS amount_received, "
+        "COALESCE(payments.payment_count, 0) AS payment_count "
         "FROM trips "
         "LEFT JOIN trucks ON trucks.truck_id = trips.truck_id "
-        "LEFT JOIN (SELECT trip_id, SUM(amount) AS amount_received "
+        "LEFT JOIN (SELECT trip_id, SUM(amount) AS amount_received, "
+        "COUNT(*) AS payment_count "
         "FROM trip_payments GROUP BY trip_id) AS payments ON payments.trip_id = trips.trip_id "
-        f"WHERE trips.status != 'Cancelled' AND {trip_scope} "
-        "ORDER BY trips.trip_id DESC",
-        trip_scope_params
+        f"WHERE {trip_where} "
+        "ORDER BY trips.trip_id DESC LIMIT ? OFFSET ?",
+        (*trip_filter_params, FINANCIAL_HISTORY_PAGE_SIZE,
+         (page - 1) * FINANCIAL_HISTORY_PAGE_SIZE)
     ).fetchall()
-    payment_history = conn.execute(
-        "SELECT financial_corrections.correction_id, financial_corrections.record_id, "
-        "financial_corrections.old_amount, financial_corrections.new_amount, "
-        "financial_corrections.reason, financial_corrections.changed_at, "
-        "users.full_name AS changed_by_name, users.email AS changed_by_email "
-        "FROM financial_corrections "
-        "LEFT JOIN users ON users.user_id = financial_corrections.changed_by "
-        "WHERE financial_corrections.record_type = 'Payment' "
-        "ORDER BY financial_corrections.correction_id DESC"
-    ).fetchall()
+    trip_ids = [row["trip_id"] for row in payment_trip_rows]
+    selected_trip = next(
+        (row for row in payment_trip_rows if row["trip_id"] == selected_trip_id),
+        None
+    )
+    receipt_page_count = (
+        (selected_trip["payment_count"] + FINANCIAL_HISTORY_PAGE_SIZE - 1)
+        // FINANCIAL_HISTORY_PAGE_SIZE
+        if selected_trip_id is not None and selected_trip
+        else 1
+    )
+    receipt_page_count = max(receipt_page_count, 1)
+    receipt_page = min(receipt_page, receipt_page_count)
+    receipt_page_size = (
+        FINANCIAL_HISTORY_PAGE_SIZE if selected_trip_id is not None else 5
+    )
+    receipt_offset = (
+        (receipt_page - 1) * receipt_page_size
+        if selected_trip_id is not None
+        else 0
+    )
     payments_by_trip = {}
-    for payment in payment_rows:
-        payment = dict(payment)
-        payment["corrections"] = []
-        payments_by_trip.setdefault(payment["trip_id"], []).append(payment)
-    payments_by_id = {
-        payment["payment_id"]: payment
-        for payments_for_trip in payments_by_trip.values()
-        for payment in payments_for_trip
-    }
-    for correction in payment_history:
-        payment = payments_by_id.get(correction["record_id"])
-        if payment:
-            payment["corrections"].append(dict(correction))
+    if trip_ids and not due_only:
+        placeholders = ", ".join("?" for _ in trip_ids)
+        payment_rows = conn.execute(
+            "WITH ranked_payments AS ("
+            "SELECT trip_payments.payment_id, trip_payments.trip_id, "
+            "trip_payments.amount, trip_payments.payment_date, "
+            "trip_payments.recorded_at, trip_payments.reference, "
+            "ROW_NUMBER() OVER (PARTITION BY trip_payments.trip_id "
+            "ORDER BY trip_payments.recorded_at DESC, trip_payments.payment_id DESC) "
+            "AS receipt_number "
+            "FROM trip_payments "
+            f"WHERE trip_payments.trip_id IN ({placeholders})"
+            ") "
+            "SELECT ranked_payments.payment_id, ranked_payments.trip_id, "
+            "ranked_payments.amount, ranked_payments.payment_date, "
+            "ranked_payments.recorded_at, ranked_payments.reference, "
+            "recorder.full_name AS recorder_name, recorder.email AS recorder_email, "
+            "correction.correction_id, correction.old_amount, correction.new_amount, "
+            "correction.reason, correction.changed_at, "
+            "changer.full_name AS changed_by_name, changer.email AS changed_by_email "
+            "FROM ranked_payments "
+            "LEFT JOIN trip_payments "
+            "ON trip_payments.payment_id = ranked_payments.payment_id "
+            "LEFT JOIN users AS recorder ON recorder.user_id = trip_payments.recorded_by "
+            "LEFT JOIN financial_corrections AS correction "
+            "ON correction.record_type = 'Payment' "
+            "AND correction.record_id = ranked_payments.payment_id "
+            "LEFT JOIN users AS changer ON changer.user_id = correction.changed_by "
+            "WHERE ranked_payments.receipt_number > ? "
+            "AND ranked_payments.receipt_number <= ? "
+            "ORDER BY ranked_payments.trip_id, ranked_payments.recorded_at DESC, "
+            "ranked_payments.payment_id DESC, correction.correction_id DESC",
+            (*trip_ids, receipt_offset, receipt_offset + receipt_page_size)
+        ).fetchall()
+        payments_by_id = {}
+        for row in payment_rows:
+            payment = payments_by_id.get(row["payment_id"])
+            if payment is None:
+                payment = {
+                    "payment_id": row["payment_id"],
+                    "trip_id": row["trip_id"],
+                    "amount": row["amount"],
+                    "payment_date": row["payment_date"],
+                    "recorded_at": row["recorded_at"],
+                    "reference": row["reference"],
+                    "recorder_name": row["recorder_name"],
+                    "recorder_email": row["recorder_email"],
+                    "corrections": [],
+                }
+                payments_by_id[row["payment_id"]] = payment
+                payments_by_trip.setdefault(row["trip_id"], []).append(payment)
+            if row["correction_id"] is not None:
+                payment["corrections"].append({
+                    "correction_id": row["correction_id"],
+                    "old_amount": row["old_amount"],
+                    "new_amount": row["new_amount"],
+                    "reason": row["reason"],
+                    "changed_at": row["changed_at"],
+                    "changed_by_name": row["changed_by_name"],
+                    "changed_by_email": row["changed_by_email"],
+                })
     trip_totals = []
     for row in payment_trip_rows:
         trip = dict(row)
@@ -1110,8 +1194,8 @@ def payments():
             "trip_count": int(bool(selected_trip and selected_trip["payments"])),
             "amount_received": selected_trip["amount_received"] if selected_trip else Decimal("0.00"),
         }
-    outstanding_due_total = sum(
-        (trip["balance_due"] for trip in trip_totals), Decimal("0.00")
+    outstanding_due_total = Decimal(
+        str(payment_summary["outstanding_due_total"] or 0)
     )
     can_correct_payments = _is_admin_user()
     conn.close()
@@ -1121,6 +1205,11 @@ def payments():
         trip_totals=trip_totals,
         due_only=due_only,
         selected_trip_id=selected_trip_id,
+        page=page,
+        page_count=payment_page_count,
+        receipt_page=receipt_page,
+        receipt_page_count=receipt_page_count,
+        matching_trip_count=payment_summary["trip_count"],
         outstanding_due_total=outstanding_due_total,
         can_correct_payments=can_correct_payments,
         can_record_payments=can_correct_payments,
@@ -1214,6 +1303,7 @@ def expenses():
     session.setdefault("csrf_token", secrets.token_urlsafe(32))
     selected_trip_id = request.args.get("trip", type=int)
     selected_status = request.args.get("status", "")
+    page = max(request.args.get("page", 1, type=int), 1)
     if selected_status not in {"Approved", "Pending", "Rejected"}:
         selected_status = ""
 
@@ -1235,6 +1325,19 @@ def expenses():
     )
 
     conn = get_db()
+    expense_summary = conn.execute(
+        "SELECT COUNT(*) AS expense_count, "
+        "COUNT(DISTINCT expenses.trip_id) AS trip_count, "
+        "COALESCE(SUM(expenses.amount), 0) AS matching_expense_total "
+        "FROM expenses JOIN trips ON trips.trip_id = expenses.trip_id "
+        f"{expense_where}",
+        expense_params
+    ).fetchone()
+    expense_page_count = (
+        expense_summary["expense_count"] + FINANCIAL_HISTORY_PAGE_SIZE - 1
+    ) // FINANCIAL_HISTORY_PAGE_SIZE
+    expense_page_count = max(expense_page_count, 1)
+    page = min(page, expense_page_count)
     rows = conn.execute(
         "SELECT expenses.expense_id, expenses.trip_id, expenses.category, "
         "expenses.amount, expenses.date, expenses.description, expenses.status, "
@@ -1249,23 +1352,33 @@ def expenses():
         "LEFT JOIN users AS submitter ON submitter.user_id = expenses.created_by "
         "LEFT JOIN users AS reviewer ON reviewer.user_id = expenses.reviewed_by "
         f"{expense_where} "
-        "ORDER BY COALESCE(expenses.created_at, expenses.date) DESC, expenses.expense_id DESC",
-        expense_params
-    ).fetchall()
-    corrections = conn.execute(
-        "SELECT financial_corrections.correction_id, financial_corrections.record_id, "
-        "financial_corrections.old_amount, financial_corrections.new_amount, "
-        "financial_corrections.old_status, financial_corrections.new_status, "
-        "financial_corrections.reason, financial_corrections.changed_at, "
-        "users.full_name AS changed_by_name, users.email AS changed_by_email "
-        "FROM financial_corrections "
-        "LEFT JOIN users ON users.user_id = financial_corrections.changed_by "
-        "WHERE financial_corrections.record_type = 'Expense' "
-        "ORDER BY financial_corrections.correction_id DESC"
+        "ORDER BY COALESCE(expenses.created_at, expenses.date) DESC, expenses.expense_id DESC "
+        "LIMIT ? OFFSET ?",
+        (*expense_params, FINANCIAL_HISTORY_PAGE_SIZE,
+         (page - 1) * FINANCIAL_HISTORY_PAGE_SIZE)
     ).fetchall()
     corrections_by_expense = {}
-    for correction in corrections:
-        corrections_by_expense.setdefault(correction["record_id"], []).append(dict(correction))
+    expense_ids = [row["expense_id"] for row in rows]
+    if expense_ids:
+        placeholders = ", ".join("?" for _ in expense_ids)
+        corrections = conn.execute(
+            "SELECT financial_corrections.correction_id, "
+            "financial_corrections.record_id, financial_corrections.old_amount, "
+            "financial_corrections.new_amount, financial_corrections.old_status, "
+            "financial_corrections.new_status, financial_corrections.reason, "
+            "financial_corrections.changed_at, users.full_name AS changed_by_name, "
+            "users.email AS changed_by_email "
+            "FROM financial_corrections "
+            "LEFT JOIN users ON users.user_id = financial_corrections.changed_by "
+            "WHERE financial_corrections.record_type = 'Expense' "
+            f"AND financial_corrections.record_id IN ({placeholders}) "
+            "ORDER BY financial_corrections.correction_id DESC",
+            expense_ids
+        ).fetchall()
+        for correction in corrections:
+            corrections_by_expense.setdefault(
+                correction["record_id"], []
+            ).append(dict(correction))
     expense_rows = []
     current_user_id = session["user_id"]
     for row in rows:
@@ -1273,9 +1386,8 @@ def expenses():
         expense["corrections"] = corrections_by_expense.get(expense["expense_id"], [])
         expense["can_correct"] = is_admin or expense["created_by"] == current_user_id
         expense_rows.append(expense)
-    filtered_expense_total = sum(
-        (Decimal(str(expense["amount"])) for expense in expense_rows),
-        Decimal("0.00")
+    filtered_expense_total = Decimal(
+        str(expense_summary["matching_expense_total"] or 0)
     )
     expenses_by_trip = {}
     for expense in expense_rows:
@@ -1331,9 +1443,12 @@ def expenses():
         "expenses.html",
         expenses=expense_rows,
         expenses_by_trip=list(expenses_by_trip.values()),
+        matching_trip_count=expense_summary["trip_count"],
         selected_trip_id=selected_trip_id,
         selected_status=selected_status,
         filtered_expense_total=filtered_expense_total,
+        page=page,
+        page_count=expense_page_count,
         totals=totals,
         finance_summary=finance_summary,
         trip_finances=trip_finances,
