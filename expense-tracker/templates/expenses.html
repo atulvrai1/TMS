@@ -277,7 +277,7 @@
                                         <strong>#{{ expense.expense_id }} · {{ expense.category }} · {{ '%.2f'|format(expense.amount) }}</strong>
                                         <span>{{ expense.date }} · {{ expense.submitter_name or expense.submitter_email or 'Legacy record' }}</span>
                                         {% if expense.description %}<span>{{ expense.description }}</span>{% endif %}
-                                        {% if expense.receipt_storage_name %}<span><a href="{{ url_for('download_expense_receipt', id=expense.expense_id) }}">Download receipt · {{ expense.receipt_original_name }}</a> ({{ (expense.receipt_size / 1024)|round|int }} KB)</span>{% endif %}
+                                        {% if expense.receipt_storage_name %}<span>{% if expense.can_download_receipt %}<a href="{{ url_for('download_expense_receipt', id=expense.expense_id) }}">Download receipt · {{ expense.receipt_original_name }}</a> ({{ (expense.receipt_size / 1024)|round|int }} KB){% else %}Receipt attached · download restricted to the submitter and administrators{% endif %}</span>{% endif %}
                                         <span class="status-badge {% if expense.status == 'Approved' %}badge-available{% elif expense.status == 'Rejected' %}badge-maint{% else %}badge-trip{% endif %}">{% if expense.status == 'Pending' %}Pending review{% else %}{{ expense.status }}{% endif %}</span>
                                         {% if expense.status != 'Pending' and expense.reviewed_at %}
                                         <span class="expense-secondary">Reviewed {{ expense.reviewed_at }}{% if expense.reviewer_name or expense.reviewer_email %} by {{ expense.reviewer_name or expense.reviewer_email }}{% endif %}</span>
