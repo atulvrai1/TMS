@@ -1863,3 +1863,176 @@ body:not(.dashboard-body) > .footer {
         width: 100%;
     }
 }
+
+
+/* Expense workspace: category sub-sections and collapsible fleet P/L */
+.expense-subnav {
+    align-items: center;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.6rem;
+    margin: 1.25rem 0 1rem;
+}
+
+.expense-subnav a {
+    background: var(--paper-card);
+    border: 1px solid var(--border-ui);
+    border-radius: 999px;
+    color: var(--industry-blue);
+    font-size: 0.84rem;
+    font-weight: 600;
+    padding: 0.6rem 0.9rem;
+    text-decoration: none;
+}
+
+.expense-subnav a:hover,
+.expense-subnav a:focus-visible {
+    background: var(--accent-light);
+    border-color: var(--industry-blue);
+}
+
+.expense-category-workspace {
+    margin: 1.75rem 0;
+    scroll-margin-top: 1.5rem;
+}
+
+.expense-category-workspace-heading {
+    align-items: end;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1rem;
+    justify-content: space-between;
+    margin-bottom: 1rem;
+}
+
+.expense-category-workspace-heading .financial-definition {
+    margin-bottom: 0;
+    max-width: 760px;
+}
+
+.expense-category-grid {
+    display: grid;
+    gap: 1rem;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 245px), 1fr));
+}
+
+.expense-category-card {
+    background: var(--paper-card);
+    border: 1px solid var(--border-ui);
+    border-radius: var(--radius-md);
+    color: var(--ink);
+    display: flex;
+    flex-direction: column;
+    gap: 0.85rem;
+    min-width: 0;
+    padding: 1rem;
+    text-decoration: none;
+    transition: border-color 120ms ease, box-shadow 120ms ease, transform 120ms ease;
+}
+
+.expense-category-card:hover,
+.expense-category-card:focus-visible {
+    border-color: var(--industry-blue);
+    box-shadow: 0 4px 16px rgba(15, 23, 42, 0.07);
+    transform: translateY(-1px);
+}
+
+.expense-category-card.active {
+    background: var(--accent-light);
+    border: 2px solid var(--industry-blue);
+    padding: calc(1rem - 1px);
+}
+
+.expense-category-card-heading {
+    align-items: start;
+    display: flex;
+    gap: 0.75rem;
+    justify-content: space-between;
+}
+
+.expense-category-card-heading strong {
+    font-size: 0.98rem;
+}
+
+.expense-category-card-heading span {
+    color: var(--ink-muted);
+    flex-shrink: 0;
+    font-size: 0.75rem;
+}
+
+.expense-category-total {
+    font-size: 1.45rem;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    overflow-wrap: anywhere;
+}
+
+.expense-category-stats {
+    border-top: 1px solid var(--border-soft);
+    display: grid;
+    gap: 0.45rem;
+    padding-top: 0.75rem;
+}
+
+.expense-category-stats span {
+    align-items: baseline;
+    color: var(--ink-muted);
+    display: flex;
+    font-size: 0.8rem;
+    gap: 0.75rem;
+    justify-content: space-between;
+}
+
+.expense-category-stats strong {
+    color: var(--ink);
+    font-variant-numeric: tabular-nums;
+}
+
+.expense-category-open {
+    color: var(--industry-blue);
+    font-size: 0.8rem;
+    font-weight: 600;
+    margin-top: auto;
+}
+
+.expense-subsection-panel {
+    background: var(--paper-card);
+    border: 1px solid var(--border-ui);
+    border-radius: var(--radius-md);
+    margin: 1.5rem 0;
+    padding: 0 1.1rem;
+    scroll-margin-top: 1.5rem;
+}
+
+.expense-subsection-summary {
+    color: var(--industry-dark);
+    cursor: pointer;
+    font-size: 1rem;
+    font-weight: 700;
+    list-style-position: inside;
+    padding: 1rem 0;
+}
+
+.expense-subsection-panel[open] > .financial-overview,
+.expense-subsection-panel[open] > .trip-profitability {
+    margin-top: 0.5rem;
+}
+
+@media (max-width: 640px) {
+    .expense-subnav {
+        align-items: stretch;
+    }
+
+    .expense-subnav a {
+        flex: 1 1 135px;
+        text-align: center;
+    }
+
+    .expense-category-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .expense-subsection-panel {
+        padding: 0 0.75rem;
+    }
+}
