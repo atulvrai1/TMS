@@ -1588,3 +1588,8 @@ button, .btn-primary, .btn-ghost, .nav-item, a { -webkit-tap-highlight-color: tr
   .user-profile > span { display: none; }
   .table-quick-search { max-width: 100%; }
 }
+
+.sidebar-logout-form { margin: 0; }
+.sidebar-logout-button { width: 100%; border: 0; background: transparent; text-align: left; font: inherit; cursor: pointer; }
+.sidebar-logout-button:hover { background: rgba(255,255,255,.1); }
+.sidebar-logout-button:focus-visible { outline-color: #fbbf24; }
