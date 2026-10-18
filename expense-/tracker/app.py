@@ -100,10 +100,14 @@ def trucks():
     conn = get_db()
     trucks = conn.execute("SELECT * FROM trucks").fetchall()
 
+    truck_status_counts = {"Available": 0, "In Trip": 0, "Maintenance": 0}
+    for truck in trucks:
+        if truck["status"] in truck_status_counts:
+            truck_status_counts[truck["status"]] += 1
     total_trucks = len(trucks)
-    available_trucks = len([t for t in trucks if t['status'] == 'Available'])
-    in_trip_trucks = len([t for t in trucks if t['status'] == 'In Trip'])
-    maint_trucks = len([t for t in trucks if t['status'] == 'Maintenance'])
+    available_trucks = truck_status_counts["Available"]
+    in_trip_trucks = truck_status_counts["In Trip"]
+    maint_trucks = truck_status_counts["Maintenance"]
 
     conn.close()
     return render_template("trucks.html",
