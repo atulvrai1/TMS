@@ -4,11 +4,13 @@ on:
   pull_request:
     paths:
       - "expense-tracker/**"
+      - "docker-compose.yml"
       - ".github/workflows/docker-build.yml"
   push:
     branches: [main, "feat/**", "fix/**"]
     paths:
       - "expense-tracker/**"
+      - "docker-compose.yml"
       - ".github/workflows/docker-build.yml"
   workflow_dispatch:
 
@@ -16,7 +18,7 @@ permissions:
   contents: read
 
 jobs:
-  build:
+  build-and-smoke-test:
     runs-on: ubuntu-latest
     steps:
       - name: Check out repository
@@ -32,3 +34,35 @@ jobs:
           file: ./expense-tracker/Dockerfile
           push: false
           tags: fleetflow:ci
+          load: true
+
+      - name: Start container
+        run: |
+          docker run --detach --name fleetflow-smoke \
+            --publish 5001:5001 \
+            --env APP_ENV=production \
+            --env FLASK_SECRET_KEY=ci-only-secret-key-0123456789abcdef0123456789 \
+            --env FLASK_HOST=0.0.0.0 \
+            --env PORT=5001 \
+            --env DATABASE_PATH=/data/tms.db \
+            fleetflow:ci
+
+      - name: Wait for HTTP response
+        run: |
+          for attempt in $(seq 1 30); do
+            if docker exec fleetflow-smoke python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:5001/', timeout=3)"; then
+              echo "FleetFlow returned an HTTP response."
+              exit 0
+            fi
+            sleep 2
+          done
+          docker logs fleetflow-smoke
+          exit 1
+
+      - name: Show logs if the job fails
+        if: failure()
+        run: docker logs fleetflow-smoke || true
+
+      - name: Clean up
+        if: always()
+        run: docker rm --force fleetflow-smoke || true
