@@ -1,0 +1,62 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: fleetflow
+  namespace: fleetflow
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: fleetflow
+  template:
+    metadata:
+      labels:
+        app: fleetflow
+    spec:
+      containers:
+        - name: fleetflow
+          image: fleetflow:local
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 5001
+          env:
+            - name: APP_ENV
+              value: development
+            - name: FLASK_HOST
+              value: 0.0.0.0
+            - name: PORT
+              value: "5001"
+            - name: DATABASE_PATH
+              value: /data/tms.db
+            - name: FLEETFLOW_PUBLIC_URL
+              value: http://127.0.0.1:5001
+            - name: FLASK_SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: fleetflow-secrets
+                  key: flask-secret-key
+          volumeMounts:
+            - name: database
+              mountPath: /data
+          readinessProbe:
+            tcpSocket:
+              port: 5001
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          livenessProbe:
+            tcpSocket:
+              port: 5001
+            initialDelaySeconds: 30
+            periodSeconds: 20
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+      volumes:
+        - name: database
+          persistentVolumeClaim:
+            claimName: fleetflow-data
