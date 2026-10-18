@@ -1,0 +1,36 @@
+services:
+  fleetflow:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: fleetflow:local
+    container_name: fleetflow
+    restart: unless-stopped
+    env_file:
+      - path: ./.env
+        required: true
+    environment:
+      APP_ENV: production
+      FLASK_HOST: 0.0.0.0
+      PORT: "5001"
+      DATABASE_PATH: /data/tms.db
+      FLEETFLOW_PUBLIC_URL: ${FLEETFLOW_PUBLIC_URL:-http://localhost:5001}
+    ports:
+      - "5001:5001"
+    volumes:
+      - fleetflow_data:/data
+      - fleetflow_instance:/app/instance
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request; urllib.request.urlopen('http://127.0.0.1:5001/', timeout=3)"
+      interval: 30s
+      timeout: 5s
+      start_period: 20s
+      retries: 3
+
+volumes:
+  fleetflow_data:
+  fleetflow_instance:
