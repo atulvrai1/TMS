@@ -260,15 +260,44 @@ def register_expense_enhancements(app, ns):
                 params,
             ).fetchone()
 
-            category_summary = conn.execute(
+            # Category cards show the full category spend in the currently selected
+            # trip/date range, independent of a category/status filter applied to
+            # the detailed expense list. Zero-activity categories remain visible.
+            scope_sql, scope_params = expense_trip_scope()
+            category_clauses = [scope_sql]
+            category_params = list(scope_params)
+            if filters["trip_id"] is not None:
+                category_clauses.append("expenses.trip_id = ?")
+                category_params.append(filters["trip_id"])
+            if filters["date_from"]:
+                category_clauses.append("expenses.date >= ?")
+                category_params.append(filters["date_from"])
+            if filters["date_to"]:
+                category_clauses.append("expenses.date <= ?")
+                category_params.append(filters["date_to"])
+            category_where = "WHERE " + " AND ".join(category_clauses)
+            category_rows = conn.execute(
                 "SELECT expenses.category, COUNT(*) AS count, "
                 "COALESCE(SUM(expenses.amount), 0) AS total, "
                 "COALESCE(SUM(CASE WHEN expenses.status = 'Approved' THEN expenses.amount ELSE 0 END), 0) AS approved_total, "
-                "COALESCE(SUM(CASE WHEN expenses.status = 'Pending' THEN expenses.amount ELSE 0 END), 0) AS pending_total "
+                "COALESCE(SUM(CASE WHEN expenses.status = 'Pending' THEN expenses.amount ELSE 0 END), 0) AS pending_total, "
+                "COALESCE(SUM(CASE WHEN expenses.status = 'Rejected' THEN expenses.amount ELSE 0 END), 0) AS rejected_total "
                 "FROM expenses JOIN trips ON trips.trip_id = expenses.trip_id "
-                f"{where_sql} GROUP BY expenses.category ORDER BY total DESC, expenses.category",
-                params,
+                f"{category_where} GROUP BY expenses.category",
+                category_params,
             ).fetchall()
+            category_by_name = {row["category"]: dict(row) for row in category_rows}
+            category_order = [
+                "Fuel", "Toll", "Meals/Allowance", "Maintenance/Repairs",
+                "Loading/Unloading", "Other", "Food", "Maintenance"
+            ]
+            category_summary = [
+                category_by_name.get(category, {
+                    "category": category, "count": 0, "total": 0,
+                    "approved_total": 0, "pending_total": 0, "rejected_total": 0
+                })
+                for category in category_order
+            ]
 
             finance_summary, trip_finances = _get_trip_financials(
                 conn, None if is_admin else "scoped"
@@ -298,6 +327,7 @@ def register_expense_enhancements(app, ns):
             filtered_expense_total=filtered_expense_total,
             totals=totals,
             category_summary=category_summary,
+            selected_view=request.args.get("view", ""),
             finance_summary=finance_summary,
             trip_finances=trip_finances,
             trips=trips,
