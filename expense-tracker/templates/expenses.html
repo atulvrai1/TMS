@@ -142,11 +142,8 @@
         </div>
         <p class="admin-section-link"><a href="{{ url_for('trips') }}">Open trips and record customer payments →</a></p>
     </section>
-
-
-
-
-    
+    </details>
+    {% endif %}
 
     <details id="expense-history" class="expense-history-section" {% if selected_trip_id or selected_status or selected_category or date_from or date_to %}open{% endif %}>
     <summary class="expense-history-toggle">{% if selected_trip_id %}Show expense history for Trip #{{ selected_trip_id }}{% elif selected_status %}Show {{ selected_status|lower }} expense history{% elif selected_category %}Show {{ selected_category }} expense history{% elif date_from or date_to %}Show date-filtered expense history{% else %}Show expense history{% endif %}</summary>
