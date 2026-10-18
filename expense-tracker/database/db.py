@@ -226,6 +226,10 @@ def init_db():
                     CHECK(status IN ('Pending', 'Approved', 'Rejected')),
                 reviewed_by INTEGER,
                 reviewed_at DATETIME,
+                review_note TEXT,
+                receipt_storage_name TEXT,
+                receipt_original_name TEXT,
+                receipt_size INTEGER,
                 FOREIGN KEY (created_by) REFERENCES users(user_id),
                 FOREIGN KEY (reviewed_by) REFERENCES users(user_id),
                 FOREIGN KEY (trip_id) REFERENCES trips(trip_id)
@@ -244,6 +248,14 @@ def init_db():
             conn.execute("ALTER TABLE expenses ADD COLUMN reviewed_at DATETIME")
         if "created_at" not in expense_columns:
             conn.execute("ALTER TABLE expenses ADD COLUMN created_at DATETIME")
+        for column_name, column_type in (
+            ("review_note", "TEXT"),
+            ("receipt_storage_name", "TEXT"),
+            ("receipt_original_name", "TEXT"),
+            ("receipt_size", "INTEGER"),
+        ):
+            if column_name not in expense_columns:
+                conn.execute(f"ALTER TABLE expenses ADD COLUMN {column_name} {column_type}")
         expense_schema = conn.execute(
             "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'expenses'"
         ).fetchone()["sql"]
@@ -265,6 +277,10 @@ def init_db():
                         CHECK(status IN ('Pending', 'Approved', 'Rejected')),
                     reviewed_by INTEGER,
                     reviewed_at DATETIME,
+                    review_note TEXT,
+                    receipt_storage_name TEXT,
+                    receipt_original_name TEXT,
+                    receipt_size INTEGER,
                     FOREIGN KEY (created_by) REFERENCES users(user_id),
                     FOREIGN KEY (reviewed_by) REFERENCES users(user_id),
                     FOREIGN KEY (trip_id) REFERENCES trips(trip_id)
@@ -273,12 +289,19 @@ def init_db():
             conn.execute(
                 "INSERT INTO expenses_new "
                 "(expense_id, trip_id, category, amount, date, description, created_at, "
-                "created_by, status, reviewed_by, reviewed_at) "
+                "created_by, status, reviewed_by, reviewed_at, review_note, receipt_storage_name, "
+                "receipt_original_name, receipt_size) "
                 "SELECT expense_id, trip_id, category, amount, date, description, created_at, "
-                "created_by, status, reviewed_by, reviewed_at FROM expenses"
+                "created_by, status, reviewed_by, reviewed_at, review_note, receipt_storage_name, "
+                "receipt_original_name, receipt_size FROM expenses"
             )
             conn.execute("DROP TABLE expenses")
             conn.execute("ALTER TABLE expenses_new RENAME TO expenses")
+
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_expenses_trip_status_date "
+            "ON expenses(trip_id, status, date)"
+        )
 
         conn.execute('''
             CREATE TABLE IF NOT EXISTS trip_payments (

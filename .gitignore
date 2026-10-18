@@ -1,0 +1,26 @@
+# Secrets and local configuration
+!.github/
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Local application data
+*.db
+*.sqlite
+*.sqlite3
+*.db-*
+*.sqlite-*
+instance/
+uploads/
+driver_documents/
+
+# Local tooling
+.DS_Store
+.vscode/
+.idea/

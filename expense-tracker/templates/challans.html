@@ -1,0 +1,195 @@
+{% extends "base.html" %}
+
+{% block title %}Traffic Challans — FleetFlow{% endblock %}
+{% block breadcrumb %}Administration / Traffic Challans{% endblock %}
+
+{% block content_dashboard %}
+<div class="dashboard-page challan-page">
+    <div class="panel-header">
+        <div>
+            <h1 class="dashboard-title">Traffic Challans</h1>
+            <p class="dashboard-subtitle">Track traffic fines, payment status, due dates, and challans by truck.</p>
+        </div>
+        <a class="btn-ghost" href="{{ url_for('admin_dashboard') }}">← Back to overview</a>
+    </div>
+
+    {% if overdue %}
+    <div class="challan-alert challan-alert-danger" role="alert">
+        <strong>{{ overdue }} overdue challan{{ '' if overdue == 1 else 's' }}</strong>
+        <span>These unpaid fines have passed their due date. Review and settle them to avoid further penalties.</span>
+    </div>
+    {% endif %}
+    {% if due_soon %}
+    <div class="challan-alert challan-alert-warning" role="status">
+        <strong>{{ due_soon }} challan{{ '' if due_soon == 1 else 's' }} due within 30 days</strong>
+        <span>Check the due dates below and plan payment before the deadline.</span>
+    </div>
+    {% endif %}
+
+    <section class="stats-grid" aria-label="Challan summary">
+        <div class="stat-tile"><span class="stat-label">Total challans</span><span class="stat-value">{{ summary.total or 0 }}</span></div>
+        <div class="stat-tile"><span class="stat-label">Pending fine amount</span><span class="stat-value">₹{{ '%.2f'|format(summary.unpaid_amount or 0) }}</span></div>
+        <div class="stat-tile"><span class="stat-label">Pending payment</span><span class="stat-value">{{ summary.pending or 0 }}</span></div>
+        <div class="stat-tile"><span class="stat-label">Paid</span><span class="stat-value">{{ summary.paid or 0 }}</span></div>
+        <div class="stat-tile"><span class="stat-label">Disputed</span><span class="stat-value">{{ summary.disputed or 0 }}</span></div>
+        <div class="stat-tile"><span class="stat-label">Overdue</span><span class="stat-value">{{ overdue }}</span></div>
+    </section>
+
+    <section class="dispatch-panel challan-form-panel" id="add-challan">
+        <div class="panel-header">
+            <div>
+                <h2 class="admin-section-title" style="margin:0">Add traffic challan</h2>
+                <p class="dashboard-subtitle">Enter the challan exactly as shown on the official notice.</p>
+            </div>
+        </div>
+        <form action="{{ url_for('challan_add') }}" method="POST" class="dispatch-form">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+            <div class="form-group">
+                <label for="new-truck">Truck / registration *</label>
+                <select id="new-truck" name="truck_id" class="form-input" required>
+                    <option value="">Select truck</option>
+                    {% for truck in trucks %}
+                    <option value="{{ truck.truck_id }}">{{ truck.registration_number }}{% if truck.model %} — {{ truck.model }}{% endif %}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="form-group">
+                <label for="new-number">Challan number *</label>
+                <input id="new-number" name="challan_number" class="form-input" maxlength="80" required placeholder="Official challan/reference ID">
+            </div>
+            <div class="form-group">
+                <label for="new-violation">Violation / reason *</label>
+                <input id="new-violation" name="violation" class="form-input" maxlength="160" required placeholder="e.g. Overloading, overspeeding">
+            </div>
+            <div class="form-group">
+                <label for="new-issue-date">Issue date *</label>
+                <input id="new-issue-date" type="date" name="issue_date" class="form-input" value="{{ today }}" required>
+            </div>
+            <div class="form-group">
+                <label for="new-due-date">Payment due date</label>
+                <input id="new-due-date" type="date" name="due_date" class="form-input">
+            </div>
+            <div class="form-group">
+                <label for="new-amount">Fine amount (₹) *</label>
+                <input id="new-amount" type="number" name="amount" class="form-input" min="0" max="999999999.99" step="0.01" value="0.00" required>
+            </div>
+            <div class="form-group">
+                <label for="new-status">Payment status *</label>
+                <select id="new-status" name="status" class="form-input" required>
+                    <option value="Pending" selected>Pending</option>
+                    <option value="Paid">Paid</option>
+                    <option value="Disputed">Disputed</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label for="new-payment-date">Payment date</label>
+                <input id="new-payment-date" type="date" name="payment_date" class="form-input">
+            </div>
+            <div class="form-group">
+                <label for="new-authority">Issuing authority</label>
+                <input id="new-authority" name="issuing_authority" class="form-input" maxlength="120" placeholder="Traffic police / RTO">
+            </div>
+            <div class="form-group">
+                <label for="new-location">Location</label>
+                <input id="new-location" name="location" class="form-input" maxlength="160" placeholder="City, road, or checkpoint">
+            </div>
+            <div class="form-group">
+                <label for="new-notes">Notes</label>
+                <input id="new-notes" name="notes" class="form-input" maxlength="500" placeholder="Receipt reference or follow-up notes">
+            </div>
+            <div class="form-actions">
+                <button type="submit" class="btn-primary">Save challan</button>
+            </div>
+        </form>
+    </section>
+
+    <section aria-labelledby="challan-history-title">
+        <div class="panel-header">
+            <div>
+                <h2 class="admin-section-title" id="challan-history-title">Challan register</h2>
+                <p class="dashboard-subtitle">Pending and overdue challans appear first. Use Edit to record payment or correct details.</p>
+            </div>
+        </div>
+        <form method="GET" action="{{ url_for('challans') }}" class="dispatch-form challan-filter-form">
+            <div class="form-group">
+                <label for="challan-search">Search</label>
+                <input id="challan-search" type="search" name="q" class="form-input" value="{{ search_query }}" placeholder="Challan, truck, violation, authority">
+            </div>
+            <div class="form-group">
+                <label for="challan-filter-status">Status</label>
+                <select id="challan-filter-status" name="status" class="form-input">
+                    <option value="">All statuses</option>
+                    {% for status in ['Pending', 'Paid', 'Disputed'] %}
+                    <option value="{{ status }}" {% if selected_status == status %}selected{% endif %}>{{ status }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="form-actions">
+                <button type="submit" class="btn-primary">Filter</button>
+                <a href="{{ url_for('challans') }}" class="btn-ghost">Clear</a>
+            </div>
+        </form>
+
+        <div class="table-container">
+            <table class="fleet-table">
+                <thead>
+                    <tr><th>Challan / truck</th><th>Violation</th><th>Issue date</th><th>Due date</th><th>Fine</th><th>Status</th><th>Authority / location</th><th>Actions</th></tr>
+                </thead>
+                <tbody>
+                    {% for item in challans %}
+                    <tr>
+                        <td><strong>{{ item.challan_number }}</strong><div class="expense-secondary">{{ item.registration_number }}</div></td>
+                        <td>{{ item.violation }}{% if item.notes %}<div class="expense-secondary">{{ item.notes }}</div>{% endif %}</td>
+                        <td>{{ item.issue_date }}</td>
+                        <td>
+                            {{ item.due_date or 'No due date' }}
+                            {% if item.status == 'Pending' and item.due_date and item.due_date < today %}
+                            <div class="challan-state-text challan-state-overdue">Overdue</div>
+                            {% elif item.status == 'Pending' and item.due_date and item.due_date == today %}
+                            <div class="challan-state-text challan-state-overdue">Due today</div>
+                            {% elif item.status == 'Pending' and item.due_date and item.due_date <= today %}
+                            <div class="challan-state-text challan-state-warning">Due soon</div>
+                            {% endif %}
+                        </td>
+                        <td>₹{{ '%.2f'|format(item.amount or 0) }}</td>
+                        <td><span class="challan-status challan-status-{{ item.status|lower|replace(' ', '-') }}">{{ item.status }}</span>{% if item.payment_date %}<div class="expense-secondary">Paid {{ item.payment_date }}</div>{% endif %}</td>
+                        <td>{{ item.issuing_authority or '—' }}{% if item.location %}<div class="expense-secondary">{{ item.location }}</div>{% endif %}</td>
+                        <td>
+                            <details class="challan-edit-details">
+                                <summary>Edit / payment</summary>
+                                <form action="{{ url_for('challan_edit', challan_id=item.challan_id) }}" method="POST" class="challan-edit-form">
+                                    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                                    <div class="form-group">
+                                        <label for="truck-{{ item.challan_id }}">Truck</label>
+                                        <select id="truck-{{ item.challan_id }}" name="truck_id" class="form-input" required>
+                                            {% for truck in trucks %}<option value="{{ truck.truck_id }}" {% if truck.truck_id == item.truck_id %}selected{% endif %}>{{ truck.registration_number }}</option>{% endfor %}
+                                        </select>
+                                    </div>
+                                    <div class="form-group"><label for="number-{{ item.challan_id }}">Challan number</label><input id="number-{{ item.challan_id }}" name="challan_number" class="form-input" maxlength="80" value="{{ item.challan_number }}" required></div>
+                                    <div class="form-group"><label for="violation-{{ item.challan_id }}">Violation / reason</label><input id="violation-{{ item.challan_id }}" name="violation" class="form-input" maxlength="160" value="{{ item.violation }}" required></div>
+                                    <div class="form-group"><label for="issue-{{ item.challan_id }}">Issue date</label><input id="issue-{{ item.challan_id }}" type="date" name="issue_date" class="form-input" value="{{ item.issue_date }}" required></div>
+                                    <div class="form-group"><label for="due-{{ item.challan_id }}">Due date</label><input id="due-{{ item.challan_id }}" type="date" name="due_date" class="form-input" value="{{ item.due_date or '' }}"></div>
+                                    <div class="form-group"><label for="amount-{{ item.challan_id }}">Fine amount (₹)</label><input id="amount-{{ item.challan_id }}" type="number" name="amount" class="form-input" min="0" max="999999999.99" step="0.01" value="{{ '%.2f'|format(item.amount or 0) }}" required></div>
+                                    <div class="form-group"><label for="status-{{ item.challan_id }}">Status</label><select id="status-{{ item.challan_id }}" name="status" class="form-input" required>{% for status in ['Pending', 'Paid', 'Disputed'] %}<option value="{{ status }}" {% if item.status == status %}selected{% endif %}>{{ status }}</option>{% endfor %}</select></div>
+                                    <div class="form-group"><label for="payment-{{ item.challan_id }}">Payment date</label><input id="payment-{{ item.challan_id }}" type="date" name="payment_date" class="form-input" value="{{ item.payment_date or '' }}"></div>
+                                    <div class="form-group"><label for="authority-{{ item.challan_id }}">Issuing authority</label><input id="authority-{{ item.challan_id }}" name="issuing_authority" class="form-input" maxlength="120" value="{{ item.issuing_authority or '' }}"></div>
+                                    <div class="form-group"><label for="location-{{ item.challan_id }}">Location</label><input id="location-{{ item.challan_id }}" name="location" class="form-input" maxlength="160" value="{{ item.location or '' }}"></div>
+                                    <div class="form-group"><label for="notes-{{ item.challan_id }}">Notes</label><input id="notes-{{ item.challan_id }}" name="notes" class="form-input" maxlength="500" value="{{ item.notes or '' }}"></div>
+                                    <button type="submit" class="btn-primary">Save changes</button>
+                                </form>
+                                <form action="{{ url_for('challan_delete', challan_id=item.challan_id) }}" method="POST" onsubmit="return confirm('Delete this challan record?');" class="challan-delete-form">
+                                    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                                    <button type="submit" class="btn-ghost">Delete challan</button>
+                                </form>
+                            </details>
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr><td colspan="8" class="user-empty-state">No challans found. Add the first traffic challan above.</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </section>
+</div>
+{% endblock %}

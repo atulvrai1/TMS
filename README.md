@@ -37,6 +37,44 @@ python app.py
 
 The development server binds to `127.0.0.1:5001` by default. Do not expose Flask's development server to the public internet.
 
+## Docker setup
+
+Docker Compose runs FleetFlow with Gunicorn and keeps the SQLite database and uploaded driver documents in persistent named volumes.
+
+Requirements: Docker Engine and the Docker Compose plugin.
+
+From the repository root:
+
+```bash
+cp expense-tracker/.env.example .env
+python3 -c "import secrets; print(secrets.token_hex(32))"
+```
+
+Edit the root `.env` file and replace `FLASK_SECRET_KEY` with the generated value. Keep this file private; it is ignored by Git. Do not use a shared or default secret.
+
+Build and start the application:
+
+```bash
+docker compose up --build -d
+docker compose ps
+docker compose logs -f fleetflow
+```
+
+Open [http://localhost:5001](http://localhost:5001).
+
+Useful commands:
+
+```bash
+docker compose logs -f fleetflow  # Follow application logs
+docker compose restart fleetflow  # Restart the app
+docker compose down               # Stop/remove container; keep persistent data
+docker compose build --no-cache   # Rebuild the image without build cache
+```
+
+The `fleetflow_data` volume stores the SQLite database; `fleetflow_instance` stores instance files, including uploaded driver documents. **Do not run `docker compose down -v` unless you intentionally want to delete those volumes and their data.** Back up important production data separately.
+
+GitHub Actions builds the Docker image and runs a container smoke test on relevant pushes and pull requests. It does not publish the image to a registry.
+
 ## Tests
 
 ```bash

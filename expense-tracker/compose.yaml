@@ -1,0 +1,33 @@
+services:
+  fleetflow:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: fleetflow:local
+    container_name: fleetflow
+    restart: unless-stopped
+    ports:
+      - "${PORT:-5001}:5001"
+    environment:
+      APP_ENV: ${APP_ENV:-development}
+      FLASK_SECRET_KEY: ${FLASK_SECRET_KEY:?Set FLASK_SECRET_KEY in .env.docker}
+      FLEETFLOW_PUBLIC_URL: ${FLEETFLOW_PUBLIC_URL:-http://127.0.0.1:5001}
+      DATABASE_PATH: /data/tms.db
+      FLASK_HOST: 0.0.0.0
+      PORT: 5001
+      # Configure SMTP only when you want password-reset emails.
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_FROM: ${SMTP_FROM:-}
+      SMTP_USERNAME: ${SMTP_USERNAME:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+    volumes:
+      - fleetflow_data:/data
+      - fleetflow_uploads:/app/uploads
+    security_opt:
+      - no-new-privileges:true
+    init: true
+
+volumes:
+  fleetflow_data:
+  fleetflow_uploads:

@@ -141,9 +141,10 @@ def _record_owner_filter(alias, owner_column="owner_user_id"):
             [session["user_id"]]
         )
     if alias == "trips":
+        # Drivers should access trips assigned to their linked driver record,
+        # even when an administrator owns/created the trip.
         return (
-            f"({alias}.{owner_column} = ? AND {alias}.driver_id = "
-            f"(SELECT driver_id FROM users WHERE user_id = {alias}.{owner_column}))",
+            f"{alias}.driver_id = (SELECT driver_id FROM users WHERE user_id = ?)",
             [session["user_id"]]
         )
     return f"{alias}.{owner_column} = ?", [session["user_id"]]
@@ -2242,6 +2243,27 @@ def admin_dashboard():
         f"{activity_scope}"
         "ORDER BY logs.timestamp DESC, logs.log_id DESC LIMIT 8"
     ).fetchall()
+    challan_scope, challan_scope_params = _record_owner_filter("challans")
+    challan_alerts = conn.execute(
+        "SELECT challans.challan_id, challans.challan_number, challans.violation, "
+        "challans.due_date, challans.amount, trucks.registration_number, "
+        "CASE WHEN challans.due_date < date('now') THEN 'Overdue' "
+        "WHEN challans.due_date = date('now') THEN 'Due today' ELSE 'Due soon' END AS due_label "
+        "FROM challans JOIN trucks ON trucks.truck_id = challans.truck_id "
+        f"WHERE {challan_scope} AND challans.status = 'Pending' "
+        "AND challans.due_date IS NOT NULL "
+        "AND challans.due_date <= date('now', '+30 days') "
+        "ORDER BY challans.due_date ASC, challans.challan_id DESC LIMIT 8",
+        challan_scope_params
+    ).fetchall()
+    challan_alert_summary = conn.execute(
+        "SELECT SUM(CASE WHEN status = 'Pending' AND due_date < date('now') THEN 1 ELSE 0 END) AS overdue, "
+        "SUM(CASE WHEN status = 'Pending' AND due_date >= date('now') "
+        "AND due_date <= date('now', '+30 days') THEN 1 ELSE 0 END) AS due_soon, "
+        "COALESCE(SUM(CASE WHEN status = 'Pending' THEN amount ELSE 0 END), 0) AS pending_amount "
+        f"FROM challans WHERE {challan_scope}",
+        challan_scope_params
+    ).fetchone()
     conn.close()
     return render_template(
         "admin_dashboard.html",
@@ -2251,6 +2273,8 @@ def admin_dashboard():
         trip_finances=trip_finances[:10],
         recent_activity=recent_activity,
         admin_notifications=admin_notifications,
+        challan_alerts=challan_alerts,
+        challan_alert_summary=challan_alert_summary,
         block_content='dashboard'
     )
 
@@ -2481,6 +2505,10 @@ def admin_users():
         "OR users.user_id IS NOT NULL "
         "ORDER BY drivers.name COLLATE NOCASE"
     ).fetchall()
+    available_driver_records = [
+        dict(driver) for driver in drivers
+        if not driver["linked_user_id"] and driver["status"] == "Active"
+    ]
     reset_requests = conn.execute(
         "SELECT users.user_id, users.full_name, users.email, "
         "MAX(password_reset_tokens.created_at) AS requested_at "
@@ -2500,9 +2528,13 @@ def admin_users():
         "admin_users.html",
         users=users,
         drivers=drivers,
+        available_driver_records=available_driver_records,
         reset_requests=reset_requests,
         current_user_id=session['user_id'],
         super_admin_email=SUPER_ADMIN_EMAIL,
+        is_super_admin=(
+            session.get("email", "").casefold() == SUPER_ADMIN_EMAIL.casefold()
+        ),
         csrf_token=session["csrf_token"],
         block_content='dashboard'
     )
@@ -2663,6 +2695,12 @@ def approve_user(id):
         approved_role = request.form.get("approved_role", "User")
         if approved_role not in ("User", "Admin"):
             flash("Select a valid account access level.", "error")
+            return redirect(url_for("admin_users"))
+        if (
+            approved_role == "Admin"
+            and session.get("email", "").casefold() != SUPER_ADMIN_EMAIL.casefold()
+        ):
+            flash("Only the super administrator can approve administrator access.", "error")
             return redirect(url_for("admin_users"))
         driver_id = request.form.get("driver_id", "").strip()
         if approved_role == "User":
@@ -2873,6 +2911,19 @@ def terminate_user(id):
         "success" if terminated else "error"
     )
     return redirect(url_for("admin_users"))
+
+
+# Register the enhanced expense screens after all original routes are defined.
+from controller.expense_enhancements import register_expense_enhancements
+register_expense_enhancements(app, globals())
+
+# Register the full maintenance management workflow.
+from controller.maintenance_enhancements import register_maintenance_module
+register_maintenance_module(app, globals())
+
+# Register traffic challan management and due-date alerts.
+from controller.challan_enhancements import register_challan_module
+register_challan_module(app, globals())
 
 
 if __name__ == "__main__":

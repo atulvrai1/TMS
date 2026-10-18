@@ -25,13 +25,13 @@
         {% else %}
         Your entries wait for admin review before they count in P/L.
         {% endif %}
-        Keep the original paper receipt with your records; receipt uploads are not enabled yet.
+        Attach a receipt to each entry when available. PDF, JPG, JPEG, and PNG files up to 10 MB are accepted.
     </div>
 
     <details class="dispatch-panel" open>
         <summary class="dispatch-panel-summary">{{ 'Record an expense' if can_review else 'Submit an expense request' }}</summary>
         {% if trips %}
-        <form action="{{ url_for('create_expense') }}" method="POST" class="expense-form">
+        <form action="{{ url_for('create_expense') }}" method="POST" class="expense-form" enctype="multipart/form-data">
             <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
             <div class="form-group">
                 <label for="trip_id">Trip this expense belongs to</label>
@@ -43,7 +43,7 @@
                 </select>
             </div>
             <div class="form-group">
-                <label for="category">What was the expense?</label>
+                <label for="category">Expense subcategory</label>
                 <select class="form-input" id="category" name="category" required>
                     <option value="">Select category</option>
                     <option>Fuel</option>
@@ -63,8 +63,13 @@
                 <input class="form-input" id="date" name="date" type="date" value="{{ today }}" required>
             </div>
             <div class="form-group expense-notes">
-                <label for="description">Notes / receipt reference (optional)</label>
+                <label for="description">Notes / bill reference (optional)</label>
                 <input class="form-input" id="description" name="description" maxlength="500" placeholder="What was purchased? Bill number, if available">
+            </div>
+            <div class="form-group expense-notes">
+                <label for="receipt">Receipt attachment (optional)</label>
+                <input class="form-input" id="receipt" name="receipt" type="file" accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png">
+                <small>PDF, JPG, JPEG, or PNG · maximum 10 MB. Files are stored privately.</small>
             </div>
             <button type="submit" class="btn-primary dispatch-submit">{{ 'Save expense' if can_review else 'Submit for admin review' }}</button>
         </form>
@@ -74,6 +79,8 @@
     </details>
 
     {% if can_review %}
+    <details id="overall-fleet-pl" class="expense-pl-tab" open>
+        <summary class="expense-pl-tab-summary">Profit / Loss</summary>
     <section class="financial-overview" aria-labelledby="expense-financial-heading">
         <h2 class="admin-section-title" id="expense-financial-heading">Overall fleet P/L — all trips</h2>
         <p class="financial-definition">
@@ -103,9 +110,7 @@
             {% endif %}
         </div>
     </section>
-    {% endif %}
 
-    {% if can_review %}
     <section class="trip-profitability" aria-labelledby="trip-profitability-heading">
         <h2 class="admin-section-title" id="trip-profitability-heading">Profit / loss by trip</h2>
         <div class="table-container">
@@ -137,28 +142,84 @@
         </div>
         <p class="admin-section-link"><a href="{{ url_for('trips') }}">Open trips and record customer payments →</a></p>
     </section>
+    </details>
     {% endif %}
 
-    <details id="expense-history" class="expense-history-section" {% if selected_trip_id or selected_status %}open{% endif %}>
-    <summary class="expense-history-toggle">{% if selected_trip_id %}Show expense history for Trip #{{ selected_trip_id }}{% elif selected_status %}Show {{ selected_status|lower }} expense history{% else %}Show expense history{% endif %}</summary>
+    <details id="expense-history" class="expense-history-section" {% if selected_trip_id or selected_status or selected_category or date_from or date_to %}open{% endif %}>
+    <summary class="expense-history-toggle">{% if selected_trip_id %}Show expense history for Trip #{{ selected_trip_id }}{% elif selected_status %}Show {{ selected_status|lower }} expense history{% elif selected_category %}Show {{ selected_category }} expense history{% elif date_from or date_to %}Show date-filtered expense history{% else %}Show expense history{% endif %}</summary>
+    <form action="{{ url_for('expenses') }}" method="GET" class="expense-filter-form">
+        <div class="expense-filter-field">
+            <label for="filter-trip">Trip</label>
+            <select class="form-input" id="filter-trip" name="trip">
+                <option value="">All accessible trips</option>
+                {% for trip in trips %}
+                <option value="{{ trip.trip_id }}" {% if selected_trip_id == trip.trip_id %}selected{% endif %}>#{{ trip.trip_id }} · {{ trip.route_from }} → {{ trip.route_to }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="expense-filter-field">
+            <label for="filter-status">Status</label>
+            <select class="form-input" id="filter-status" name="status">
+                <option value="">All statuses</option>
+                {% for status in ['Pending', 'Approved', 'Rejected'] %}
+                <option value="{{ status }}" {% if selected_status == status %}selected{% endif %}>{{ status }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="expense-filter-field">
+            <label for="filter-category">Category</label>
+            <select class="form-input" id="filter-category" name="category">
+                <option value="">All categories</option>
+                {% for category in ['Fuel', 'Toll', 'Meals/Allowance', 'Maintenance/Repairs', 'Loading/Unloading', 'Other', 'Food', 'Maintenance'] %}
+                <option value="{{ category }}" {% if selected_category == category %}selected{% endif %}>{{ category }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="expense-filter-field">
+            <label for="filter-date-from">From date</label>
+            <input class="form-input" id="filter-date-from" type="date" name="date_from" value="{{ date_from }}">
+        </div>
+        <div class="expense-filter-field">
+            <label for="filter-date-to">To date</label>
+            <input class="form-input" id="filter-date-to" type="date" name="date_to" value="{{ date_to }}">
+        </div>
+        <div class="expense-filter-actions">
+            <button type="submit" class="btn-primary">Apply filters</button>
+            <a class="btn-ghost" href="{{ url_for('expenses') }}">Clear</a>
+            <a class="btn-ghost" href="{{ url_for('export_expenses_csv', trip=selected_trip_id, status=selected_status, category=selected_category, date_from=date_from, date_to=date_to) }}">Export CSV</a>
+        </div>
+    </form>
+
+    <nav class="expense-history-subcategories" aria-label="Filter history by expense subcategory">
+        <a href="{{ url_for('expenses', trip=selected_trip_id, status=selected_status, date_from=date_from, date_to=date_to) }}#expense-history" {% if not selected_category %}aria-current="page"{% endif %}>All subcategories</a>
+        {% for item in category_summary %}
+        <a href="{{ url_for('expenses', category=item.category, trip=selected_trip_id, status=selected_status, date_from=date_from, date_to=date_to) }}#expense-history" {% if selected_category == item.category %}aria-current="page"{% endif %}>{{ item.category }}</a>
+        {% endfor %}
+    </nav>
+
     <div class="expense-history-heading">
         <div>
-            <h2 class="admin-section-title" id="expense-history-heading">{% if selected_trip_id %}Expense history — Trip #{{ selected_trip_id }}{% elif selected_status %}{{ selected_status }} expense history{% else %}Expense history{% endif %}</h2>
+            <h2 class="admin-section-title" id="expense-history-heading">{% if selected_trip_id %}Expense history — Trip #{{ selected_trip_id }}{% elif selected_category %}{{ selected_category }} expense history{% elif selected_status %}{{ selected_status }} expense history{% else %}Expense history{% endif %}</h2>
             {% if selected_trip_id %}
             <p class="financial-definition">Showing every expense for Trip #{{ selected_trip_id }}, including expenses awaiting admin review, approved/rejected entries, and correction history.</p>
             {% elif selected_status %}
-            <p class="financial-definition">Showing only {{ selected_status|lower }} expense records across all trips.</p>
+            <p class="financial-definition">Showing only {{ selected_status|lower }} expense records for the current filters.</p>
+            {% elif selected_category %}
+            <p class="financial-definition">Showing {{ selected_category }} expense records for the current filters.</p>
+            {% elif date_from or date_to %}
+            <p class="financial-definition">Showing expense records for the selected date range.</p>
             {% else %}
             <p class="financial-definition">Newest expense records appear first. Expand correction details to review the audit trail.</p>
             {% endif %}
         </div>
-        {% if selected_trip_id or selected_status %}
+        {% if selected_trip_id or selected_status or selected_category or date_from or date_to %}
         <a class="btn-ghost" href="{{ url_for('expenses') }}#expense-history">Show all expense records</a>
         {% endif %}
     </div>
     <div class="stats-grid">
         <div class="stat-tile"><span class="stat-label">Trips with matching expenses</span><span class="stat-value">{{ expenses_by_trip|length }}</span></div>
         <div class="stat-tile financial-result"><span class="stat-label">Matching expense total</span><span class="stat-value">{{ '%.2f'|format(filtered_expense_total) }}</span></div>
+        <div class="stat-tile"><span class="stat-label">Rejected in this view</span><span class="stat-value">{{ '%.2f'|format(totals.rejected) }}</span></div>
         {% if not selected_status %}
         {% if totals.pending > 0 %}
         <a class="stat-tile stat-tile-link" style="border-left: 4px solid var(--status-trip);" href="{{ url_for('expenses', status='Pending') }}#expense-history" aria-label="View all pending expenses across all trips">
@@ -179,6 +240,7 @@
                     <th>Expense records</th>
                     <th>Approved</th>
                     <th>Pending</th>
+                    <th>Rejected</th>
                     <th>Total in this view</th>
                 </tr>
             </thead>
@@ -200,21 +262,25 @@
                                         <strong>#{{ expense.expense_id }} · {{ expense.category }} · {{ '%.2f'|format(expense.amount) }}</strong>
                                         <span>{{ expense.date }} · {{ expense.submitter_name or expense.submitter_email or 'Legacy record' }}</span>
                                         {% if expense.description %}<span>{{ expense.description }}</span>{% endif %}
+                                        {% if expense.receipt_storage_name %}<span>{% if expense.can_download_receipt %}<a href="{{ url_for('download_expense_receipt', id=expense.expense_id) }}">Download receipt · {{ expense.receipt_original_name }}</a> ({{ (expense.receipt_size / 1024)|round|int }} KB){% else %}Receipt attached · download restricted to the submitter and administrators{% endif %}</span>{% endif %}
                                         <span class="status-badge {% if expense.status == 'Approved' %}badge-available{% elif expense.status == 'Rejected' %}badge-maint{% else %}badge-trip{% endif %}">{% if expense.status == 'Pending' %}Pending review{% else %}{{ expense.status }}{% endif %}</span>
                                         {% if expense.status != 'Pending' and expense.reviewed_at %}
                                         <span class="expense-secondary">Reviewed {{ expense.reviewed_at }}{% if expense.reviewer_name or expense.reviewer_email %} by {{ expense.reviewer_name or expense.reviewer_email }}{% endif %}</span>
                                         {% endif %}
+                                        {% if expense.review_note %}<span class="expense-secondary">Review note / rejection reason: {{ expense.review_note }}</span>{% endif %}
                                     </div>
                                     {% if can_review and expense.status == 'Pending' %}
                                     <div class="expense-review-actions">
                                         <form action="{{ url_for('review_expense', id=expense.expense_id) }}" method="POST">
                                             <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
                                             <input type="hidden" name="status" value="Approved">
+                                            <input type="text" name="review_note" maxlength="300" placeholder="Optional approval note" aria-label="Optional approval note">
                                             <button type="submit" class="link-button">Approve</button>
                                         </form>
-                                        <form action="{{ url_for('review_expense', id=expense.expense_id) }}" method="POST" onsubmit="return confirm('Reject expense #{{ expense.expense_id }}?');">
+                                        <form action="{{ url_for('review_expense', id=expense.expense_id) }}" method="POST">
                                             <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
                                             <input type="hidden" name="status" value="Rejected">
+                                            <input type="text" name="review_note" minlength="5" maxlength="300" placeholder="Reason for rejection (required)" aria-label="Reason for rejection" required>
                                             <button type="submit" class="link-button danger-link">Reject</button>
                                         </form>
                                     </div>
@@ -252,10 +318,11 @@
                     </td>
                     <td>{{ '%.2f'|format(trip.approved_total) }}</td>
                     <td>{{ '%.2f'|format(trip.pending_total) }}</td>
+                    <td>{{ '%.2f'|format(trip.rejected_total) }}</td>
                     <td>{{ '%.2f'|format(trip.total) }}</td>
                 </tr>
                 {% else %}
-                <tr><td colspan="5" class="user-empty-state">No expense records yet. Record the first trip expense above.</td></tr>
+                <tr><td colspan="6" class="user-empty-state">No expense records match the current filters. Adjust the filters or record a new expense.</td></tr>
                 {% endfor %}
             </tbody>
         </table>

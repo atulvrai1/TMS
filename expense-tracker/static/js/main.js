@@ -151,3 +151,77 @@ document.querySelectorAll("form[data-disable-on-submit]").forEach((form) => {
         }
     });
 });
+
+/* FleetFlow: generate mobile card labels from table headings */
+(() => {
+    const labelTable = (table) => {
+        if (!(table instanceof HTMLTableElement)) return;
+
+        const headers = Array.from(
+            table.querySelectorAll('thead th')
+        ).map((th) => th.innerText.trim());
+
+        if (!headers.length) return;
+
+        table.querySelectorAll('tbody tr').forEach((row) => {
+            const cells = Array.from(row.children).filter(
+                (cell) => cell.tagName === 'TD'
+            );
+
+            // Leave empty-state and spanning rows unchanged.
+            if (cells.some((cell) => cell.colSpan > 1)) return;
+
+            cells.forEach((cell, index) => {
+                if (!cell.hasAttribute('data-label')) {
+                    cell.setAttribute(
+                        'data-label',
+                        headers[index] || `Field ${index + 1}`
+                    );
+                }
+            });
+        });
+    };
+
+    const scanTables = (root = document) => {
+        if (root instanceof HTMLTableElement) {
+            labelTable(root);
+        }
+
+        if (root.querySelectorAll) {
+            root.querySelectorAll('table.fleet-table').forEach(labelTable);
+        }
+    };
+
+    const start = () => {
+        scanTables();
+
+        // Also label records added later by JavaScript.
+        const observer = new MutationObserver((mutations) => {
+            mutations.forEach((mutation) => {
+                mutation.addedNodes.forEach((node) => {
+                    if (node.nodeType === Node.ELEMENT_NODE) {
+                        scanTables(node);
+                    }
+                });
+
+                if (
+                    mutation.type === 'childList' &&
+                    mutation.target instanceof HTMLTableSectionElement
+                ) {
+                    scanTables(mutation.target.closest('table'));
+                }
+            });
+        });
+
+        observer.observe(document.body, {
+            childList: true,
+            subtree: true
+        });
+    };
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', start, { once: true });
+    } else {
+        start();
+    }
+})();

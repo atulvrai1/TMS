@@ -1,61 +1,60 @@
 {% extends "base.html" %}
 
-{% block title %}Spendly — Track Every Rupee{% endblock %}
+{% block title %}FleetFlow — Truck & Fleet Management{% endblock %}
 
 {% block content %}
 
 <section class="hero">
     <div class="hero-inner">
-        <div class="hero-badge">Personal Finance Tracker</div>
+        <div class="hero-badge">Truck &amp; Fleet Management</div>
         <h1 class="hero-title">
-            Know where your<br>
-            <em>money goes</em>
+            Every trip,<br>
+            <em>under control.</em>
         </h1>
         <p class="hero-subtitle">
-            Log expenses, understand your spending patterns,
-            and take control of your financial life —
-            one transaction at a time.
+            Manage trucks, drivers, trips, expenses, customer payments,
+            and fleet performance — all from one place.
         </p>
         <div class="hero-actions">
-            <a href="{{ url_for('register') }}" class="btn-primary">Start tracking free</a>
-            <a href="{{ url_for('trucks') }}" class="btn-ghost">View Live Fleet</a>
+            <a href="{{ url_for('register') }}" class="btn-primary">Get started</a>
+            <a href="{{ url_for('trucks') }}" class="btn-ghost">View Fleet</a>
             <a href="{{ url_for('login') }}" class="btn-ghost">Sign in</a>
         </div>
     </div>
     <div class="hero-visual">
         <div class="mock-card">
             <div class="mock-card-header">
-                <span class="mock-label">March 2026</span>
-                <span class="mock-total">₹12,450</span>
+                <span class="mock-label">Fleet workflow preview</span>
+                <span class="mock-total">FleetFlow</span>
             </div>
             <div class="mock-bars">
                 <div class="mock-bar-row">
-                    <span class="mock-cat">Bills</span>
+                    <span class="mock-cat">Trip planning</span>
                     <div class="mock-bar-track">
-                        <div class="mock-bar" style="width: 72%"></div>
+                        <div class="mock-bar" style="width: 88%"></div>
                     </div>
-                    <span class="mock-amt">₹4,500</span>
+                    <span class="mock-amt">Plan</span>
                 </div>
                 <div class="mock-bar-row">
-                    <span class="mock-cat">Food</span>
+                    <span class="mock-cat">Driver assignment</span>
                     <div class="mock-bar-track">
-                        <div class="mock-bar mock-bar-2" style="width: 52%"></div>
+                        <div class="mock-bar mock-bar-2" style="width: 76%"></div>
                     </div>
-                    <span class="mock-amt">₹3,200</span>
+                    <span class="mock-amt">Assign</span>
                 </div>
                 <div class="mock-bar-row">
-                    <span class="mock-cat">Health</span>
+                    <span class="mock-cat">Expense review</span>
                     <div class="mock-bar-track">
-                        <div class="mock-bar mock-bar-3" style="width: 33%"></div>
+                        <div class="mock-bar mock-bar-3" style="width: 62%"></div>
                     </div>
-                    <span class="mock-amt">₹2,050</span>
+                    <span class="mock-amt">Review</span>
                 </div>
                 <div class="mock-bar-row">
-                    <span class="mock-cat">Transport</span>
+                    <span class="mock-cat">Trip profitability</span>
                     <div class="mock-bar-track">
-                        <div class="mock-bar mock-bar-4" style="width: 28%"></div>
+                        <div class="mock-bar mock-bar-4" style="width: 91%"></div>
                     </div>
-                    <span class="mock-amt">₹1,800</span>
+                    <span class="mock-amt">Report</span>
                 </div>
             </div>
         </div>
@@ -65,28 +64,33 @@
 <section class="features">
     <div class="features-inner">
         <div class="feature-card">
+            <div class="feature-icon">🚛</div>
+            <h3 class="feature-title">Truck records</h3>
+            <p class="feature-body">Maintain registration, model, capacity, availability, and maintenance status for every truck in your fleet.</p>
+        </div>
+        <div class="feature-card">
+            <div class="feature-icon">♙</div>
+            <h3 class="feature-title">Driver records &amp; documents</h3>
+            <p class="feature-body">Keep driver names, licence numbers, contact details, work status, and uploaded driver documents organized in one place.</p>
+        </div>
+        <div class="feature-card">
+            <div class="feature-icon">↗</div>
+            <h3 class="feature-title">Trips &amp; dispatch</h3>
+            <p class="feature-body">Plan routes, assign the right truck and driver, and follow each trip from dispatch through completion.</p>
+        </div>
+        <div class="feature-card">
             <div class="feature-icon">₹</div>
-            <h3 class="feature-title">Log expenses instantly</h3>
-            <p class="feature-body">Add any expense in seconds. Category, amount, date, description — all in one simple form.</p>
-        </div>
-        <div class="feature-card">
-            <div class="feature-icon">◎</div>
-            <h3 class="feature-title">Understand your patterns</h3>
-            <p class="feature-body">See exactly where your money goes with category breakdowns and monthly summaries.</p>
-        </div>
-        <div class="feature-card">
-            <div class="feature-icon">◷</div>
-            <h3 class="feature-title">Filter by time period</h3>
-            <p class="feature-body">View your spending for any date range — last week, last month, or a custom period.</p>
+            <h3 class="feature-title">Expenses, payments &amp; P/L</h3>
+            <p class="feature-body">Record trip costs, manage customer payments, review expense history, and understand profit or loss by trip.</p>
         </div>
     </div>
 </section>
 
 <section class="cta-section">
     <div class="cta-inner">
-        <h2 class="cta-title">Ready to take control?</h2>
-        <p class="cta-body">Join thousands of people who track their expenses with Spendly.</p>
-        <a href="{{ url_for('register') }}" class="btn-primary">Create free account</a>
+        <h2 class="cta-title">Ready to move your fleet forward?</h2>
+        <p class="cta-body">Bring your trucks, drivers, trips, and financial records together with FleetFlow.</p>
+        <a href="{{ url_for('register') }}" class="btn-primary">Create your account</a>
     </div>
 </section>
 
