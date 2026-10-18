@@ -1593,3 +1593,87 @@ button, .btn-primary, .btn-ghost, .nav-item, a { -webkit-tap-highlight-color: tr
 .sidebar-logout-button { width: 100%; border: 0; background: transparent; text-align: left; font: inherit; cursor: pointer; }
 .sidebar-logout-button:hover { background: rgba(255,255,255,.1); }
 .sidebar-logout-button:focus-visible { outline-color: #fbbf24; }
+
+/* Public pages: allow natural document scrolling and responsive homepage layout. */
+html {
+    min-height: 100%;
+    height: auto;
+    overflow-y: auto;
+}
+
+body:not(.dashboard-body) {
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh;
+    height: auto;
+    overflow-x: clip;
+    overflow-y: auto;
+}
+
+body:not(.dashboard-body) > .main-content {
+    flex: 1 0 auto;
+    width: 100%;
+    min-height: 0;
+    height: auto;
+    overflow: visible;
+}
+
+body:not(.dashboard-body) > .footer {
+    flex-shrink: 0;
+}
+
+.hero {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+}
+
+.hero-inner,
+.hero-visual {
+    min-width: 0;
+}
+
+.hero-actions {
+    flex-wrap: wrap;
+}
+
+@media (max-width: 768px) {
+    body:not(.dashboard-body) .hero {
+        grid-template-columns: minmax(0, 1fr);
+        gap: 2rem;
+        padding: 2.5rem 1.25rem;
+    }
+
+    body:not(.dashboard-body) .hero-title {
+        font-size: clamp(2rem, 8vw, 3rem);
+    }
+
+    body:not(.dashboard-body) .hero-actions {
+        flex-wrap: wrap;
+    }
+
+    body:not(.dashboard-body) .features {
+        padding: 2.5rem 1.25rem;
+    }
+
+    body:not(.dashboard-body) .features-inner {
+        grid-template-columns: minmax(0, 1fr);
+        gap: 1rem;
+    }
+
+    body:not(.dashboard-body) .cta-section {
+        padding: 3rem 1.25rem;
+    }
+
+    body:not(.dashboard-body) .navbar {
+        padding-inline: 1rem;
+    }
+
+    body:not(.dashboard-body) .nav-links {
+        gap: 0.75rem;
+        font-size: 0.8rem;
+    }
+
+    body:not(.dashboard-body) .mock-card {
+        padding: 1.25rem;
+    }
+}
+
