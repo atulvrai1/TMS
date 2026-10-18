@@ -25,6 +25,50 @@
         </div>
     </section>
 
+    <section class="challan-dashboard-alerts" aria-labelledby="challan-alerts-heading">
+        <div class="panel-header">
+            <div>
+                <h2 class="admin-section-title" id="challan-alerts-heading" style="margin-top:0;">Traffic challan expiry & payment alerts</h2>
+                <p class="dashboard-subtitle">Pending challans with a payment deadline in the next 30 days or an overdue deadline.</p>
+            </div>
+            <a class="btn-primary" href="{{ url_for('challans') }}">Manage challans</a>
+        </div>
+        <div class="stats-grid">
+            <div class="stat-tile challan-alert-tile {% if challan_alert_summary.overdue %}challan-alert-tile-danger{% endif %}">
+                <span class="stat-label">Overdue challans</span>
+                <span class="stat-value">{{ challan_alert_summary.overdue or 0 }}</span>
+            </div>
+            <div class="stat-tile challan-alert-tile {% if challan_alert_summary.due_soon %}challan-alert-tile-warning{% endif %}">
+                <span class="stat-label">Due within 30 days</span>
+                <span class="stat-value">{{ challan_alert_summary.due_soon or 0 }}</span>
+            </div>
+            <div class="stat-tile">
+                <span class="stat-label">Unpaid fine amount</span>
+                <span class="stat-value">₹{{ '%.2f'|format(challan_alert_summary.pending_amount or 0) }}</span>
+            </div>
+        </div>
+        {% if challan_alerts %}
+        <div class="table-container challan-alert-table">
+            <table class="fleet-table">
+                <thead><tr><th>Challan</th><th>Truck</th><th>Payment due</th><th>Amount</th><th>Alert</th></tr></thead>
+                <tbody>
+                    {% for item in challan_alerts %}
+                    <tr>
+                        <td><a href="{{ url_for('challans', q=item.challan_number) }}"><strong>{{ item.challan_number }}</strong></a><div class="expense-secondary">{{ item.violation }}</div></td>
+                        <td>{{ item.registration_number }}</td>
+                        <td>{{ item.due_date }}</td>
+                        <td>₹{{ '%.2f'|format(item.amount or 0) }}</td>
+                        <td><span class="challan-status {% if item.due_label in ('Overdue', 'Due today') %}challan-status-alert{% else %}challan-status-warning{% endif %}">{{ item.due_label }}</span></td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <p class="challan-no-alerts">No unpaid challans are due within the next 30 days. Great work keeping the fleet up to date.</p>
+        {% endif %}
+    </section>
+
     <section aria-labelledby="access-summary-heading">
         <h2 class="admin-section-title" id="access-summary-heading">Account access</h2>
         <div class="stats-grid">

@@ -2243,6 +2243,27 @@ def admin_dashboard():
         f"{activity_scope}"
         "ORDER BY logs.timestamp DESC, logs.log_id DESC LIMIT 8"
     ).fetchall()
+    challan_scope, challan_scope_params = _record_owner_filter("challans")
+    challan_alerts = conn.execute(
+        "SELECT challans.challan_id, challans.challan_number, challans.violation, "
+        "challans.due_date, challans.amount, trucks.registration_number, "
+        "CASE WHEN challans.due_date < date('now') THEN 'Overdue' "
+        "WHEN challans.due_date = date('now') THEN 'Due today' ELSE 'Due soon' END AS due_label "
+        "FROM challans JOIN trucks ON trucks.truck_id = challans.truck_id "
+        f"WHERE {challan_scope} AND challans.status = 'Pending' "
+        "AND challans.due_date IS NOT NULL "
+        "AND challans.due_date <= date('now', '+30 days') "
+        "ORDER BY challans.due_date ASC, challans.challan_id DESC LIMIT 8",
+        challan_scope_params
+    ).fetchall()
+    challan_alert_summary = conn.execute(
+        "SELECT SUM(CASE WHEN status = 'Pending' AND due_date < date('now') THEN 1 ELSE 0 END) AS overdue, "
+        "SUM(CASE WHEN status = 'Pending' AND due_date >= date('now') "
+        "AND due_date <= date('now', '+30 days') THEN 1 ELSE 0 END) AS due_soon, "
+        "COALESCE(SUM(CASE WHEN status = 'Pending' THEN amount ELSE 0 END), 0) AS pending_amount "
+        f"FROM challans WHERE {challan_scope}",
+        challan_scope_params
+    ).fetchone()
     conn.close()
     return render_template(
         "admin_dashboard.html",
@@ -2252,6 +2273,8 @@ def admin_dashboard():
         trip_finances=trip_finances[:10],
         recent_activity=recent_activity,
         admin_notifications=admin_notifications,
+        challan_alerts=challan_alerts,
+        challan_alert_summary=challan_alert_summary,
         block_content='dashboard'
     )
 
@@ -2883,6 +2906,10 @@ register_expense_enhancements(app, globals())
 # Register the full maintenance management workflow.
 from controller.maintenance_enhancements import register_maintenance_module
 register_maintenance_module(app, globals())
+
+# Register traffic challan management and due-date alerts.
+from controller.challan_enhancements import register_challan_module
+register_challan_module(app, globals())
 
 
 if __name__ == "__main__":

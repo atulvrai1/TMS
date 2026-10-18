@@ -2671,3 +2671,164 @@ button {
         font-size: 0.65rem;
     }
 }
+
+
+/* Traffic challan register and dashboard deadline alerts */
+.challan-page .challan-form-panel {
+    margin: 1.5rem 0 2rem;
+    padding: 1.25rem;
+}
+.challan-page .challan-alert {
+    display: flex;
+    flex-direction: column;
+    gap: .25rem;
+    padding: .9rem 1rem;
+    margin: 0 0 .85rem;
+    border: 1px solid var(--border, #d8dee8);
+    border-left-width: 4px;
+    border-radius: 10px;
+    background: var(--surface, #fff);
+}
+.challan-alert-danger {
+    border-left-color: #b42318 !important;
+    background: #fff5f4 !important;
+    color: #7a271a;
+}
+.challan-alert-warning {
+    border-left-color: #b54708 !important;
+    background: #fffaeb !important;
+    color: #7a2e0e;
+}
+.challan-page .challan-filter-form {
+    margin: 0 0 1rem;
+    align-items: end;
+}
+.challan-edit-details {
+    min-width: 110px;
+}
+.challan-edit-details summary {
+    cursor: pointer;
+    font-weight: 650;
+    color: var(--accent, #2459a9);
+}
+.challan-edit-form {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: .65rem;
+    min-width: min(340px, 72vw);
+    max-width: 440px;
+    padding: .9rem 0;
+}
+.challan-edit-form .form-group {
+    min-width: 0;
+}
+.challan-edit-form .form-input {
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
+}
+.challan-delete-form {
+    margin-top: .5rem;
+}
+.challan-status {
+    display: inline-flex;
+    align-items: center;
+    padding: .25rem .55rem;
+    border-radius: 999px;
+    font-size: .78rem;
+    line-height: 1.3;
+    font-weight: 700;
+    white-space: nowrap;
+    background: #eef2f6;
+    color: #344054;
+}
+.challan-status-pending,
+.challan-status-warning {
+    color: #854d0e;
+    background: #fef3c7;
+}
+.challan-status-paid {
+    color: #166534;
+    background: #dcfce7;
+}
+.challan-status-disputed {
+    color: #6b21a8;
+    background: #f3e8ff;
+}
+.challan-status-alert {
+    color: #991b1b;
+    background: #fee2e2;
+}
+.challan-state-text {
+    margin-top: .25rem;
+    font-size: .78rem;
+    font-weight: 700;
+}
+.challan-state-overdue {
+    color: #b42318;
+}
+.challan-state-warning {
+    color: #b54708;
+}
+.challan-dashboard-alerts {
+    margin: 1.75rem 0 2rem;
+    padding: 1.25rem;
+    border: 1px solid var(--border, #d8dee8);
+    border-radius: 14px;
+    background: var(--surface, #fff);
+}
+.challan-dashboard-alerts .panel-header {
+    align-items: center;
+    gap: 1rem;
+    flex-wrap: wrap;
+}
+.challan-alert-tile-danger {
+    border-left: 4px solid #b42318 !important;
+}
+.challan-alert-tile-warning {
+    border-left: 4px solid #b54708 !important;
+}
+.challan-alert-table {
+    margin-top: 1rem;
+}
+.challan-no-alerts {
+    padding: .85rem 0 0;
+    color: var(--ink-muted, #667085);
+}
+@media (max-width: 768px) {
+    .challan-page .panel-header {
+        align-items: flex-start;
+        flex-direction: column;
+    }
+    .challan-page .panel-header > a,
+    .challan-page .panel-header .btn-primary,
+    .challan-page .panel-header .btn-ghost {
+        max-width: 100%;
+    }
+    .challan-page .dispatch-form {
+        grid-template-columns: minmax(0, 1fr);
+    }
+    .challan-page .form-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: .6rem;
+    }
+    .challan-page .form-actions > * {
+        max-width: 100%;
+    }
+    .challan-page .table-container {
+        max-width: 100%;
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+    }
+    .challan-page .fleet-table {
+        min-width: 900px;
+    }
+    .challan-dashboard-alerts {
+        padding: .9rem;
+    }
+    .challan-dashboard-alerts .panel-header {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+}
