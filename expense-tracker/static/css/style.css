@@ -2036,3 +2036,595 @@ body:not(.dashboard-body) > .footer {
         padding: 0 0.75rem;
     }
 }
+
+/* ------------------------------------------------------------------ */
+/* Responsive layout pass: mobile menu, content grids, forms and tables */
+/* Keep these rules last so they override earlier legacy breakpoints.   */
+/* ------------------------------------------------------------------ */
+
+html {
+    width: 100%;
+    max-width: 100%;
+    -webkit-text-size-adjust: 100%;
+}
+
+body {
+    width: 100%;
+    max-width: 100%;
+}
+
+body.dashboard-body {
+    overflow-x: clip;
+}
+
+img,
+video,
+svg,
+canvas,
+iframe {
+    max-width: 100%;
+}
+
+input,
+select,
+textarea,
+button {
+    min-width: 0;
+    max-width: 100%;
+}
+
+.dashboard-layout {
+    grid-template-columns: minmax(0, var(--sidebar-width, 260px)) minmax(0, 1fr);
+    width: 100%;
+    max-width: 100%;
+}
+
+.app-container,
+.main-content,
+.dashboard-page,
+.dashboard-page > *,
+.dashboard-page .panel-header > * {
+    min-width: 0;
+    max-width: 100%;
+}
+
+.dashboard-page .panel-header,
+.expense-history-heading,
+.expense-category-workspace-heading {
+    align-items: flex-start;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1rem;
+    justify-content: space-between;
+}
+
+.dashboard-title,
+.dashboard-subtitle,
+.panel-header h1,
+.panel-header p {
+    overflow-wrap: anywhere;
+}
+
+.trip-page-links,
+.hero-actions,
+.expense-filter-actions,
+.expense-review-actions {
+    max-width: 100%;
+    flex-wrap: wrap;
+}
+
+.table-container {
+    max-width: 100%;
+    min-width: 0;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: thin;
+}
+
+.fleet-table {
+    max-width: none;
+}
+
+.fleet-table th,
+.fleet-table td {
+    overflow-wrap: anywhere;
+}
+
+.stats-grid {
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 190px), 1fr));
+}
+
+.stat-tile {
+    min-width: 0;
+}
+
+.stat-label {
+    overflow-wrap: anywhere;
+}
+
+.expense-form,
+.dispatch-form {
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr));
+}
+
+.auth-section {
+    padding: clamp(1rem, 4vw, 3rem);
+}
+
+.auth-container,
+.auth-card,
+.legal-container {
+    min-width: 0;
+    max-width: 100%;
+}
+
+.auth-card {
+    padding: clamp(1rem, 4vw, 2rem);
+}
+
+.legal-container {
+    padding-inline: clamp(1rem, 4vw, 2rem);
+    overflow-wrap: anywhere;
+}
+
+.mock-card,
+.mock-card-header,
+.mock-bar-row,
+.feature-card {
+    min-width: 0;
+}
+
+.mock-label,
+.mock-cat,
+.mock-amt {
+    overflow-wrap: anywhere;
+}
+
+@media (min-width: 769px) and (max-width: 1100px) {
+    .dashboard-layout {
+        grid-template-columns: 220px minmax(0, 1fr);
+    }
+
+    .sidebar {
+        padding: 0.75rem;
+    }
+
+    .sidebar-header {
+        gap: 0.5rem;
+        font-size: 1.15rem;
+    }
+
+    .sidebar-nav .nav-item {
+        gap: 0.5rem;
+        padding-inline: 0.55rem;
+        font-size: 0.88rem;
+        overflow-wrap: anywhere;
+    }
+
+    .top-bar {
+        padding-inline: 1.25rem;
+    }
+
+    .main-content {
+        padding: 1.25rem !important;
+    }
+
+    body:not(.dashboard-body) .hero {
+        gap: 2rem;
+        padding: 3.5rem 1.5rem;
+    }
+
+    body:not(.dashboard-body) .hero-title {
+        font-size: clamp(2.25rem, 4.5vw, 3.5rem);
+    }
+}
+
+@media (max-width: 768px) {
+    .dashboard-layout {
+        display: block;
+        min-height: 100vh;
+        min-height: 100dvh;
+    }
+
+    /* Override the later fixed-height desktop sidebar rules. */
+    .sidebar {
+        height: auto;
+        min-height: 0;
+        max-height: none;
+        overflow: visible;
+        position: sticky;
+        top: 0;
+        padding: 0.75rem 1rem;
+    }
+
+    .dashboard-body.menu-open .sidebar {
+        height: auto;
+        max-height: none;
+        overflow: visible;
+        position: relative;
+    }
+
+    .sidebar-header {
+        align-items: center;
+        flex-wrap: nowrap;
+        gap: 0.5rem;
+        margin-bottom: 0;
+    }
+
+    .mobile-menu-toggle {
+        flex: 0 0 auto;
+        min-height: 2.75rem;
+        padding: 0.55rem 0.75rem;
+    }
+
+    .sidebar-nav {
+        display: none;
+        flex: 0 1 auto;
+        max-height: none;
+        overflow: visible;
+        padding: 0;
+    }
+
+    .dashboard-body.menu-open .sidebar-nav {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 0.4rem;
+        margin-top: 0.85rem;
+    }
+
+    .dashboard-body.menu-open .sidebar-footer {
+        display: block;
+        margin-top: 0.75rem;
+        padding-top: 0.65rem;
+    }
+
+    .dashboard-body.menu-open .nav-section-label {
+        grid-column: 1 / -1;
+    }
+
+    .sidebar-nav .nav-item {
+        align-items: flex-start;
+        min-height: 2.75rem;
+        padding: 0.65rem 0.7rem;
+        overflow-wrap: anywhere;
+    }
+
+    .sidebar-nav .nav-item > span:first-child {
+        flex: 0 0 auto;
+    }
+
+    .top-bar {
+        align-items: center;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem 0.75rem;
+        height: auto;
+        min-height: 60px;
+        padding: 0.7rem 1rem;
+    }
+
+    .breadcrumbs {
+        flex: 1 1 130px;
+        min-width: 0;
+        overflow-wrap: anywhere;
+    }
+
+    .user-profile {
+        flex: 0 1 auto;
+        min-width: 0;
+        margin-left: auto;
+    }
+
+    .main-content {
+        padding: 1rem !important;
+    }
+
+    .dashboard-page .panel-header {
+        margin-bottom: 1.25rem;
+    }
+
+    .dashboard-page .panel-header h1,
+    .dashboard-title {
+        font-size: clamp(1.45rem, 4.5vw, 1.8rem);
+        line-height: 1.2;
+    }
+
+    .panel-header .btn-primary,
+    .panel-header .btn-ghost,
+    .trip-page-links .btn-ghost {
+        max-width: 100%;
+        white-space: normal;
+        text-align: center;
+    }
+
+    .stats-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 0.75rem;
+        margin: 1rem 0 1.5rem;
+    }
+
+    .stat-tile {
+        gap: 0.4rem;
+        padding: 0.9rem;
+    }
+
+    .stat-label {
+        font-size: 0.72rem;
+        letter-spacing: 0.03em;
+    }
+
+    .stat-value {
+        font-size: clamp(1.25rem, 4.5vw, 1.8rem);
+        line-height: 1.2;
+    }
+
+    .table-container {
+        width: 100%;
+        margin-top: 1rem;
+    }
+
+    /* Data-dense tables remain inside their own swipeable container,
+       rather than widening the entire page on small screens. */
+    .fleet-table {
+        min-width: 660px;
+    }
+
+    .fleet-table th,
+    .fleet-table td {
+        padding: 0.75rem;
+        font-size: 0.82rem;
+    }
+
+    .dispatch-panel {
+        padding: 1rem;
+    }
+
+    .expense-form,
+    .dispatch-form {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 0.9rem;
+    }
+
+    .expense-notes {
+        grid-column: 1 / -1;
+    }
+
+    .expense-filter-form {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 0.75rem;
+        padding: 0.9rem;
+    }
+
+    .expense-filter-field {
+        min-width: 0;
+    }
+
+    .expense-filter-actions {
+        grid-column: 1 / -1;
+    }
+
+    body:not(.dashboard-body) .hero {
+        grid-template-columns: minmax(0, 1fr);
+        gap: 2rem;
+        padding: 2.5rem 1.25rem;
+    }
+
+    body:not(.dashboard-body) .hero-title {
+        font-size: clamp(2.1rem, 7vw, 3rem);
+    }
+
+    body:not(.dashboard-body) .hero-subtitle {
+        max-width: 65ch;
+        font-size: 1rem;
+    }
+
+    body:not(.dashboard-body) .hero-actions {
+        gap: 0.65rem;
+    }
+
+    body:not(.dashboard-body) .features {
+        padding: 2.5rem 1.25rem;
+    }
+
+    body:not(.dashboard-body) .features-inner {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 1rem;
+    }
+
+    body:not(.dashboard-body) .feature-card {
+        padding: 1.25rem;
+    }
+
+    body:not(.dashboard-body) .nav-inner {
+        height: auto;
+        min-height: 60px;
+        flex-wrap: wrap;
+        gap: 0.5rem 1rem;
+        padding-block: 0.65rem;
+    }
+
+    body:not(.dashboard-body) .nav-links {
+        min-width: 0;
+        flex-wrap: wrap;
+        gap: 0.5rem 0.85rem;
+    }
+
+    body:not(.dashboard-body) .mock-card {
+        max-width: 100%;
+        padding: 1.25rem;
+    }
+
+    body:not(.dashboard-body) .mock-bar-row {
+        grid-template-columns: minmax(0, 1.1fr) minmax(2.5rem, 1fr) auto;
+        gap: 0.55rem;
+    }
+
+    body:not(.dashboard-body) .cta-section {
+        padding: 3rem 1.25rem;
+    }
+}
+
+@media (max-width: 560px) {
+    .main-content {
+        padding: 0.85rem !important;
+    }
+
+    .top-bar {
+        padding-inline: 0.85rem;
+    }
+
+    .stats-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 0.6rem;
+    }
+
+    .stat-tile {
+        padding: 0.75rem;
+    }
+
+    .stat-value {
+        font-size: clamp(1.2rem, 6vw, 1.55rem);
+    }
+
+    .expense-form,
+    .dispatch-form,
+    .expense-filter-form {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    .expense-notes,
+    .expense-filter-actions {
+        grid-column: 1;
+    }
+
+    .expense-filter-actions {
+        align-items: stretch;
+        flex-direction: column;
+    }
+
+    .expense-filter-actions .btn-primary,
+    .expense-filter-actions .btn-ghost {
+        width: 100%;
+    }
+
+    .expense-review-actions,
+    .expense-review-actions form {
+        align-items: stretch;
+        flex-direction: column;
+    }
+
+    .expense-review-actions input[name="review_note"] {
+        width: 100%;
+        max-width: none;
+        min-width: 0;
+    }
+
+    .dashboard-page .panel-header .btn-primary,
+    .dashboard-page .panel-header .btn-ghost,
+    .dashboard-page .finance-action-link {
+        width: 100%;
+        justify-content: center;
+    }
+
+    .trip-page-links {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr);
+        width: 100%;
+    }
+
+    body:not(.dashboard-body) .nav-inner {
+        align-items: center;
+    }
+
+    body:not(.dashboard-body) .nav-links {
+        display: flex;
+        justify-content: space-between;
+        width: 100%;
+        gap: 0.35rem;
+        font-size: 0.82rem;
+    }
+
+    body:not(.dashboard-body) .nav-links a {
+        padding: 0.45rem 0.35rem;
+    }
+
+    body:not(.dashboard-body) .nav-links .nav-cta {
+        padding: 0.45rem 0.65rem;
+    }
+
+    body:not(.dashboard-body) .hero-actions > a {
+        flex: 1 1 140px;
+        text-align: center;
+    }
+
+    body:not(.dashboard-body) .features-inner {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    body:not(.dashboard-body) .feature-card {
+        padding: 1.1rem;
+    }
+
+    body:not(.dashboard-body) .mock-card-header {
+        align-items: flex-start;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+    }
+
+    body:not(.dashboard-body) .mock-total {
+        font-size: 1.4rem;
+    }
+
+    body:not(.dashboard-body) .mock-bar-row {
+        grid-template-columns: minmax(0, 1fr) minmax(2rem, 0.8fr) auto;
+        gap: 0.4rem;
+    }
+
+    body:not(.dashboard-body) .mock-cat,
+    body:not(.dashboard-body) .mock-amt {
+        font-size: 0.72rem;
+    }
+
+    .auth-title {
+        font-size: clamp(1.6rem, 7vw, 2rem);
+    }
+
+    .legal-container {
+        margin-block: 2rem;
+    }
+}
+
+@media (max-width: 360px) {
+    .stats-grid {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    .dashboard-body.menu-open .sidebar-nav {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    body:not(.dashboard-body) .nav-brand {
+        font-size: 1rem;
+    }
+
+    body:not(.dashboard-body) .nav-links {
+        justify-content: space-between;
+        gap: 0.2rem;
+        font-size: 0.76rem;
+    }
+
+    body:not(.dashboard-body) .nav-links .nav-cta {
+        padding-inline: 0.45rem;
+    }
+
+    body:not(.dashboard-body) .mock-bar-row {
+        grid-template-columns: minmax(0, 1fr) 2.5rem auto;
+    }
+
+    body:not(.dashboard-body) .mock-label,
+    body:not(.dashboard-body) .mock-cat,
+    body:not(.dashboard-body) .mock-amt {
+        font-size: 0.68rem;
+    }
+}
