@@ -36,8 +36,17 @@ from controller.access_controller import (
 )
 
 app = Flask(__name__)
-app.config["PUBLIC_BASE_URL"] = os.environ.get("FLEETFLOW_PUBLIC_URL", "").rstrip("/")
-app.config["MAX_CONTENT_LENGTH"] = 11 * 1024 * 1024
+IS_PRODUCTION = os.environ.get("APP_ENV", "").strip().lower() == "production"
+app.config.update(
+    PUBLIC_BASE_URL=os.environ.get("FLEETFLOW_PUBLIC_URL", "").rstrip("/"),
+    MAX_CONTENT_LENGTH=11 * 1024 * 1024,
+    SESSION_COOKIE_HTTPONLY=True,
+    SESSION_COOKIE_SAMESITE="Lax",
+    SESSION_COOKIE_SECURE=IS_PRODUCTION,
+    REMEMBER_COOKIE_HTTPONLY=True,
+    REMEMBER_COOKIE_SECURE=IS_PRODUCTION,
+    PERMANENT_SESSION_LIFETIME=__import__("datetime").timedelta(hours=8),
+)
 DRIVER_DOCUMENT_MAX_SIZE = 10 * 1024 * 1024
 DRIVER_DOCUMENT_TYPES = {
     "Driving license": {".pdf", ".jpg", ".jpeg", ".png"},
@@ -56,23 +65,27 @@ DRIVER_DOCUMENT_SIGNATURES = {
 
 
 def _get_secret_key():
-    configured_key = os.environ.get("FLASK_SECRET_KEY")
+    configured_key = os.environ.get("FLASK_SECRET_KEY", "").strip()
     if configured_key:
+        if len(configured_key) < 32:
+            raise RuntimeError("FLASK_SECRET_KEY must contain at least 32 characters.")
         return configured_key
-
-    key_path = Path(__file__).resolve().parent / ".flask_secret_key"
-    try:
-        descriptor = os.open(
-            key_path,
-            os.O_WRONLY | os.O_CREAT | os.O_EXCL,
-            0o600
+    if IS_PRODUCTION:
+        raise RuntimeError(
+            "FLASK_SECRET_KEY must be configured in production; generate one with "
+            "'python -c \"import secrets; print(secrets.token_hex(32))\"'."
         )
+
+    # Development only: create an ignored, permission-restricted key file.
+    key_path = Path(__file__).resolve().parent / ".flask_secret_key"
+    key_path.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        descriptor = os.open(key_path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
     except FileExistsError:
-        for _ in range(100):
-            if key_path.stat().st_size:
-                return key_path.read_text(encoding="utf-8").strip()
-            time.sleep(0.01)
-        raise RuntimeError(f"Flask secret key file is empty: {key_path}")
+        key = key_path.read_text(encoding="utf-8").strip()
+        if len(key) >= 32:
+            return key
+        raise RuntimeError(f"Development Flask secret key file is invalid: {key_path}")
 
     key = secrets.token_hex(32)
     with os.fdopen(descriptor, "w", encoding="utf-8") as key_file:
@@ -86,11 +99,15 @@ app.config["SECRET_KEY"] = _get_secret_key()
 
 
 def _password_matches(stored_password, candidate):
-    if not candidate:
+    """Accept only Werkzeug password hashes; never authenticate plaintext secrets."""
+    if not candidate or not stored_password:
         return False
-    if stored_password.startswith(("scrypt:", "pbkdf2:")):
+    if not stored_password.startswith(("scrypt:", "pbkdf2:")):
+        return False
+    try:
         return check_password_hash(stored_password, candidate)
-    return stored_password == candidate
+    except (ValueError, TypeError):
+        return False
 
 
 def _avatar_initials(full_name, email):
@@ -285,8 +302,8 @@ def login():
                 login_role=login_role,
                 csrf_token=session["csrf_token"]
             )
-        email = request.form.get("email")
-        password = request.form.get("password")
+        email = request.form.get("email", "").strip().lower()
+        password = request.form.get("password", "")
 
         conn = get_db()
         user = conn.execute("SELECT * FROM users WHERE email = ?", (email,)).fetchone()
@@ -326,6 +343,9 @@ def login():
                     login_role=login_role,
                     csrf_token=session["csrf_token"]
                 )
+            # Rotate the signed session on successful authentication.
+            session.clear()
+            session['csrf_token'] = secrets.token_urlsafe(32)
             session['user_id'] = user['user_id']
             session['email'] = user['email']
             session['role'] = user['role']
@@ -2847,4 +2867,5 @@ def terminate_user(id):
 
 
 if __name__ == "__main__":
-    app.run(debug=True, port=5001)
+    # Never enable the interactive debugger by default.
+    app.run(debug=False, host=os.environ.get("FLASK_HOST", "127.0.0.1"), port=int(os.environ.get("PORT", "5001")))
