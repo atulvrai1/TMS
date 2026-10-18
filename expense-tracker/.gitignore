@@ -1,7 +1,32 @@
-venv/
-expense_tracker.db
+# Python
 __pycache__/
-*.pyc
+*.py[cod]
 *.pyo
+.venv/
+venv/
+
+# Environment and secrets
+.env
+.env.*
+!.env.example
+.flask_secret_key
+
+# Local databases and backups (never commit operational data)
+*.db
+*.sqlite
+*.sqlite3
+*.db-*
+*.sqlite-*
+
+# Runtime/private data
+instance/
+*.log
+uploads/
+driver_documents/
+
+# Tests and tooling
+.pytest_cache/
+.coverage
+htmlcov/
 .DS_Store
 .claude/plans/
