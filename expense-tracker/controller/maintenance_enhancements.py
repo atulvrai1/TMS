@@ -306,17 +306,7 @@ def register_maintenance_module(app, ns):
                 ":parts_cost, :labour_cost, :tax_cost, :status, :created_by, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)",
                 data,
             )
-            if data["status"] == "Completed":
-                conn.execute(
-                    "UPDATE trucks SET last_service_date = ? WHERE truck_id = ?",
-                    (data["service_date"], data["truck_id"]),
-                )
-            elif data["status"] == "In Progress":
-                conn.execute(
-                    "UPDATE trucks SET status = 'Maintenance' WHERE truck_id = ? "
-                    "AND status != 'In Trip'",
-                    (data["truck_id"],),
-                )
+            refresh_truck_service_state(conn, data["truck_id"])
             _record_user_activity(
                 conn, "Maintenance Record Added",
                 f"{data['service_type']} for truck {truck['registration_number']} "
