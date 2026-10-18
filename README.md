@@ -47,6 +47,16 @@ pytest -q
 
 Tests use a temporary database and should not change your working database.
 
+## Main workflows and usability
+
+- **Dispatch lifecycle:** schedule a trip with an available truck and active driver, dispatch it with a starting odometer, and complete it with a validated return odometer. Truck availability is updated with the trip transition.
+- **Customer payments:** record dated payments and receipt/reference notes against a trip; amounts above the outstanding freight balance are rejected.
+- **Expenses and review:** link expenses to trips and review their approval state; approved costs feed the profitability summaries.
+- **Fleet and access:** manage trucks, drivers, maintenance records, user approvals, and audit history according to account permissions.
+- **Operator experience:** responsive dashboard navigation, accessible keyboard focus, table quick-search, mobile-friendly horizontal table scrolling, and protection against accidental duplicate trip/payment submissions.
+
+The automated trip workflow test covers scheduling, dispatch, odometer validation, completion, truck availability, and payment balance enforcement against a temporary database. These checks are useful regression coverage, not a substitute for testing with your real operational data and deployment configuration.
+
 ## Production deployment
 
 1. Store secrets in your deployment platform's secret manager/environment; do not commit `.env`.
