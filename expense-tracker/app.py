@@ -2876,6 +2876,11 @@ def terminate_user(id):
     return redirect(url_for("admin_users"))
 
 
+# Register the enhanced expense screens after all original routes are defined.
+from controller.expense_enhancements import register_expense_enhancements
+register_expense_enhancements(app, globals())
+
+
 if __name__ == "__main__":
     # Never enable the interactive debugger by default.
     app.run(debug=False, host=os.environ.get("FLASK_HOST", "127.0.0.1"), port=int(os.environ.get("PORT", "5001")))
