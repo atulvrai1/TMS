@@ -44,7 +44,6 @@ HEALTHCHECK --interval=30s \
     --timeout=5s \
     --start-period=20s \
     --retries=3 \
-    CMD python -c "import os, urllib.request; urllib.request.urlopen('http://127.0.0.1:' + os.environ.get('PORT', '5001') + '/', timeout=4)" || exit 1
-
+    CMD ["gunicorn", "--bind", "0.0.0.0:5001", "--workers", "2", "--timeout", "120", "--access-logfile", "-", "--error-logfile", "-", "app:app"]
 # Start the Flask application using Gunicorn
 CMD ["gunicorn", "--bind", "0.0.0.0:5001", "--workers", "2", "--timeout", "120", "app:app"]

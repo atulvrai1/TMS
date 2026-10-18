@@ -119,3 +119,187 @@ with app.test_client() as client:
         "Password reset fallback test failed.\n"
         f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
     )
+
+
+def test_only_super_admin_can_approve_admin_access(tmp_path):
+    database_path = tmp_path / "admin-approval-test-tms.db"
+    env = os.environ.copy()
+    env.update(
+        {
+            "DATABASE_PATH": str(database_path),
+            "FLASK_SECRET_KEY": "test-only-secret-key-that-is-at-least-32-characters-long",
+            "FLEETFLOW_SUPER_ADMIN_EMAIL": "super-admin@example.test",
+            "APP_ENV": "test",
+            "PYTHONPATH": str(PROJECT_DIR),
+        }
+    )
+    code = r"""
+import app as app_module
+from app import app
+from database.db import get_db
+from werkzeug.security import generate_password_hash
+
+app_module.NotificationService.send_email = staticmethod(lambda **kwargs: None)
+conn = get_db()
+password = generate_password_hash("Correct-Horse-123!")
+super_admin_id = conn.execute(
+    "INSERT INTO users (email, password, full_name, is_approved, role, job_role) "
+    "VALUES (?, ?, ?, 1, 'Admin', 'Admin')",
+    ("super-admin@example.test", password, "Super Admin"),
+).lastrowid
+admin_id = conn.execute(
+    "INSERT INTO users (email, password, full_name, is_approved, role, job_role) "
+    "VALUES (?, ?, ?, 1, 'Admin', 'Admin')",
+    ("admin@example.test", password, "Admin"),
+).lastrowid
+pending_id = conn.execute(
+    "INSERT INTO users (email, password, full_name, is_approved, requested_role) "
+    "VALUES (?, ?, ?, 0, 'Admin')",
+    ("pending-admin@example.test", password, "Pending Admin"),
+).lastrowid
+conn.commit()
+conn.close()
+
+with app.test_client() as client:
+    with client.session_transaction() as session:
+        session.update(
+            user_id=super_admin_id,
+            email="super-admin@example.test",
+            csrf_token="test-token",
+        )
+    response = client.get("/admin/users")
+    assert response.status_code == 200
+    assert b'<button type="submit" class="btn-primary">Approve Admin Access</button>' in response.data
+
+with app.test_client() as client:
+    with client.session_transaction() as session:
+        session.update(
+            user_id=admin_id,
+            email="admin@example.test",
+            csrf_token="test-token",
+        )
+    response = client.get("/admin/users")
+    assert response.status_code == 200
+    assert b"Awaiting super administrator approval." in response.data
+    assert b'<button type="submit" class="btn-primary">Approve Admin Access</button>' not in response.data
+    assert b'name="approved_role" value="Admin"' not in response.data
+    response = client.post(
+        f"/admin/approve/{pending_id}",
+        data={"csrf_token": "test-token", "approved_role": "Admin"},
+    )
+    assert response.status_code == 302
+
+conn = get_db()
+pending = conn.execute(
+    "SELECT is_approved, role FROM users WHERE user_id = ?", (pending_id,)
+).fetchone()
+assert pending["is_approved"] == 0
+conn.close()
+
+with app.test_client() as client:
+    with client.session_transaction() as session:
+        session.update(
+            user_id=super_admin_id,
+            email="super-admin@example.test",
+            csrf_token="test-token",
+        )
+    response = client.post(
+        f"/admin/approve/{pending_id}",
+        data={"csrf_token": "test-token", "approved_role": "Admin"},
+    )
+    assert response.status_code == 302
+
+conn = get_db()
+pending = conn.execute(
+    "SELECT is_approved, role FROM users WHERE user_id = ?", (pending_id,)
+).fetchone()
+assert pending["is_approved"] == 1
+assert pending["role"] == "Admin"
+conn.close()
+"""
+    result = subprocess.run(
+        [sys.executable, "-c", code],
+        cwd=PROJECT_DIR,
+        env=env,
+        text=True,
+        capture_output=True,
+        timeout=30,
+        check=False,
+    )
+    assert result.returncode == 0, (
+        "Administrator access approval test failed.\n"
+        f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
+    )
+
+
+def test_admin_user_driver_selector_explains_empty_state_and_lists_available_drivers(tmp_path):
+    database_path = tmp_path / "admin-driver-selector-test-tms.db"
+    env = os.environ.copy()
+    env.update(
+        {
+            "DATABASE_PATH": str(database_path),
+            "FLASK_SECRET_KEY": "test-only-secret-key-that-is-at-least-32-characters-long",
+            "FLEETFLOW_SUPER_ADMIN_EMAIL": "super-admin@example.test",
+            "APP_ENV": "test",
+            "PYTHONPATH": str(PROJECT_DIR),
+        }
+    )
+    code = r"""
+from app import app
+from database.db import get_db
+
+conn = get_db()
+admin_id = conn.execute(
+    "INSERT INTO users (email, password, full_name, is_approved, role, job_role) "
+    "VALUES (?, ?, ?, 1, 'Admin', 'Admin')",
+    ("super-admin@example.test", "unused-test-password", "Super Admin"),
+).lastrowid
+conn.commit()
+conn.close()
+
+with app.test_client() as client:
+    with client.session_transaction() as session:
+        session.update(
+            user_id=admin_id,
+            email="super-admin@example.test",
+            csrf_token="test-token",
+        )
+    response = client.get("/admin/users")
+    assert response.status_code == 200
+    assert b'id="new-driver-record"' in response.data
+    assert b"No active, unlinked driver records" in response.data
+    assert b'href="/drivers/add">Add a driver record</a>' in response.data
+
+conn = get_db()
+conn.execute(
+    "INSERT INTO drivers (name, license_number, status) VALUES (?, ?, 'Active')",
+    ("Available Driver", "TEST-LIC-001"),
+)
+conn.commit()
+conn.close()
+
+with app.test_client() as client:
+    with client.session_transaction() as session:
+        session.update(
+            user_id=admin_id,
+            email="super-admin@example.test",
+            csrf_token="test-token",
+        )
+    response = client.get("/admin/users")
+    assert response.status_code == 200
+    assert b'<option value="1">Available Driver \xe2\x80\x94 TEST-LIC-001</option>' in response.data
+    assert b'<select id="new-driver-record" name="driver_id" class="form-input" required disabled>' not in response.data
+"""
+    result = subprocess.run(
+        [sys.executable, "-c", code],
+        cwd=PROJECT_DIR,
+        env=env,
+        text=True,
+        capture_output=True,
+        timeout=30,
+        check=False,
+    )
+    assert result.returncode == 0, (
+        "Driver record selector test failed.\n"
+        f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
+    )

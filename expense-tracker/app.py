@@ -2505,6 +2505,10 @@ def admin_users():
         "OR users.user_id IS NOT NULL "
         "ORDER BY drivers.name COLLATE NOCASE"
     ).fetchall()
+    available_driver_records = [
+        dict(driver) for driver in drivers
+        if not driver["linked_user_id"] and driver["status"] == "Active"
+    ]
     reset_requests = conn.execute(
         "SELECT users.user_id, users.full_name, users.email, "
         "MAX(password_reset_tokens.created_at) AS requested_at "
@@ -2524,9 +2528,13 @@ def admin_users():
         "admin_users.html",
         users=users,
         drivers=drivers,
+        available_driver_records=available_driver_records,
         reset_requests=reset_requests,
         current_user_id=session['user_id'],
         super_admin_email=SUPER_ADMIN_EMAIL,
+        is_super_admin=(
+            session.get("email", "").casefold() == SUPER_ADMIN_EMAIL.casefold()
+        ),
         csrf_token=session["csrf_token"],
         block_content='dashboard'
     )
@@ -2687,6 +2695,12 @@ def approve_user(id):
         approved_role = request.form.get("approved_role", "User")
         if approved_role not in ("User", "Admin"):
             flash("Select a valid account access level.", "error")
+            return redirect(url_for("admin_users"))
+        if (
+            approved_role == "Admin"
+            and session.get("email", "").casefold() != SUPER_ADMIN_EMAIL.casefold()
+        ):
+            flash("Only the super administrator can approve administrator access.", "error")
             return redirect(url_for("admin_users"))
         driver_id = request.form.get("driver_id", "").strip()
         if approved_role == "User":

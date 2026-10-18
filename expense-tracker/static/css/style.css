@@ -3097,4 +3097,48 @@ button {
         grid-template-columns: minmax(0, 1fr);
         gap: 0.15rem;
     }
+
+    .admin-users-table {
+        width: 100%;
+        min-width: 100%;
+        table-layout: fixed;
+    }
+
+    .admin-users-table th:nth-child(1) { width: 12%; }
+    .admin-users-table th:nth-child(2) { width: 17%; }
+    .admin-users-table th:nth-child(3) { width: 12%; }
+    .admin-users-table th:nth-child(4) { width: 21%; }
+    .admin-users-table th:nth-child(5) { width: 14%; }
+    .admin-users-table th:nth-child(6) { width: 11%; }
+    .admin-users-table th:nth-child(7) { width: 13%; }
+
+    .admin-users-table td:nth-child(4) {
+        min-width: 0;
+    }
+
+    .admin-users-table .role-assignment-form {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        min-width: 0;
+        max-width: 100%;
+    }
+
+    .admin-users-table .role-assignment-form select {
+        flex: 1 1 8rem;
+        width: 100%;
+        min-width: 0;
+        max-width: 100%;
+    }
+
+    .admin-users-table td:last-child,
+    .admin-users-table td:last-child > *,
+    .admin-users-table td:last-child form,
+    .admin-users-table td:last-child button,
+    .admin-users-table td:last-child select {
+        min-width: 0;
+        max-width: 100%;
+        white-space: normal;
+        overflow-wrap: anywhere;
+    }
 }
