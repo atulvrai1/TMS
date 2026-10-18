@@ -185,6 +185,10 @@ def register_maintenance_module(app, ns):
         )
         if odometer is not None and next_odometer is not None and next_odometer < odometer:
             raise ValueError("Next service odometer cannot be below the current odometer.")
+        if next_date and next_date < service_date:
+            raise ValueError("Next service date cannot be earlier than the current service date.")
+        if status == "Completed" and service_date > date.today().isoformat():
+            raise ValueError("A completed service cannot have a future service date.")
 
         parts = _money(request.form.get("parts_cost"), "Parts cost")
         labour = _money(request.form.get("labour_cost"), "Labour cost")
@@ -306,7 +310,8 @@ def register_maintenance_module(app, ns):
                 ":parts_cost, :labour_cost, :tax_cost, :status, :created_by, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)",
                 data,
             )
-            refresh_truck_service_state(conn, data["truck_id"])
+            if data["status"] in {"Completed", "In Progress"}:
+                refresh_truck_service_state(conn, data["truck_id"])
             _record_user_activity(
                 conn, "Maintenance Record Added",
                 f"{data['service_type']} for truck {truck['registration_number']} "
@@ -356,8 +361,9 @@ def register_maintenance_module(app, ns):
                 "WHERE maintenance_id=:maintenance_id",
                 {**data, "maintenance_id": maintenance_id},
             )
-            for truck_id in {current["truck_id"], data["truck_id"]}:
-                refresh_truck_service_state(conn, truck_id)
+            if current["status"] != "Scheduled" or data["status"] != "Scheduled":
+                for truck_id in {current["truck_id"], data["truck_id"]}:
+                    refresh_truck_service_state(conn, truck_id)
             _record_user_activity(
                 conn, "Maintenance Record Updated",
                 f"Updated maintenance record #{maintenance_id} for truck {truck['registration_number']}."
