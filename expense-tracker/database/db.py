@@ -1,14 +1,19 @@
 import sqlite3
 import os
+from pathlib import Path
+from werkzeug.security import generate_password_hash
 
-DATABASE_PATH = os.environ.get("DATABASE_PATH", "tms.db")
+_BASE_DIR = Path(__file__).resolve().parents[1]
+_configured_database_path = Path(os.environ.get("DATABASE_PATH", "tms.db")).expanduser()
+DATABASE_PATH = str((_configured_database_path if _configured_database_path.is_absolute() else _BASE_DIR / _configured_database_path).resolve())
 SUPER_ADMIN_EMAIL = os.environ.get("FLEETFLOW_SUPER_ADMIN_EMAIL", "atulv.11239@gmail.com")
 
 def get_db():
     """Returns a SQLite connection with row_factory and foreign keys enabled."""
-    conn = sqlite3.connect(DATABASE_PATH)
+    conn = sqlite3.connect(DATABASE_PATH, timeout=30)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys = ON")
+    conn.execute("PRAGMA busy_timeout = 30000")
     return conn
 
 def log_activity(user_id, action, details, actor_user_id=None):
@@ -369,13 +374,28 @@ def init_db():
         conn.commit()
 
 def seed_db():
-    """Inserts sample data for development."""
+    """Seed demo fleet records and optionally bootstrap an administrator.
+
+    Set FLEETFLOW_BOOTSTRAP_ADMIN_EMAIL and FLEETFLOW_BOOTSTRAP_ADMIN_PASSWORD
+    explicitly when creating a new development database. Never seed a known
+    default password or silently grant administrator access.
+    """
     with get_db() as conn:
-        # Seed Admin
-        conn.execute(
-            "INSERT OR IGNORE INTO users (email, password, full_name, is_approved, role) VALUES (?, ?, ?, ?, ?)",
-            (SUPER_ADMIN_EMAIL, 'password123', 'Atul Admin', 1, 'Admin')
-        )
+        admin_email = os.environ.get("FLEETFLOW_BOOTSTRAP_ADMIN_EMAIL", "").strip().lower()
+        admin_password = os.environ.get("FLEETFLOW_BOOTSTRAP_ADMIN_PASSWORD", "")
+        if bool(admin_email) != bool(admin_password):
+            raise RuntimeError(
+                "Set both FLEETFLOW_BOOTSTRAP_ADMIN_EMAIL and "
+                "FLEETFLOW_BOOTSTRAP_ADMIN_PASSWORD to bootstrap an administrator."
+            )
+        if admin_email and admin_password:
+            if len(admin_password) < 12:
+                raise RuntimeError("Bootstrap administrator password must be at least 12 characters.")
+            conn.execute(
+                "INSERT OR IGNORE INTO users "
+                "(email, password, full_name, is_approved, role) VALUES (?, ?, ?, ?, ?)",
+                (admin_email, generate_password_hash(admin_password), "Fleet Administrator", 1, "Admin")
+            )
 
         # Seed Trucks
         trucks = [
