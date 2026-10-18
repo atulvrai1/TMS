@@ -54,6 +54,7 @@
                 <button type="submit" class="btn-primary account-submit">Save profile</button>
             </form>
             <form action="{{ url_for('logout') }}" method="POST" style="margin-top: 2rem;">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
                 <button type="submit" class="btn-ghost account-logout">Log out</button>
             </form>
         </section>
