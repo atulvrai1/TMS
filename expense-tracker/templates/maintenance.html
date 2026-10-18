@@ -166,9 +166,9 @@
                         </td>
                         <td>
                             <strong>{{ record.status }}</strong>
-                            {% if record.status != 'Completed' and record.next_service_date and record.next_service_date < today %}
+                            {% if record.next_service_date and record.next_service_date < today %}
                             <div class="expense-secondary">Overdue</div>
-                            {% elif record.status != 'Completed' and record.next_service_date and record.next_service_date <= today|string %}
+                            {% elif record.next_service_date and record.next_service_date == today %}
                             <div class="expense-secondary">Due today</div>
                             {% endif %}
                         </td>
