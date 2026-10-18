@@ -99,11 +99,15 @@ app.config["SECRET_KEY"] = _get_secret_key()
 
 
 def _password_matches(stored_password, candidate):
-    if not candidate:
+    """Accept only Werkzeug password hashes; never authenticate plaintext secrets."""
+    if not candidate or not stored_password:
         return False
-    if stored_password.startswith(("scrypt:", "pbkdf2:")):
+    if not stored_password.startswith(("scrypt:", "pbkdf2:")):
+        return False
+    try:
         return check_password_hash(stored_password, candidate)
-    return stored_password == candidate
+    except (ValueError, TypeError):
+        return False
 
 
 def _avatar_initials(full_name, email):
@@ -339,6 +343,9 @@ def login():
                     login_role=login_role,
                     csrf_token=session["csrf_token"]
                 )
+            # Rotate the signed session on successful authentication.
+            session.clear()
+            session['csrf_token'] = secrets.token_urlsafe(32)
             session['user_id'] = user['user_id']
             session['email'] = user['email']
             session['role'] = user['role']
