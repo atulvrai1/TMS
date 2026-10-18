@@ -13,7 +13,7 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/* \
     && groupadd --system fleetflow \
     && useradd --system --gid fleetflow --home-dir /app fleetflow \
-    && mkdir -p /data /app/uploads \
+    && mkdir -p /data /app/instance/driver_documents \
     && chown -R fleetflow:fleetflow /data /app
 
 COPY requirements.txt ./
