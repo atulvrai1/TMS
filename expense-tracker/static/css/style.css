@@ -3066,3 +3066,35 @@ button {
     }
 }
 
+
+/* Keep desktop table columns sized to their content instead of forcing equal widths. */
+@media (min-width: 769px) {
+    .fleet-table {
+        width: max-content;
+        min-width: 100%;
+        max-width: none;
+        table-layout: auto;
+    }
+
+    .fleet-table th,
+    .fleet-table td {
+        white-space: normal !important;
+        overflow-wrap: anywhere;
+        word-break: normal;
+        min-width: 0;
+        max-width: none;
+        vertical-align: top;
+    }
+
+    .fleet-table td time,
+    .fleet-table td .status,
+    .fleet-table td [class*="status"] {
+        white-space: normal !important;
+        overflow-wrap: anywhere;
+    }
+
+    .trip-route-point {
+        grid-template-columns: minmax(0, 1fr);
+        gap: 0.15rem;
+    }
+}
