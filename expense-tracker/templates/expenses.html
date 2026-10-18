@@ -78,71 +78,12 @@
         {% endif %}
     </details>
 
-    {% if can_review %}
-    <section class="financial-overview" aria-labelledby="expense-financial-heading">
-        <h2 class="admin-section-title" id="expense-financial-heading">Overall fleet P/L — all trips</h2>
-        <p class="financial-definition">
-            Net P/L = customer freight charges − approved trip expenses. Cash P/L = payments received − approved trip expenses.
-            Expenses awaiting admin review are shown separately and excluded from profit until approved.
-        </p>
-        <div class="stats-grid">
-            <div class="stat-tile"><span class="stat-label">Freight charges</span><span class="stat-value">{{ '%.2f'|format(finance_summary.freight_total) }}</span></div>
-            <div class="stat-tile"><span class="stat-label">Payments received</span><span class="stat-value">{{ '%.2f'|format(finance_summary.received_total) }}</span></div>
-            <a class="stat-tile stat-tile-link" href="{{ url_for('payments', due='1') }}" aria-label="View trips with customer balances due">
-                <span class="stat-label">Customer balance due · View trips →</span>
-                <span class="stat-value">{{ '%.2f'|format(finance_summary.balance_due_total) }}</span>
-            </a>
-            <a class="stat-tile stat-tile-link" href="{{ url_for('expenses', status='Approved') }}#expense-history" aria-label="View all approved expense records">
-                <span class="stat-label">Approved expenses · View history →</span>
-                <span class="stat-value">{{ '%.2f'|format(finance_summary.approved_expenses_total) }}</span>
-            </a>
-            <div class="stat-tile financial-result"><span class="stat-label">Net P/L (charged)</span><span class="stat-value">{{ '%.2f'|format(finance_summary.profit_loss_total) }}</span></div>
-            <div class="stat-tile financial-result"><span class="stat-label">Cash P/L (received)</span><span class="stat-value">{{ '%.2f'|format(finance_summary.cash_profit_loss_total) }}</span></div>
-            {% if finance_summary.pending_expenses_total > 0 %}
-            <a class="stat-tile stat-tile-link" href="{{ url_for('expenses', status='Pending') }}#expense-history" aria-label="View expenses awaiting admin review">
-                <span class="stat-label">Awaiting admin review · View records →</span>
-                <span class="stat-value">{{ '%.2f'|format(finance_summary.pending_expenses_total) }}</span>
-            </a>
-            {% else %}
-            <div class="stat-tile"><span class="stat-label">Awaiting admin review · not in P/L</span><span class="stat-value">{{ '%.2f'|format(finance_summary.pending_expenses_total) }}</span></div>
-            {% endif %}
-        </div>
-    </section>
-    {% endif %}
-
-    {% if can_review %}
-    <section class="trip-profitability" aria-labelledby="trip-profitability-heading">
-        <h2 class="admin-section-title" id="trip-profitability-heading">Profit / loss by trip</h2>
-        <div class="table-container">
-            <table class="fleet-table">
-                <thead><tr><th>Trip</th><th>Status</th><th>Customer freight charge</th><th>Received</th><th>Balance due</th><th>Approved trip expenses</th><th>Net P/L</th><th>Cash P/L</th></tr></thead>
-                <tbody>
-                    {% for trip in trip_finances %}
-                    <tr>
-                        <td>#{{ trip.trip_id }}<br><span class="expense-secondary">{{ trip.route_from }} → {{ trip.route_to }}</span></td>
-                        <td>{{ trip.status }}</td>
-                        <td>{{ '%.2f'|format(trip.freight_amount) }}</td>
-                        <td>{{ '%.2f'|format(trip.amount_received) }}</td>
-                        <td>
-                            {% if trip.balance_due > 0 %}
-                            <a href="{{ url_for('payments', due='1', trip=trip.trip_id) }}" aria-label="View outstanding balance for trip {{ trip.trip_id }}">{{ '%.2f'|format(trip.balance_due) }}</a>
-                            {% else %}
-                            {{ '%.2f'|format(trip.balance_due) }}
-                            {% endif %}
-                        </td>
-                        <td><a href="{{ url_for('expenses', trip=trip.trip_id) }}#expense-history" aria-label="View all expense history for trip {{ trip.trip_id }}">{{ '%.2f'|format(trip.approved_expenses) }} · View</a>{% if trip.pending_expenses %}<br><a class="expense-secondary" href="{{ url_for('expenses', trip=trip.trip_id, status='Pending') }}#expense-history" aria-label="View pending expenses for trip {{ trip.trip_id }}">{{ '%.2f'|format(trip.pending_expenses) }} pending · View</a>{% endif %}</td>
-                        <td class="{% if trip.profit_loss > 0 %}profit-loss-positive{% elif trip.profit_loss < 0 %}profit-loss-negative{% endif %}">{{ '%.2f'|format(trip.profit_loss) }}</td>
-                        <td class="{% if trip.cash_profit_loss > 0 %}profit-loss-positive{% elif trip.cash_profit_loss < 0 %}profit-loss-negative{% endif %}">{{ '%.2f'|format(trip.cash_profit_loss) }}</td>
-                    </tr>
-                    {% else %}
-                    <tr><td colspan="8" class="user-empty-state">No trips to include in the P/L summary.</td></tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-        </div>
-        <p class="admin-section-link"><a href="{{ url_for('trips') }}">Open trips and record customer payments →</a></p>
-    </section>
-    {% endif %}
+    <nav class="expense-subnav" aria-label="Expense sections">
+        <a href="#expense-categories">Expense subcategories</a>
+        {% if can_review %}<a href="{{ url_for('expenses', view='pl') }}#overall-fleet-pl">Overall Fleet P/L</a>{% endif %}
+        <a href="#expense-history">Expense history</a>
+        <a href="{{ url_for('export_expenses_csv', trip=selected_trip_id, status=selected_status, category=selected_category, date_from=date_from, date_to=date_to) }}">Export current report</a>
+    </nav>
 
     <form action="{{ url_for('expenses') }}" method="GET" class="expense-filter-form">
         <div class="expense-filter-field">
@@ -187,27 +128,103 @@
         </div>
     </form>
 
-    {% if category_summary %}
-    <section class="trip-profitability expense-category-summary" aria-labelledby="expense-category-heading">
-        <h2 class="admin-section-title" id="expense-category-heading">Expense breakdown by category</h2>
+    <section id="expense-categories" class="expense-category-workspace" aria-labelledby="expense-category-heading">
+        <div class="expense-category-workspace-heading">
+            <div>
+                <h2 class="admin-section-title" id="expense-category-heading">Expense subcategories</h2>
+                <p class="financial-definition">Choose a category to open its records. Amounts below respect the selected trip and date range, so you can quickly compare spend across expense types.</p>
+            </div>
+            {% if selected_category %}
+            <a class="btn-ghost" href="{{ url_for('expenses', trip=selected_trip_id, date_from=date_from, date_to=date_to, status=selected_status) }}#expense-categories">Clear category</a>
+            {% endif %}
+        </div>
+        <div class="expense-category-grid">
+            {% for item in category_summary %}
+            <a class="expense-category-card{% if selected_category == item.category %} active{% endif %}"
+               href="{{ url_for('expenses', category=item.category, trip=selected_trip_id, date_from=date_from, date_to=date_to, status=selected_status) }}#expense-history"
+               {% if selected_category == item.category %}aria-current="page"{% endif %}>
+                <div class="expense-category-card-heading">
+                    <strong>{{ item.category }}</strong>
+                    <span>{{ item.count }} record{{ '' if item.count == 1 else 's' }}</span>
+                </div>
+                <div class="expense-category-total">{{ '%.2f'|format(item.total) }}</div>
+                <div class="expense-category-stats">
+                    <span>Approved <strong>{{ '%.2f'|format(item.approved_total) }}</strong></span>
+                    <span>Pending <strong>{{ '%.2f'|format(item.pending_total) }}</strong></span>
+                    <span>Rejected <strong>{{ '%.2f'|format(item.rejected_total) }}</strong></span>
+                </div>
+                <span class="expense-category-open">Open category records →</span>
+            </a>
+            {% endfor %}
+        </div>
+        <p class="financial-definition">Older records under Food or Maintenance are retained as separate legacy categories; nothing is removed or renamed.</p>
+    </section>
+
+    {% if can_review %}
+    <details id="overall-fleet-pl" class="expense-subsection-panel" {% if selected_view == 'pl' %}open{% endif %}>
+        <summary class="expense-subsection-summary">Overall Fleet P/L and trip profitability</summary>
+    <section class="financial-overview" aria-labelledby="expense-financial-heading">
+        <h2 class="admin-section-title" id="expense-financial-heading">Overall fleet P/L — all trips</h2>
+        <p class="financial-definition">
+            Net P/L = customer freight charges − approved trip expenses. Cash P/L = payments received − approved trip expenses.
+            Expenses awaiting admin review are shown separately and excluded from profit until approved.
+        </p>
+        <div class="stats-grid">
+            <div class="stat-tile"><span class="stat-label">Freight charges</span><span class="stat-value">{{ '%.2f'|format(finance_summary.freight_total) }}</span></div>
+            <div class="stat-tile"><span class="stat-label">Payments received</span><span class="stat-value">{{ '%.2f'|format(finance_summary.received_total) }}</span></div>
+            <a class="stat-tile stat-tile-link" href="{{ url_for('payments', due='1') }}" aria-label="View trips with customer balances due">
+                <span class="stat-label">Customer balance due · View trips →</span>
+                <span class="stat-value">{{ '%.2f'|format(finance_summary.balance_due_total) }}</span>
+            </a>
+            <a class="stat-tile stat-tile-link" href="{{ url_for('expenses', status='Approved') }}#expense-history" aria-label="View all approved expense records">
+                <span class="stat-label">Approved expenses · View history →</span>
+                <span class="stat-value">{{ '%.2f'|format(finance_summary.approved_expenses_total) }}</span>
+            </a>
+            <div class="stat-tile financial-result"><span class="stat-label">Net P/L (charged)</span><span class="stat-value">{{ '%.2f'|format(finance_summary.profit_loss_total) }}</span></div>
+            <div class="stat-tile financial-result"><span class="stat-label">Cash P/L (received)</span><span class="stat-value">{{ '%.2f'|format(finance_summary.cash_profit_loss_total) }}</span></div>
+            {% if finance_summary.pending_expenses_total > 0 %}
+            <a class="stat-tile stat-tile-link" href="{{ url_for('expenses', status='Pending') }}#expense-history" aria-label="View expenses awaiting admin review">
+                <span class="stat-label">Awaiting admin review · View records →</span>
+                <span class="stat-value">{{ '%.2f'|format(finance_summary.pending_expenses_total) }}</span>
+            </a>
+            {% else %}
+            <div class="stat-tile"><span class="stat-label">Awaiting admin review · not in P/L</span><span class="stat-value">{{ '%.2f'|format(finance_summary.pending_expenses_total) }}</span></div>
+            {% endif %}
+        </div>
+    </section>
+
+    <section class="trip-profitability" aria-labelledby="trip-profitability-heading">
+        <h2 class="admin-section-title" id="trip-profitability-heading">Profit / loss by trip</h2>
         <div class="table-container">
             <table class="fleet-table">
-                <thead><tr><th>Category</th><th>Records</th><th>Approved</th><th>Pending</th><th>Total recorded</th></tr></thead>
+                <thead><tr><th>Trip</th><th>Status</th><th>Customer freight charge</th><th>Received</th><th>Balance due</th><th>Approved trip expenses</th><th>Net P/L</th><th>Cash P/L</th></tr></thead>
                 <tbody>
-                    {% for item in category_summary %}
+                    {% for trip in trip_finances %}
                     <tr>
-                        <td>{{ item.category }}</td>
-                        <td>{{ item.count }}</td>
-                        <td>{{ '%.2f'|format(item.approved_total) }}</td>
-                        <td>{{ '%.2f'|format(item.pending_total) }}</td>
-                        <td>{{ '%.2f'|format(item.total) }}</td>
+                        <td>#{{ trip.trip_id }}<br><span class="expense-secondary">{{ trip.route_from }} → {{ trip.route_to }}</span></td>
+                        <td>{{ trip.status }}</td>
+                        <td>{{ '%.2f'|format(trip.freight_amount) }}</td>
+                        <td>{{ '%.2f'|format(trip.amount_received) }}</td>
+                        <td>
+                            {% if trip.balance_due > 0 %}
+                            <a href="{{ url_for('payments', due='1', trip=trip.trip_id) }}" aria-label="View outstanding balance for trip {{ trip.trip_id }}">{{ '%.2f'|format(trip.balance_due) }}</a>
+                            {% else %}
+                            {{ '%.2f'|format(trip.balance_due) }}
+                            {% endif %}
+                        </td>
+                        <td><a href="{{ url_for('expenses', trip=trip.trip_id) }}#expense-history" aria-label="View all expense history for trip {{ trip.trip_id }}">{{ '%.2f'|format(trip.approved_expenses) }} · View</a>{% if trip.pending_expenses %}<br><a class="expense-secondary" href="{{ url_for('expenses', trip=trip.trip_id, status='Pending') }}#expense-history" aria-label="View pending expenses for trip {{ trip.trip_id }}">{{ '%.2f'|format(trip.pending_expenses) }} pending · View</a>{% endif %}</td>
+                        <td class="{% if trip.profit_loss > 0 %}profit-loss-positive{% elif trip.profit_loss < 0 %}profit-loss-negative{% endif %}">{{ '%.2f'|format(trip.profit_loss) }}</td>
+                        <td class="{% if trip.cash_profit_loss > 0 %}profit-loss-positive{% elif trip.cash_profit_loss < 0 %}profit-loss-negative{% endif %}">{{ '%.2f'|format(trip.cash_profit_loss) }}</td>
                     </tr>
+                    {% else %}
+                    <tr><td colspan="8" class="user-empty-state">No trips to include in the P/L summary.</td></tr>
                     {% endfor %}
                 </tbody>
             </table>
         </div>
-        <p class="financial-definition">Only approved expenses reduce profit/loss. Pending and rejected amounts remain separately visible for review and reconciliation.</p>
+        <p class="admin-section-link"><a href="{{ url_for('trips') }}">Open trips and record customer payments →</a></p>
     </section>
+    </details>
     {% endif %}
 
     <details id="expense-history" class="expense-history-section" {% if selected_trip_id or selected_status or selected_category or date_from or date_to %}open{% endif %}>
