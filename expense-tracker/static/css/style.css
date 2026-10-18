@@ -2628,3 +2628,91 @@ button {
         font-size: 0.68rem;
     }
 }
+
+
+/* Trip route readability: show pickup and destination as separately labelled values. */
+.trip-route-cell {
+    min-width: 250px;
+    max-width: 380px;
+    white-space: normal;
+}
+
+.trip-route {
+    display: grid;
+    gap: 0.65rem;
+    min-width: 0;
+}
+
+.trip-route-point {
+    display: grid;
+    grid-template-columns: 5.4rem minmax(0, 1fr);
+    align-items: start;
+    gap: 0.55rem;
+    min-width: 0;
+}
+
+.trip-route-label {
+    padding-top: 0.08rem;
+    color: var(--ink-muted);
+    font-size: 0.7rem;
+    font-weight: 700;
+    letter-spacing: 0.045em;
+    line-height: 1.45;
+    text-transform: uppercase;
+}
+
+.trip-route-value {
+    display: block;
+    min-width: 0;
+    color: var(--ink);
+    font-size: 0.9rem;
+    font-weight: 500;
+    line-height: 1.45;
+    white-space: normal;
+    overflow-wrap: anywhere;
+    word-break: normal;
+}
+
+.trip-route-destination {
+    padding-top: 0.55rem;
+    border-top: 1px dashed var(--border-ui);
+}
+
+@media (max-width: 768px) {
+    .dashboard-page .trip-route-cell {
+        width: 260px;
+        min-width: 260px;
+        max-width: 280px;
+    }
+
+    .dashboard-page .trip-route {
+        gap: 0.55rem;
+    }
+
+    .dashboard-page .trip-route-point {
+        grid-template-columns: 4.6rem minmax(0, 1fr);
+        gap: 0.4rem;
+    }
+
+    .dashboard-page .trip-route-value {
+        font-size: 0.84rem;
+        line-height: 1.45;
+    }
+}
+
+@media (max-width: 420px) {
+    .dashboard-page .trip-route-cell {
+        width: 245px;
+        min-width: 245px;
+        max-width: 245px;
+    }
+
+    .dashboard-page .trip-route-point {
+        grid-template-columns: 4.2rem minmax(0, 1fr);
+        gap: 0.35rem;
+    }
+
+    .dashboard-page .trip-route-label {
+        font-size: 0.65rem;
+    }
+}
