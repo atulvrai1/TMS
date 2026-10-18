@@ -218,6 +218,9 @@ def register_expense_enhancements(app, ns):
                 expense = dict(row)
                 expense["corrections"] = corrections_by_expense.get(expense["expense_id"], [])
                 expense["can_correct"] = is_admin or expense["created_by"] == session["user_id"]
+                expense["can_download_receipt"] = (
+                    is_admin or expense["created_by"] == session["user_id"]
+                )
                 expense_rows.append(expense)
 
                 amount = Decimal(str(expense["amount"] or 0)).quantize(Decimal("0.01"))
