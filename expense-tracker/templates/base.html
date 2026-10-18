@@ -27,6 +27,7 @@
                 <a href="{{ url_for('trucks') }}" class="nav-item{% if request.endpoint in ('trucks', 'add_truck', 'edit_truck', 'delete_truck') %} active{% endif %}"><span>🚚</span> Trucks</a>
                 <a href="{{ url_for('drivers') }}" class="nav-item{% if request.endpoint in ('drivers', 'add_driver', 'edit_driver', 'upload_driver_document', 'download_driver_document') %} active{% endif %}"><span>♙</span> Driver Records</a>
                 <a href="{{ url_for('maintenance') }}" class="nav-item{% if request.endpoint == 'maintenance' %} active{% endif %}"><span>🛠</span> Maintenance</a>
+                <a href="{{ url_for('challans') }}" class="nav-item{% if request.endpoint in ('challans', 'challan_add', 'challan_edit', 'challan_delete') %} active{% endif %}"><span>🚨</span> Traffic Challans</a>
                 <a href="{{ url_for('trips') }}" class="nav-item{% if request.endpoint in ('trips', 'create_trip', 'update_trip_status', 'update_trip_freight', 'record_trip_payment') %} active{% endif %}"><span>↗</span> Trips & Dispatch</a>
                 <a href="{{ url_for('admin_notifications') }}" class="nav-item{% if request.endpoint in ('admin_notifications', 'admin_notification_count') %} active{% endif %}">
                     <span>🔔</span> Notifications
