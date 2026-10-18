@@ -380,6 +380,7 @@ def forgot_password():
     session.setdefault("csrf_token", secrets.token_urlsafe(32))
     error = None
     requested = False
+    recovery_link = None
     if request.method == "POST":
         if not _valid_csrf_token():
             error = "Your session token is invalid. Reload the page and try again."
@@ -394,7 +395,11 @@ def forgot_password():
             ).fetchone() if email else None
             try:
                 if user:
-                    _issue_password_reset(conn, user, None)
+                    _, delivered_by_email, reset_url = _issue_password_reset(conn, user, None)
+                    # Never expose a reset token to the browser in production.
+                    # In development, provide the generated link directly if SMTP is unavailable.
+                    if not delivered_by_email and not IS_PRODUCTION:
+                        recovery_link = reset_url
                 requested = True
             except Exception:
                 app.logger.exception("Failed to issue a self-service password reset.")
@@ -405,7 +410,8 @@ def forgot_password():
         "forgot_password.html",
         csrf_token=session["csrf_token"],
         error=error,
-        requested=requested
+        requested=requested,
+        recovery_link=recovery_link
     )
 
 
