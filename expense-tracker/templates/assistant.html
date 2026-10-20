@@ -97,8 +97,7 @@
 .ff-message-body{max-width:min(80%,720px);min-width:0}
 .ff-message-label{font-size:.72rem;font-weight:700;color:var(--ff-muted);margin:0 0 .35rem}
 .ff-message-bubble{padding:.9rem 1rem;border:1px solid #e9ebf2;border-radius:4px 14px 14px 14px;background:#fafbfe;line-height:1.7;font-size:.9rem;white-space:pre-wrap;overflow-wrap:anywhere}
-.ff-message.user .ff-message-bubble{background:#eef1ff;border-color:#e0e5ff;border-radius:14px 4px 14px 14px}
-.ff-message.error .ff-message-bubble{background:#fff6f6;border-color:#f4d3d3;color:#8f2727}
+.ff-message.user .ff-message-bubble{background:#eef1ff;border-color:#e0e5ff;border-radius:14px 4px 14px 14px}.ff-message.error .ff-message-bubble{background:#fff6f6;border-color:#f4d3d3;color:#8f2727}
 .ff-message-bubble p{margin:0 0 .65rem}.ff-message-bubble p:last-child{margin-bottom:0}
 .ff-message-bubble ul{margin:.4rem 0 .2rem;padding-left:1.25rem}.ff-message-bubble li{margin:.3rem 0}
 .ff-typing{display:inline-flex;gap:4px;align-items:center;padding:.35rem 0}
@@ -112,6 +111,28 @@
 .ff-composer button:disabled{opacity:.45;cursor:wait}
 .ff-composer-note{display:flex;justify-content:space-between;gap:.7rem;padding:.35rem .45rem 0;color:#9297a7;font-size:.68rem;line-height:1.4}
 .ff-trip-preview{margin-top:.8rem;padding:1rem;border:1px solid #dfe3f2;border-radius:12px;background:#fff;box-shadow:0 4px 15px rgba(35,45,90,.04)}.ff-trip-preview>strong{display:block;margin-bottom:.6rem;font-size:.92rem}.ff-trip-preview dl{display:grid;grid-template-columns:minmax(95px,.35fr) minmax(0,1fr);gap:.45rem .8rem;margin:.2rem 0 1rem;font-size:.82rem}.ff-trip-preview dt{color:var(--ff-muted)}.ff-trip-preview dd{margin:0;font-weight:600;overflow-wrap:anywhere}.ff-trip-confirm{border:0;border-radius:9px;background:linear-gradient(130deg,#4f63d9,#347cda);color:#fff;padding:.65rem .9rem;font:inherit;font-size:.82rem;font-weight:700;cursor:pointer}.ff-trip-confirm:disabled{opacity:.65;cursor:wait}.ff-trip-note{margin:.65rem 0 0;font-size:.73rem;color:var(--ff-muted)}.ff-trip-open-link{display:inline-block;margin-top:.5rem;color:#4257cb;font-weight:700;text-decoration:underline}.ff-sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+
+.ff-payment-results{margin-top:.15rem;min-width:0}
+.ff-payment-title{margin:0 0 .8rem;font-size:1rem;line-height:1.35;font-weight:800;color:#252b45}
+.ff-payment-table-wrap{width:100%;max-width:100%;overflow-x:auto;border:1px solid #e5e8f1;border-radius:12px;background:#fff}
+.ff-payment-table{width:100%;min-width:590px;border-collapse:separate;border-spacing:0;font-size:.82rem;line-height:1.45;white-space:normal}
+.ff-payment-table th{padding:.75rem .85rem;background:#f5f6fc;color:#656d83;text-align:left;text-transform:uppercase;letter-spacing:.045em;font-size:.68rem;font-weight:800;border-bottom:1px solid #e5e8f1}
+.ff-payment-table td{padding:.8rem .85rem;border-bottom:1px solid #edf0f6;vertical-align:top;color:#33394e}
+.ff-payment-table tbody tr:last-child td{border-bottom:1px solid #e5e8f1}
+.ff-payment-table tbody tr:hover{background:#fafbff}
+.ff-payment-table .ff-payment-id{font-weight:800;color:#3547b8;white-space:nowrap}
+.ff-payment-table .ff-payment-trip strong,.ff-payment-table .ff-payment-trip small{display:block}
+.ff-payment-table .ff-payment-trip small{margin-top:.18rem;color:#747b8d;font-size:.74rem;white-space:normal;min-width:100px}
+.ff-payment-table .ff-payment-amount{font-weight:800;text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}
+.ff-payment-table th.ff-payment-amount{text-align:right}
+.ff-payment-table .ff-payment-date{white-space:nowrap}
+.ff-payment-table .ff-payment-reference{min-width:140px;max-width:260px;overflow-wrap:anywhere;color:#687086;font-size:.76rem}
+.ff-payment-table tfoot td{background:#f7f8ff;border:0;font-weight:800;color:#252b45}
+.ff-payment-table tfoot .ff-payment-total-label{text-align:right}
+.ff-payment-table tfoot .ff-payment-total-amount{text-align:right;color:#24734c;white-space:nowrap;font-size:.9rem}
+.ff-payment-footnote{margin:.55rem .1rem 0;color:#747b8d;font-size:.72rem}
+@media(max-width:700px){.ff-payment-table{min-width:540px}.ff-payment-table th,.ff-payment-table td{padding:.7rem .65rem}.ff-payment-title{font-size:.95rem}}
+
 @keyframes ff-fade-in{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:translateY(0)}}
 @keyframes ff-pulse{from{opacity:.35;transform:translateY(0)}to{opacity:1;transform:translateY(-3px)}}
 @media(max-width:700px){.ff-agent{min-height:calc(100vh - 115px)}.ff-agent-workspace{min-height:500px}.ff-chat-messages{max-height:none;padding:1rem}.ff-starters{grid-template-columns:1fr}.ff-message-body{max-width:88%}.ff-composer{width:calc(100% - 1rem)}.ff-composer-note{display:block}.ff-composer-note span{display:block}.ff-agent-actions{width:100%;justify-content:space-between}}
@@ -148,6 +169,125 @@
   let pendingTruckCreation = sessionStorage.getItem('ffPendingTruckCreation') === 'true';
 
   function scrollToLatest() { messages.scrollTop = messages.scrollHeight; }
+
+
+  function renderAssistantResponse(bubble, text) {
+    const lines = String(text || '').split(/\r?\n/);
+    const rowPattern = /^\s*Payment\s+#?(\d+)\s*\|\s*Trip\s+#?(\d+)\s*(?:\((.*?)\))?\s*\|\s*(₹\s*[\d,]+(?:\.\d{1,2})?)\s*\|\s*(\d{4}-\d{2}-\d{2})(?:\s*\|\s*(.*))?\s*$/i;
+    const rows = lines.map((line) => {
+      const match = line.match(rowPattern);
+      return match ? {
+        paymentId: match[1],
+        tripId: match[2],
+        route: (match[3] || '').trim(),
+        amount: match[4].replace(/\s+/g, ''),
+        date: match[5],
+        reference: (match[6] || '').trim()
+      } : null;
+    }).filter(Boolean);
+
+    if (!rows.length) {
+      if (kind === 'assistant') renderAssistantResponse(bubble, text);
+    else bubble.textContent = text;
+      return;
+    }
+
+    const result = document.createElement('section');
+    result.className = 'ff-payment-results';
+    const title = document.createElement('h3');
+    title.className = 'ff-payment-title';
+    const heading = lines.find((line) => /^\s*(received payments|payments received|payment records|payment details)\s*:?\s*$/i.test(line));
+    title.textContent = heading ? heading.trim().replace(/:$/, '') : 'Payment records';
+    result.appendChild(title);
+
+    const summaryMatch = String(text).match(/Total\s+(?:shown|received|amount)\s*:\s*(₹\s*[\d,]+(?:\.\d{1,2})?)\s*(?:across\s*(\d+)\s*payment record\(s\))?/i);
+    const sum = rows.reduce((total, row) => total + Number(row.amount.replace(/[₹,]/g, '')), 0);
+    const totalAmount = summaryMatch ? summaryMatch[1].replace(/\s+/g, '') : '₹' + sum.toLocaleString('en-IN', {minimumFractionDigits:2, maximumFractionDigits:2});
+    const recordCount = summaryMatch && summaryMatch[2] ? Number(summaryMatch[2]) : rows.length;
+
+    const wrapper = document.createElement('div');
+    wrapper.className = 'ff-payment-table-wrap';
+    const table = document.createElement('table');
+    table.className = 'ff-payment-table';
+    const caption = document.createElement('caption');
+    caption.className = 'ff-sr-only';
+    caption.textContent = title.textContent + ' table';
+    table.appendChild(caption);
+
+    const thead = document.createElement('thead');
+    const headerRow = document.createElement('tr');
+    ['Payment ID', 'Trip / Route', 'Amount received', 'Date', 'Reference'].forEach((label) => {
+      const th = document.createElement('th');
+      th.scope = 'col';
+      th.textContent = label;
+      if (label === 'Amount received') th.className = 'ff-payment-amount';
+      headerRow.appendChild(th);
+    });
+    thead.appendChild(headerRow);
+    table.appendChild(thead);
+
+    const tbody = document.createElement('tbody');
+    rows.forEach((payment) => {
+      const tr = document.createElement('tr');
+      const idCell = document.createElement('td');
+      idCell.className = 'ff-payment-id';
+      idCell.textContent = '#' + payment.paymentId;
+
+      const tripCell = document.createElement('td');
+      tripCell.className = 'ff-payment-trip';
+      const tripLabel = document.createElement('strong');
+      tripLabel.textContent = 'Trip #' + payment.tripId;
+      tripCell.appendChild(tripLabel);
+      if (payment.route) {
+        const routeLabel = document.createElement('small');
+        routeLabel.textContent = payment.route;
+        tripCell.appendChild(routeLabel);
+      }
+
+      const amountCell = document.createElement('td');
+      amountCell.className = 'ff-payment-amount';
+      amountCell.textContent = payment.amount;
+
+      const dateCell = document.createElement('td');
+      dateCell.className = 'ff-payment-date';
+      const parsedDate = new Date(payment.date + 'T00:00:00');
+      dateCell.textContent = Number.isNaN(parsedDate.getTime())
+        ? payment.date
+        : parsedDate.toLocaleDateString('en-IN', {day:'2-digit', month:'short', year:'numeric'});
+
+      const referenceCell = document.createElement('td');
+      referenceCell.className = 'ff-payment-reference';
+      referenceCell.textContent = payment.reference || '—';
+
+      tr.append(idCell, tripCell, amountCell, dateCell, referenceCell);
+      tbody.appendChild(tr);
+    });
+    table.appendChild(tbody);
+
+    const tfoot = document.createElement('tfoot');
+    const totalRow = document.createElement('tr');
+    const labelCell = document.createElement('td');
+    labelCell.colSpan = 2;
+    labelCell.className = 'ff-payment-total-label';
+    labelCell.textContent = 'Total received · ' + recordCount + ' record' + (recordCount === 1 ? '' : 's');
+    const amountCell = document.createElement('td');
+    amountCell.colSpan = 3;
+    amountCell.className = 'ff-payment-total-amount';
+    amountCell.textContent = totalAmount;
+    totalRow.append(labelCell, amountCell);
+    tfoot.appendChild(totalRow);
+    table.appendChild(tfoot);
+
+    wrapper.appendChild(table);
+    result.appendChild(wrapper);
+    if (rows.length > 1) {
+      const note = document.createElement('p');
+      note.className = 'ff-payment-footnote';
+      note.textContent = 'Scroll horizontally to view all columns on smaller screens.';
+      result.appendChild(note);
+    }
+    bubble.replaceChildren(result);
+  }
 
   function addMessage(kind, text, options = {}) {
     const welcome = document.getElementById('ff-welcome');
@@ -197,8 +337,7 @@
     card.appendChild(title);
     const fields = [
       ['Route', draft.route_from + ' → ' + draft.route_to],
-      ['Date', draft.start_date],
-      ['Truck', draft.truck + (draft.truck_model ? ' · ' + draft.truck_model : '')],
+      ['Date', draft.start_date],      ['Truck', draft.truck + (draft.truck_model ? ' · ' + draft.truck_model : '')],
       ['Driver', draft.driver],
       ['Freight', '₹' + Number(draft.freight_amount).toLocaleString('en-IN', {minimumFractionDigits:2, maximumFractionDigits:2})],
       ['Amount already received', '₹' + Number(draft.received_amount || 0).toLocaleString('en-IN', {minimumFractionDigits:2, maximumFractionDigits:2})],
@@ -297,8 +436,7 @@
     button.disabled = true;
     button.textContent = 'Adding truck…';
     try {
-      const response = await fetch(truckConfirmUrl, {
-        method: 'POST', credentials: 'same-origin',
+      const response = await fetch(truckConfirmUrl, {        method: 'POST', credentials: 'same-origin',
         headers: {'Content-Type':'application/json', 'Accept':'application/json', 'X-CSRFToken':csrfToken},
         body: JSON.stringify({})
       });
@@ -397,7 +535,6 @@
     messages.innerHTML = '<div class="ff-welcome" id="ff-welcome"><div class="ff-welcome-mark" aria-hidden="true">✦</div><h2>What can I help you with?</h2><p>Ask about your fleet operations. I’ll turn the available records into clear summaries.</p><div class="ff-starters" aria-label="Suggested prompts"><button type="button" class="ff-starter" data-question="Show my latest trips"><span aria-hidden="true">↗</span><span><strong>Latest trips</strong><small>Routes, drivers and trip status</small></span><span class="ff-starter-arrow">↗</span></button><button type="button" class="ff-starter" data-question="Summarize expenses"><span aria-hidden="true">₹</span><span><strong>Expense summary</strong><small>Totals and pending reviews</small></span><span class="ff-starter-arrow">↗</span></button><button type="button" class="ff-starter" data-question="How much payment has been recorded?"><span aria-hidden="true">▤</span><span><strong>Recorded payments</strong><small>Payment count and total</small></span><span class="ff-starter-arrow">↗</span></button><button type="button" class="ff-starter" data-question="Summarize maintenance costs"><span aria-hidden="true">⚙</span><span><strong>Maintenance</strong><small>Service records and costs</small></span><span class="ff-starter-arrow">↗</span></button></div></div>';
     bindStarters();
   }
-
   async function submitQuestion(question) {
     if (busy || !question.trim()) return;
     if (pendingTruckCreation && /\b(cancel|stop|chhodo|rehne do)\b/i.test(question)) {
@@ -497,8 +634,7 @@
         method: 'POST', credentials: 'same-origin',
         headers: {'Content-Type': 'application/json', 'X-CSRFToken': csrfToken},
         body: JSON.stringify({})
-      });
-    } catch (_) {}
+      });    } catch (_) {}
     resetWelcome();
     historyPanel.hidden = true;
     historyToggle.setAttribute('aria-expanded', 'false');
