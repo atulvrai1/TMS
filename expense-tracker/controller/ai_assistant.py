@@ -435,6 +435,11 @@ def _query_records(state: AssistantState) -> AssistantState:
                     query += " AND " + " AND ".join(filters)
                 query += " GROUP BY trips.trip_id ORDER BY trips.trip_id DESC LIMIT 20"
                 rows = conn.execute(query, params + filter_params).fetchall()
+                # Defense in depth: a trip-specific payment/balance request must never
+                # include records from another trip, even if routing or filters change.
+                if trip_id_match:
+                    requested_trip_id = int(trip_id_match.group(1))
+                    rows = [row for row in rows if int(row["trip_id"]) == requested_trip_id]
                 if not rows:
                     answer = "I couldn't find that trip in the records available to your account."
                 else:
@@ -458,6 +463,10 @@ def _query_records(state: AssistantState) -> AssistantState:
                     query += " AND " + " AND ".join(filters)
                 query += " ORDER BY trip_payments.payment_date DESC, trip_payments.payment_id DESC LIMIT 30"
                 rows = conn.execute(query, params + filter_params).fetchall()
+                # Enforce exact trip isolation before formatting the payment rows.
+                if trip_id_match:
+                    requested_trip_id = int(trip_id_match.group(1))
+                    rows = [row for row in rows if int(row["trip_id"]) == requested_trip_id]
                 if not rows:
                     answer = "No received payments were found for that trip in the records available to your account." if trip_id_match else "No received payments were found in the records available to your account."
                 else:
