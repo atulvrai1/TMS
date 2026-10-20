@@ -225,6 +225,32 @@ def _resolve_contextual_question(question: str, history: list) -> str:
     if re.search(r"\b(?:truck|vehicle|registration)\s+(?!number\b|details?\b|status\b|that\b|this\b|same\b)[\w-]+", text, re.I):
         return text
 
+    # Continue the current topic when a user asks for more details.
+    wants_details = bool(re.search(
+        r"^(?:please )?(?:give|show|tell|provide|share) (?:me )?(?:all )?(?:the )?details\\b|^(?:all )?details[?.!]*$|^(?:tell me more|more details|full details)[?.!]*$",
+        text, re.I
+    ))
+    if wants_details:
+        for item in reversed(history[-12:]):
+            if item.get("role") != "assistant":
+                continue
+            previous_answer = str(item.get("content", ""))
+            if not re.search(r"\\b(?:trip|trips|pending|scheduled|in progress)\\b", previous_answer, re.I):
+                continue
+            trip_ids = []
+            for line in previous_answer.splitlines():
+                match = re.match(r"^\\s*\\|\\s*#?(\\d+)\\s*\\|", line)
+                if not match:
+                    match = re.match(r"^\\s*#(\\d+)\\s+", line)
+                if match:
+                    trip_ids.append(match.group(1))
+            trip_ids = list(dict.fromkeys(trip_ids))
+            if len(trip_ids) == 1:
+                return f"Trip #{trip_ids[0]} details"
+            if re.search(r"\\bpending\\b", previous_answer, re.I):
+                return "show details of pending trips"
+            break
+
     follow_up = bool(re.search(
         r"\b(it|that|those|this|there|same|them|he|she|that one|that truck|that driver|us trip|is trip|us gaadi|us gadi|us truck|us driver|uske liye|iske liye|uska|uski|uske|iska|iski|is gaadi)\b",
         text, re.I
