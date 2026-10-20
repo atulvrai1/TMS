@@ -411,8 +411,19 @@ def _query_records(state: AssistantState) -> AssistantState:
                     truck_match = re.match(r"(.*)", model_label)
             filters = []
             filter_params = []
+            pending_question = bool(re.search(
+                r"\b(?:pending|not completed|unfinished|open trips?|kitne trips? baaki|kitne trips? pending|trips? baaki|trips? pending)\b|\b(?:abhi\s+)?kitne\s+trips?\b",
+                question, re.I
+            ))
+            count_question = bool(re.search(
+                r"\b(?:how many|count|number of|kitne|kitni|total)\b",
+                question, re.I
+            )) and bool(re.search(r"\b(?:trip|trips|pending|scheduled|completed)\b", question, re.I))
             status_match = re.search(r"\b(scheduled|in progress|completed|cancelled|canceled)\b", question, re.I)
-            if status_match:
+            if pending_question:
+                # In FleetFlow, trips awaiting completion are Scheduled or In Progress.
+                filters.append("lower(trips.status) IN ('scheduled', 'in progress')")
+            elif status_match:
                 status_value = status_match.group(1).title()
                 if status_value == "Canceled":
                     status_value = "Cancelled"
@@ -439,7 +450,25 @@ def _query_records(state: AssistantState) -> AssistantState:
                 query += " AND " + " AND ".join(filters)
             query += " ORDER BY trips.start_date DESC, trips.trip_id DESC LIMIT 8"
             rows = conn.execute(query, params + filter_params).fetchall()
-            if not rows:
+            if pending_question:
+                count_sql = (
+                    "SELECT COUNT(*) AS trip_count FROM trips JOIN trucks ON trucks.truck_id = trips.truck_id "
+                    "JOIN drivers ON drivers.driver_id = trips.driver_id "
+                    f"WHERE {scope} AND " + " AND ".join(filters)
+                )
+                count_row = conn.execute(count_sql, params + filter_params).fetchone()
+                pending_count = int(count_row["trip_count"] or 0)
+                if pending_count == 0:
+                    answer = "Abhi koi pending trip nahi hai. Sabhi accessible trips Completed, Cancelled, ya otherwise not pending hain."
+                else:
+                    lines = [
+                        f"#{r['trip_id']} {r['route_from']} → {r['route_to']} | "
+                        f"{r['start_date']} | {r['status']} | {r['registration_number']} | {r['driver']}"
+                        for r in rows
+                    ]
+                    noun = "trip" if pending_count == 1 else "trips"
+                    answer = f"Abhi {pending_count} {noun} pending hain (Scheduled ya In Progress):\\n" + "\\n".join(lines)
+            elif not rows:
                 answer = "I couldn't find any trips in the records available to your account."
             else:
                 due_question = bool(re.search(
