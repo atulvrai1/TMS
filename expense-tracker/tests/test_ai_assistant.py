@@ -16,6 +16,10 @@ def test_intent_router_recognizes_trip_questions():
     assert _detect_intent("Show my latest trips") == "trips"
 
 
+def test_intent_router_recognizes_pending_trip_count_in_hinglish():
+    assert _detect_intent("Abhi kitne trips pending hain?") == "trips"
+
+
 def test_intent_router_recognizes_expense_questions():
     assert _detect_intent("How much did we spend on expenses?") == "expenses"
 
