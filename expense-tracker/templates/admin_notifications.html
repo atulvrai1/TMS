@@ -7,8 +7,49 @@
 <div class="dashboard-page">
     <div class="panel-header" style="margin-bottom: 2rem;">
         <h1 style="font-family: var(--font-display); font-size: 2rem; color: var(--ink); margin: 0;">Notifications</h1>
-        <p style="color: var(--ink-muted); margin-top: 0.25rem;">Review pending account requests, expenses, and password recovery links.</p>
+        <p style="color: var(--ink-muted); margin-top: 0.25rem;">Review expiring compliance documents, pending account requests, expenses, and password recovery links.</p>
     </div>
+
+    <section class="table-container" style="padding: 1.5rem; margin-bottom: 1.5rem;" aria-labelledby="compliance-expiry-heading">
+        <div style="display: flex; justify-content: space-between; align-items: center; gap: 1rem; flex-wrap: wrap;">
+            <h2 id="compliance-expiry-heading">Compliance document expiry alerts ({{ notifications.compliance_expiry|length }})</h2>
+            <a href="{{ url_for('roadside_compliance') }}">Open Roadside Compliance</a>
+        </div>
+        <p style="color: var(--ink-muted);">Alerts are generated automatically for documents expiring within 30 days and remain visible after expiry until the expiry date is corrected or the document record is replaced. Each document appears once in this list, so refreshing does not create duplicate alerts.</p>
+        {% if notifications.compliance_expiry %}
+        <div class="table-container">
+            <table class="fleet-table">
+                <thead><tr><th>Alert</th><th>Document</th><th>Truck / Driver / Trip</th><th>Expiry date</th><th>Action</th></tr></thead>
+                <tbody>
+                    {% for item in notifications.compliance_expiry %}
+                    <tr>
+                        <td>
+                            <strong>{{ item.alert_level }}</strong>
+                            {% if item.days_remaining < 0 %}
+                            <div style="color: var(--danger, #b91c1c); font-size: .85rem;">Expired {{ -item.days_remaining }} day(s) ago</div>
+                            {% elif item.days_remaining == 0 %}
+                            <div style="color: var(--danger, #b91c1c); font-size: .85rem;">Action required today</div>
+                            {% else %}
+                            <div style="color: var(--ink-muted); font-size: .85rem;">{{ item.days_remaining }} day(s) remaining</div>
+                            {% endif %}
+                        </td>
+                        <td>{{ item.document_type }}{% if item.document_number %}<div style="color: var(--ink-muted); font-size: .85rem;">No. {{ item.document_number }}</div>{% endif %}</td>
+                        <td>
+                            {% if item.subject_type == 'truck' %}{{ item.registration_number or 'Truck record' }}
+                            {% elif item.subject_type == 'driver' %}{{ item.driver_name or 'Driver record' }}
+                            {% else %}Trip #{{ item.related_trip_id }} · {{ item.route_from or '' }} → {{ item.route_to or '' }}{% endif %}
+                        </td>
+                        <td>{{ item.expiry_date }}</td>
+                        <td><a href="{{ url_for('roadside_compliance') }}">Review / renew</a></td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <p class="user-empty-state">No compliance documents are due to expire within the next 30 days.</p>
+        {% endif %}
+    </section>
 
     <section class="table-container" style="padding: 1.5rem; margin-bottom: 1.5rem;" aria-labelledby="reset-notifications-heading">
         <h2 id="reset-notifications-heading">Password reset links</h2>
