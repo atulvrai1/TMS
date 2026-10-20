@@ -377,35 +377,40 @@ def _query_records(state: AssistantState) -> AssistantState:
             question = state.get("routing_question", state.get("question", ""))
             trip_id_match = re.search(r"\btrip\s*#?\s*(\d+)\b", question, re.IGNORECASE)
             truck_match = re.search(r"\b(?:truck\s+number|registration(?:\s+number)?|vehicle|truck|gaadi|gadi|lorry)\s+(.+?)(?=\s+(?:trip|trips|driver|status|from|to|with|on|for|and|follow-up|ka|ki|ke|wali|wala|wale|kitna|kitne|kitni)\b|[?.!,]|$)", question, re.IGNORECASE)
-            if not truck_match:
-                known_models = conn.execute("SELECT model FROM trucks").fetchall()
-                model_label = next((row["model"] for row in known_models if row["model"].lower() in question.lower()), None)
-                if model_label:
-                    truck_match = re.match(r"(.*)", model_label)
-            filters = []
-            filter_params = []
+            filters, filter_params = [], []
             if trip_id_match:
                 filters.append("trips.trip_id = ?")
                 filter_params.append(int(trip_id_match.group(1)))
             if truck_match:
-                label = truck_match.group(1).strip(" '\"")
+                label = truck_match.group(1).strip(" '\\"")
                 filters.append("(upper(trucks.registration_number) = upper(?) OR lower(trucks.model) = lower(?) OR lower(trucks.registration_number) LIKE lower(?))")
                 filter_params.extend([label, label, "%" + label + "%"])
             query = (
-                "SELECT COUNT(*) AS count, COALESCE(SUM(CASE WHEN expenses.status != 'Rejected' "
-                "THEN expenses.amount ELSE 0 END), 0) AS total, "
-                "COALESCE(SUM(CASE WHEN expenses.status = 'Pending' THEN 1 ELSE 0 END), 0) AS pending "
+                "SELECT expenses.expense_id, expenses.trip_id, expenses.category, expenses.amount, "
+                "expenses.date, expenses.description, expenses.status, trips.route_from, trips.route_to "
                 "FROM expenses JOIN trips ON trips.trip_id = expenses.trip_id "
                 "JOIN trucks ON trucks.truck_id = trips.truck_id WHERE " + scope
             )
             if filters:
                 query += " AND " + " AND ".join(filters)
-            rows = conn.execute(query, params + filter_params).fetchone()
-            answer = (
-                f"Expense summary for records available to your account: "
-                f"{rows['count']} expense entries, ₹{rows['total']:,.2f} total excluding rejected "
-                f"entries, and {rows['pending']} pending review."
-            )
+            query += " ORDER BY expenses.date DESC, expenses.expense_id DESC LIMIT 50"
+            expense_rows = conn.execute(query, params + filter_params).fetchall()
+            valid_rows = [row for row in expense_rows if str(row["status"]).casefold() != "rejected"]
+            total = sum(float(row["amount"] or 0) for row in valid_rows)
+            pending = sum(1 for row in expense_rows if str(row["status"]).casefold() == "pending")
+            if not expense_rows:
+                answer = "No expense records found for that trip or filter in the records available to your account."
+            else:
+                lines = [
+                    f"Expense #{row['expense_id']} | Trip #{row['trip_id']} ({row['route_from']} → {row['route_to']}) | "
+                    f"{row['category']} | ₹{float(row['amount'] or 0):,.2f} | {row['date']} | {row['status']} | "
+                    f"{(row['description'] or '—').replace('|', '/')}"
+                    for row in expense_rows
+                ]
+                answer = (
+                    "Expense records:\n" + "\n".join(lines)
+                    + f"\nTotal excluding rejected: ₹{total:,.2f} across {len(valid_rows)} entries; pending review: {pending}."
+                )
             if "profit" in state["question"].lower() or "p&l" in state["question"].lower():
                 answer += " This is an expense summary, not a full profit-and-loss calculation."
         elif intent == "payments":
