@@ -1,3 +1,9 @@
+import sys
+from pathlib import Path
+
+# The project root for this application is expense-tracker/, not the repository root.
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
 from controller.ai_assistant import _detect_intent, assistant_graph
 
 
