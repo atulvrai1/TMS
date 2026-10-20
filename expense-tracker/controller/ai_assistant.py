@@ -282,6 +282,11 @@ def _query_records(state: AssistantState) -> AssistantState:
             question = state.get("routing_question", state.get("question", ""))
             trip_id_match = re.search(r"\btrip\s*#?\s*(\d+)\b", question, re.IGNORECASE)
             truck_match = re.search(r"\b(?:truck\s+number|registration(?:\s+number)?|vehicle|truck|gaadi|gadi|lorry)\s+(.+?)(?=\s+(?:trip|driver|status|from|to|with|on|for|and|follow-up)\b|[?.!,]|$)", question, re.IGNORECASE)
+            if not truck_match:
+                known_models = conn.execute("SELECT model FROM trucks").fetchall()
+                model_label = next((row["model"] for row in known_models if row["model"].lower() in question.lower()), None)
+                if model_label:
+                    truck_match = re.match(r"(.*)", model_label)
             filters = []
             filter_params = []
             if trip_id_match:
@@ -335,6 +340,11 @@ def _query_records(state: AssistantState) -> AssistantState:
             question = state.get("routing_question", state.get("question", ""))
             trip_id_match = re.search(r"\btrip\s*#?\s*(\d+)\b", question, re.IGNORECASE)
             truck_match = re.search(r"\b(?:truck\s+number|registration(?:\s+number)?|vehicle|truck|gaadi|gadi|lorry)\s+(.+?)(?=\s+(?:trip|driver|status|from|to|with|on|for|and|follow-up)\b|[?.!,]|$)", question, re.IGNORECASE)
+            if not truck_match:
+                known_models = conn.execute("SELECT model FROM trucks").fetchall()
+                model_label = next((row["model"] for row in known_models if row["model"].lower() in question.lower()), None)
+                if model_label:
+                    truck_match = re.match(r"(.*)", model_label)
             filters = []
             filter_params = []
             if trip_id_match:
@@ -366,6 +376,11 @@ def _query_records(state: AssistantState) -> AssistantState:
             question = state.get("routing_question", state.get("question", ""))
             trip_id_match = re.search(r"\btrip\s*#?\s*(\d+)\b", question, re.IGNORECASE)
             truck_match = re.search(r"\b(?:truck\s+number|registration(?:\s+number)?|vehicle|truck|gaadi|gadi|lorry)\s+(.+?)(?=\s+(?:trip|driver|status|from|to|with|on|for|and|follow-up)\b|[?.!,]|$)", question, re.IGNORECASE)
+            if not truck_match:
+                known_models = conn.execute("SELECT model FROM trucks").fetchall()
+                model_label = next((row["model"] for row in known_models if row["model"].lower() in question.lower()), None)
+                if model_label:
+                    truck_match = re.match(r"(.*)", model_label)
             filters = []
             filter_params = []
             if trip_id_match:
