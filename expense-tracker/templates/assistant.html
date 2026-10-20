@@ -134,6 +134,8 @@
   const tripConfirmUrl = {{ url_for("fleetflow_assistant.confirm_assistant_trip")|tojson }};
   const paymentDraftUrl = {{ url_for("fleetflow_assistant.draft_payment_from_assistant")|tojson }};
   const paymentConfirmUrl = {{ url_for("fleetflow_assistant.confirm_assistant_payment")|tojson }};
+  const truckDraftUrl = {{ url_for("fleetflow_assistant.draft_truck_from_assistant")|tojson }};
+  const truckConfirmUrl = {{ url_for("fleetflow_assistant.confirm_assistant_truck")|tojson }};
   const historyUrl = {{ url_for("fleetflow_assistant.assistant_history")|tojson }};
   const newChatUrl = {{ url_for("fleetflow_assistant.assistant_new_chat")|tojson }};
   const saveHistoryUrl = {{ url_for("fleetflow_assistant.save_assistant_history_message")|tojson }};
@@ -143,6 +145,7 @@
   const historyList = document.getElementById('ff-history-list');
   const historyClose = document.getElementById('ff-history-close');
   let busy = false;
+  let pendingTruckCreation = false;
 
   function scrollToLatest() { messages.scrollTop = messages.scrollHeight; }
 
@@ -254,6 +257,76 @@
     scrollToLatest();
   }
 
+
+  function showTruckPreview(draft) {
+    const item = addMessage('assistant', 'Truck details are ready. Please check them before saving:');
+    const card = document.createElement('div');
+    card.className = 'ff-trip-preview';
+    const title = document.createElement('strong');
+    title.textContent = 'New truck preview';
+    card.appendChild(title);
+    const fields = [
+      ['Registration number', draft.registration_number],
+      ['Model', draft.model],
+      ['Manufacturing year', String(draft.year)],
+      ['Capacity', draft.capacity_tons ? draft.capacity_tons + ' tons' : 'Not provided'],
+      ['Status', draft.status || 'Available']
+    ];
+    const list = document.createElement('dl');
+    fields.forEach(([label, value]) => {
+      const dt = document.createElement('dt'); dt.textContent = label;
+      const dd = document.createElement('dd'); dd.textContent = value;
+      list.append(dt, dd);
+    });
+    const confirm = document.createElement('button');
+    confirm.type = 'button';
+    confirm.className = 'ff-trip-confirm';
+    confirm.textContent = 'Confirm and add truck';
+    confirm.addEventListener('click', () => confirmTruck(confirm));
+    const note = document.createElement('p');
+    note.className = 'ff-trip-note';
+    note.textContent = 'Nothing has been saved yet. Confirm to add this truck to FleetFlow.';
+    card.append(list, confirm, note);
+    item.bubble.appendChild(card);
+    scrollToLatest();
+  }
+
+  async function confirmTruck(button) {
+    if (busy) return;
+    busy = true;
+    button.disabled = true;
+    button.textContent = 'Adding truck…';
+    try {
+      const response = await fetch(truckConfirmUrl, {
+        method: 'POST', credentials: 'same-origin',
+        headers: {'Content-Type':'application/json', 'Accept':'application/json', 'X-CSRFToken':csrfToken},
+        body: JSON.stringify({})
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        addMessage('assistant', data.error || 'Truck could not be added. Please try again.', {error:true});
+        button.textContent = 'Confirmation failed';
+      } else {
+        button.textContent = 'Truck added ✓';
+        pendingTruckCreation = false;
+        const item = addMessage('assistant', data.message || 'Truck added successfully.');
+        const link = document.createElement('a');
+        link.href = {{ url_for('trucks')|tojson }};
+        link.className = 'ff-trip-open-link';
+        link.textContent = 'Open trucks';
+        item.bubble.appendChild(document.createElement('br'));
+        item.bubble.appendChild(link);
+      }
+    } catch (_) {
+      addMessage('assistant', 'Connection problem while adding the truck. Check the Trucks page before trying again.', {error:true});
+      button.disabled = false;
+      button.textContent = 'Try confirmation again';
+    } finally {
+      busy = false;
+      scrollToLatest();
+    }
+  }
+
   async function confirmPayment(button) {
     if (busy) return;
     busy = true;
@@ -334,9 +407,10 @@
     input.value = '';
     resizeInput();
     try {
-      const isTripCreate = /\b(create|make|plan|schedule|book|dispatch)\b/i.test(question) && /\btrip\b/i.test(question);
+      const isTripCreate = /\b(create|make|plan|schedule|book|dispatch|banao|bnao|lagao)\b/i.test(question) && /\btrip\b/i.test(question);
+      const isTruckCreate = pendingTruckCreation || (/\b(add|create|register|new|naya|nayi|jodo|jodna)\b/i.test(question) && /\b(truck|lorry|gaadi|gadi|vehicle)\b/i.test(question));
       const isPaymentRecord = /\b(got|received|collected|mila|mili|mile|jama|payment|record|add|log)\b/i.test(question) && (/(?:₹\s*\d[\d,]*(?:\.\d{1,2})?|\b\d[\d,]*(?:\.\d{1,2})?\b|\b(payment|amount|rupees|rs\.?|inr|paise|paisa)\b)/i.test(question)) && !/\b(show|list|how much|summary|total|kitna mila|kitna received)\b/i.test(question);
-      const targetUrl = isTripCreate ? tripDraftUrl : (isPaymentRecord ? paymentDraftUrl : askUrl);
+      const targetUrl = isTripCreate ? tripDraftUrl : (isTruckCreate ? truckDraftUrl : (isPaymentRecord ? paymentDraftUrl : askUrl));
       const response = await fetch(targetUrl, {
         method: 'POST',
         credentials: 'same-origin',
@@ -349,13 +423,17 @@
       typing.remove();
       if (!response.ok) {
         addMessage('assistant', data.error || ('Request failed (HTTP ' + response.status + '). Please try again.'), {error:true});
-      } else if ((isTripCreate || isPaymentRecord) && Array.isArray(data.missing)) {
-        addMessage('assistant', 'I need a few more details first. Missing: ' + data.missing.join(', ') + '.\n\n' + (data.prompt_hint || 'Please add the missing details.'));
+      } else if ((isTripCreate || isTruckCreate || isPaymentRecord) && Array.isArray(data.missing)) {
+        if (isTruckCreate) pendingTruckCreation = true;
+        addMessage('assistant', 'I need a few more details first. Missing: ' + data.missing.join(', ') + '.\n\n' + (data.prompt_hint || 'You can send the details in any order.'));
       } else if (isTripCreate && data.draft) {
         showTripPreview(data.draft);
+      } else if (isTruckCreate && data.draft) {
+        pendingTruckCreation = false;
+        showTruckPreview(data.draft);
       } else if (isPaymentRecord && data.draft) {
         showPaymentPreview(data.draft);
-      } else if ((isTripCreate || isPaymentRecord) && data.error) {
+      } else if ((isTripCreate || isTruckCreate || isPaymentRecord) && data.error) {
         addMessage('assistant', data.error, {error:true});
       } else if (typeof data.answer !== 'string' || !data.answer.trim()) {
         addMessage('assistant', data.error || 'The request completed, but no answer was returned. Please try another question.', {error:true});
