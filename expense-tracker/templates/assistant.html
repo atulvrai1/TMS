@@ -113,6 +113,10 @@
   const askUrl = {{ url_for("fleetflow_assistant.ask_fleetflow_assistant")|tojson }};
   const tripDraftUrl = {{ url_for("fleetflow_assistant.draft_trip_from_assistant")|tojson }};
   const tripConfirmUrl = {{ url_for("fleetflow_assistant.confirm_assistant_trip")|tojson }};
+  const paymentDraftUrl = {{ url_for("fleetflow_assistant.draft_payment_from_assistant")|tojson }};
+  const paymentConfirmUrl = {{ url_for("fleetflow_assistant.confirm_assistant_payment")|tojson }};
+  const historyUrl = {{ url_for("fleetflow_assistant.assistant_history")|tojson }};
+  const newChatUrl = {{ url_for("fleetflow_assistant.assistant_new_chat")|tojson }};
   let busy = false;
 
   function scrollToLatest() { messages.scrollTop = messages.scrollHeight; }
@@ -183,6 +187,69 @@
     scrollToLatest();
   }
 
+  function showPaymentPreview(draft) {
+    const item = addMessage('assistant', 'I found the trip. Please review the payment details before saving:');
+    const card = document.createElement('div');
+    card.className = 'ff-trip-preview';
+    const title = document.createElement('strong');
+    title.textContent = 'Payment preview';
+    card.appendChild(title);
+    const fields = [
+      ['Trip', '#' + draft.trip_id + ' · ' + draft.route_from + ' → ' + draft.route_to],
+      ['Truck', draft.truck + (draft.truck_model ? ' · ' + draft.truck_model : '')],
+      ['Trip status', draft.trip_status],
+      ['Amount received', '₹' + Number(draft.amount).toLocaleString('en-IN', {minimumFractionDigits:2, maximumFractionDigits:2})],
+      ['Previously received', '₹' + Number(draft.previously_received).toLocaleString('en-IN', {minimumFractionDigits:2, maximumFractionDigits:2})],
+      ['Date', draft.payment_date]
+    ];
+    const list = document.createElement('dl');
+    fields.forEach(([label, value]) => {
+      const dt = document.createElement('dt'); dt.textContent = label;
+      const dd = document.createElement('dd'); dd.textContent = value;
+      list.append(dt, dd);
+    });
+    const confirm = document.createElement('button');
+    confirm.type = 'button';
+    confirm.className = 'ff-trip-confirm';
+    confirm.textContent = 'Confirm and record payment';
+    confirm.addEventListener('click', () => confirmPayment(confirm));
+    const note = document.createElement('p');
+    note.className = 'ff-trip-note';
+    note.textContent = 'Nothing has been recorded yet. Confirm only if these details are correct.';
+    card.append(list, confirm, note);
+    item.bubble.appendChild(card);
+    scrollToLatest();
+  }
+
+  async function confirmPayment(button) {
+    if (busy) return;
+    busy = true;
+    button.disabled = true;
+    button.textContent = 'Recording payment…';
+    try {
+      const response = await fetch(paymentConfirmUrl, {
+        method: 'POST', credentials: 'same-origin',
+        headers: {'Content-Type': 'application/json', 'Accept': 'application/json', 'X-CSRFToken': csrfToken},
+        body: JSON.stringify({})
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        addMessage('assistant', data.error || 'Payment recording failed. Please try again.', {error:true});
+        button.textContent = 'Confirmation failed';
+      } else {
+        button.textContent = 'Payment recorded ✓';
+        addMessage('assistant', data.message || 'Payment recorded successfully.');
+      }
+    } catch (_) {
+      addMessage('assistant', 'Could not confirm the payment because of a connection error. Check the Payments page before retrying.', {error:true});
+      button.disabled = false;
+      button.textContent = 'Try confirmation again';
+    } finally {
+      busy = false;
+      scrollToLatest();
+    }
+  }
+
   async function confirmTrip(button) {
     if (busy) return;
     busy = true;
@@ -235,7 +302,9 @@
     resizeInput();
     try {
       const isTripCreate = /\b(create|make|plan|schedule|book|dispatch)\b/i.test(question) && /\btrip\b/i.test(question);
-      const response = await fetch(isTripCreate ? tripDraftUrl : askUrl, {
+      const isPaymentRecord = /\b(got|received|collected|record|add|log)\b/i.test(question) && /\b(payment|amount|rupees|rs\.?|inr|trip\s*#?\s*\d+)\b/i.test(question) && /\btrip\s*#?\s*\d+\b/i.test(question) && !/\b(show|list|how much|summary|total)\b/i.test(question);
+      const targetUrl = isTripCreate ? tripDraftUrl : (isPaymentRecord ? paymentDraftUrl : askUrl);
+      const response = await fetch(targetUrl, {
         method: 'POST',
         credentials: 'same-origin',
         headers: {'Content-Type': 'application/json', 'Accept': 'application/json', 'X-CSRFToken': csrfToken},
@@ -247,11 +316,13 @@
       typing.remove();
       if (!response.ok) {
         addMessage('assistant', data.error || ('Request failed (HTTP ' + response.status + '). Please try again.'), {error:true});
-      } else if (isTripCreate && Array.isArray(data.missing)) {
-        addMessage('assistant', 'I need a few more details before I can prepare the trip. Missing: ' + data.missing.join(', ') + '.\n\n' + (data.prompt_hint || 'Please include all required trip details in one message.'));
+      } else if ((isTripCreate || isPaymentRecord) && Array.isArray(data.missing)) {
+        addMessage('assistant', 'I need a few more details first. Missing: ' + data.missing.join(', ') + '.\n\n' + (data.prompt_hint || 'Please add the missing details.'));
       } else if (isTripCreate && data.draft) {
         showTripPreview(data.draft);
-      } else if (isTripCreate && data.error) {
+      } else if (isPaymentRecord && data.draft) {
+        showPaymentPreview(data.draft);
+      } else if ((isTripCreate || isPaymentRecord) && data.error) {
         addMessage('assistant', data.error, {error:true});
       } else if (typeof data.answer !== 'string' || !data.answer.trim()) {
         addMessage('assistant', data.error || 'The request completed, but no answer was returned. Please try another question.', {error:true});
@@ -292,14 +363,34 @@
       form.requestSubmit();
     }
   });
-  newChat.addEventListener('click', () => {
+  newChat.addEventListener('click', async () => {
     if (busy) return;
+    try {
+      await fetch(newChatUrl, {
+        method: 'POST', credentials: 'same-origin',
+        headers: {'Content-Type': 'application/json', 'X-CSRFToken': csrfToken},
+        body: JSON.stringify({})
+      });
+    } catch (_) {}
     resetWelcome();
     input.value = '';
     resizeInput();
     input.focus();
   });
+
+  async function loadHistory() {
+    try {
+      const response = await fetch(historyUrl, {credentials: 'same-origin', headers: {'Accept':'application/json'}});
+      if (!response.ok) return;
+      const data = await response.json();
+      if (!Array.isArray(data.messages) || !data.messages.length) return;
+      const welcome = document.getElementById('ff-welcome');
+      if (welcome) welcome.remove();
+      data.messages.forEach((message) => addMessage(message.role === 'user' ? 'user' : 'assistant', message.content || ''));
+    } catch (_) {}
+  }
   bindStarters();
+  loadHistory();
 })();
 </script>
 {% endblock %}
