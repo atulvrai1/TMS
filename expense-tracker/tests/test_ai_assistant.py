@@ -6,7 +6,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from flask import Flask, session
 
-from controller.ai_assistant import _detect_intent, _parse_trip_prompt, assistant_graph
+from controller.ai_assistant import _detect_intent, _parse_payment_prompt, _parse_trip_prompt, assistant_graph
 
 
 def test_intent_router_recognizes_trip_questions():
@@ -53,3 +53,14 @@ def test_trip_prompt_parser_extracts_required_details():
     assert draft["driver_label"] == "Rajesh Kumar"
     assert draft["freight_amount"] == "25000.00"
     assert draft["owner_email"] == "admin@example.com"
+
+
+def test_payment_intent_recognizes_received_amount_for_trip():
+    assert _detect_intent("I got 10000 amount for trip3") == "payments"
+
+
+def test_payment_prompt_understands_trip_number_without_space():
+    draft, missing = _parse_payment_prompt("I got 10000 amount for trip3")
+    assert missing == []
+    assert draft["trip_id"] == 3
+    assert draft["amount"] == "10000.00"
