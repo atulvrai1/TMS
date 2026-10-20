@@ -714,6 +714,16 @@ def assistant_page():
     return render_template("assistant.html", block_content="dashboard")
 
 
+@assistant_bp.get("/api/assistant/csrf")
+@access_required
+def assistant_csrf_token():
+    """Return the current session CSRF token so an open Assistant tab can recover after session renewal."""
+    session.setdefault("csrf_token", __import__("secrets").token_urlsafe(32))
+    response = jsonify(csrf_token=session["csrf_token"])
+    response.headers["Cache-Control"] = "no-store"
+    return response, 200
+
+
 @assistant_bp.post("/api/assistant")
 @access_required
 def ask_fleetflow_assistant():
