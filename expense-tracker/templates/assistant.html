@@ -177,6 +177,38 @@
   function renderAssistantResponse(bubble, text) {
     const lines = String(text || '').split(/\r?\n/);
     const rowPattern = /^\s*Payment\s+#?(\d+)\s*\|\s*Trip\s+#?(\d+)\s*(?:\((.*?)\))?\s*\|\s*(₹\s*[\d,]+(?:\.\d{1,2})?)\s*\|\s*(\d{4}-\d{2}-\d{2})(?:\s*\|\s*(.*))?\s*$/i;
+    const tripPattern = /^\\s*#(\\d+)\\s+(.+?)\\s*→\\s*(.+?)\\s*\\|\\s*(\\d{4}-\\d{2}-\\d{2})\\s*\\|\\s*([^|]+)\\s*\\|\\s*([^|]+)\\s*\\|\\s*(.+?)\\s*$/;
+    const tripRows = lines.map(line=>{const m=line.match(tripPattern);return m?{id:m[1],from:m[2].trim(),to:m[3].trim(),date:m[4],status:m[5].trim(),truck:m[6].trim(),driver:m[7].trim()}:null;}).filter(Boolean);
+    if(tripRows.length){
+      const result=document.createElement('section');result.className='ff-payment-results';
+      const title=document.createElement('h3');title.className='ff-payment-title';
+      title.textContent=lines.find(line=>/trips?\\s*\\(/i.test(line))||'Trip records';result.appendChild(title);
+      const wrapper=document.createElement('div');wrapper.className='ff-payment-table-wrap';
+      const table=document.createElement('table');table.className='ff-payment-table';
+      const thead=document.createElement('thead'),header=document.createElement('tr');
+      ['Trip ID','Route','Date','Status','Truck','Driver'].forEach(label=>{const th=document.createElement('th');th.scope='col';th.textContent=label;header.appendChild(th);});
+      thead.appendChild(header);table.appendChild(thead);
+      const tbody=document.createElement('tbody');
+      tripRows.forEach(row=>{const tr=document.createElement('tr');['#'+row.id,row.from+' → '+row.to,row.date,row.status,row.truck,row.driver].forEach(value=>{const td=document.createElement('td');td.textContent=value;tr.appendChild(td);});tbody.appendChild(tr);});
+      table.appendChild(tbody);wrapper.appendChild(table);result.appendChild(wrapper);bubble.replaceChildren(result);return;
+    }
+    const driverPattern = /^\\s*Driver\\s+#?(\\d+)\\s*\\|\\s*([^|]+)\\s*\\|\\s*Status\\s+([^|]+)\\s*\\|\\s*License\\s+([^|]+)\\s*\\|\\s*Contact\\s+(.+)$/i;
+    const driverRows = lines.map(line=>{const m=line.match(driverPattern);return m?{id:m[1],name:m[2].trim(),status:m[3].trim(),license:m[4].trim(),contact:m[5].trim()}:null;}).filter(Boolean);
+    const userPattern = /^\\s*User\\s+#?(\\d+)\\s*\\|\\s*([^|]+)\\s*\\|\\s*(Admin|User)\\s*\\|\\s*(Active|Inactive)\\s*$/i;
+    const userRows = lines.map(line=>{const m=line.match(userPattern);return m?{id:m[1],name:m[2].trim(),role:m[3].trim(),status:m[4].trim()}:null;}).filter(Boolean);
+    const simpleRows = driverRows.length ? {title:'Driver records',headers:['Driver ID','Name','Status','License','Contact'],rows:driverRows.map(r=>['#'+r.id,r.name,r.status,r.license,r.contact])}
+      : userRows.length ? {title:'User records',headers:['User ID','Name','Role','Status'],rows:userRows.map(r=>['#'+r.id,r.name,r.role,r.status])} : null;
+    if(simpleRows){
+      const result=document.createElement('section');result.className='ff-payment-results';
+      const title=document.createElement('h3');title.className='ff-payment-title';title.textContent=simpleRows.title;result.appendChild(title);
+      const wrapper=document.createElement('div');wrapper.className='ff-payment-table-wrap';
+      const table=document.createElement('table');table.className='ff-payment-table';
+      const thead=document.createElement('thead'),header=document.createElement('tr');
+      simpleRows.headers.forEach(label=>{const th=document.createElement('th');th.scope='col';th.textContent=label;header.appendChild(th);});
+      thead.appendChild(header);table.appendChild(thead);
+      const tbody=document.createElement('tbody');simpleRows.rows.forEach(row=>{const tr=document.createElement('tr');row.forEach(value=>{const td=document.createElement('td');td.textContent=value;tr.appendChild(td);});tbody.appendChild(tr);});
+      table.appendChild(tbody);wrapper.appendChild(table);result.appendChild(wrapper);bubble.replaceChildren(result);return;
+    }
     const expensePattern = /^\\s*Expense\\s+#?(\\d+)\\s*\\|\\s*Trip\\s+#?(\\d+)\\s*(?:\\((.*?)\\))?\\s*\\|\\s*([^|]+)\\s*\\|\\s*(₹\\s*[\\d,]+(?:\\.\\d{1,2})?)\\s*\\|\\s*(\\d{4}-\\d{2}-\\d{2})\\s*\\|\\s*([^|]+)(?:\\s*\\|\\s*(.*))?\\s*$/i;
     const expenseRows = lines.map((line) => {
       const match = line.match(expensePattern);
