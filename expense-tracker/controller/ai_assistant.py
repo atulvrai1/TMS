@@ -281,7 +281,7 @@ def _query_records(state: AssistantState) -> AssistantState:
             scope, params = _owner_scope("trips", "owner_user_id", state)
             question = state.get("routing_question", state.get("question", ""))
             trip_id_match = re.search(r"\btrip\s*#?\s*(\d+)\b", question, re.IGNORECASE)
-            truck_match = re.search(r"\b(?:truck\s+number|registration(?:\s+number)?|vehicle|truck)\s+(.+?)(?=\s+(?:trip|driver|status|from|to|with|on|for|and|follow-up)\b|[?.!,]|$)", question, re.IGNORECASE)
+            truck_match = re.search(r"\b(?:truck\s+number|registration(?:\s+number)?|vehicle|truck|gaadi|gadi|lorry)\s+(.+?)(?=\s+(?:trip|driver|status|from|to|with|on|for|and|follow-up)\b|[?.!,]|$)", question, re.IGNORECASE)
             filters = []
             filter_params = []
             if trip_id_match:
@@ -334,7 +334,7 @@ def _query_records(state: AssistantState) -> AssistantState:
             scope, params = _owner_scope("trips", "owner_user_id", state)
             question = state.get("routing_question", state.get("question", ""))
             trip_id_match = re.search(r"\btrip\s*#?\s*(\d+)\b", question, re.IGNORECASE)
-            truck_match = re.search(r"\b(?:truck\s+number|registration(?:\s+number)?|vehicle|truck)\s+(.+?)(?=\s+(?:trip|driver|status|from|to|with|on|for|and|follow-up)\b|[?.!,]|$)", question, re.IGNORECASE)
+            truck_match = re.search(r"\b(?:truck\s+number|registration(?:\s+number)?|vehicle|truck|gaadi|gadi|lorry)\s+(.+?)(?=\s+(?:trip|driver|status|from|to|with|on|for|and|follow-up)\b|[?.!,]|$)", question, re.IGNORECASE)
             filters = []
             filter_params = []
             if trip_id_match:
@@ -365,7 +365,7 @@ def _query_records(state: AssistantState) -> AssistantState:
             scope, params = _owner_scope("trips", "owner_user_id", state)
             question = state.get("routing_question", state.get("question", ""))
             trip_id_match = re.search(r"\btrip\s*#?\s*(\d+)\b", question, re.IGNORECASE)
-            truck_match = re.search(r"\b(?:truck\s+number|registration(?:\s+number)?|vehicle|truck)\s+(.+?)(?=\s+(?:trip|driver|status|from|to|with|on|for|and|follow-up)\b|[?.!,]|$)", question, re.IGNORECASE)
+            truck_match = re.search(r"\b(?:truck\s+number|registration(?:\s+number)?|vehicle|truck|gaadi|gadi|lorry)\s+(.+?)(?=\s+(?:trip|driver|status|from|to|with|on|for|and|follow-up)\b|[?.!,]|$)", question, re.IGNORECASE)
             filters = []
             filter_params = []
             if trip_id_match:
