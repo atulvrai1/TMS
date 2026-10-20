@@ -1479,6 +1479,116 @@ def confirm_assistant_truck():
     finally:
         conn.close()
 
+
+@assistant_bp.post("/api/assistant/trips/complete/draft")
+@access_required
+def draft_trip_completion_from_assistant():
+    if not _assistant_csrf_valid():
+        return jsonify(error="Your session token is invalid. Refresh the page and try again."), 403
+    if not (session.get("is_admin") or session.get("role") == "Admin"
+            or session.get("email", "").casefold() == SUPER_ADMIN_EMAIL.casefold()):
+        return jsonify(error="Only an administrator can mark a trip as completed. Please ask your administrator."), 403
+    payload = request.get_json(silent=True) or {}
+    question = payload.get("question")
+    if not isinstance(question, str) or not question.strip() or len(question) > MAX_QUESTION_LENGTH:
+        return jsonify(error="Tell me which trip to complete, for example: complete Trip 4."), 400
+    match = re.search(r"\btrip\s*#?\s*(\d+)\b|#(\d+)\b", question, re.I)
+    trip_id = int(next(group for group in match.groups() if group)) if match else None
+    if not trip_id:
+        contextual = _resolve_contextual_question(question, _load_recent_assistant_history())
+        match = re.search(r"\btrip\s*#?\s*(\d+)\b|#(\d+)\b", contextual, re.I)
+        trip_id = int(next(group for group in match.groups() if group)) if match else None
+    if not trip_id:
+        return jsonify(missing=["trip number (for example, Trip 4)"],
+                       prompt_hint="Example: trip 4 complete kar do."), 200
+    conn = get_db()
+    try:
+        state = {"email": session.get("email", ""), "role": session.get("role", "User"), "user_id": session["user_id"]}
+        scope, params = _owner_scope("trips", "owner_user_id", state)
+        row = conn.execute(
+            "SELECT trips.trip_id, trips.route_from, trips.route_to, trips.start_date, trips.status, "
+            "trucks.registration_number, trucks.model, drivers.name AS driver_name "
+            "FROM trips JOIN trucks ON trucks.truck_id = trips.truck_id "
+            "JOIN drivers ON drivers.driver_id = trips.driver_id "
+            f"WHERE trips.trip_id = ? AND {scope}", [trip_id] + params
+        ).fetchone()
+        if not row:
+            return jsonify(error=f"Trip #{trip_id} was not found in the records available to your account."), 404
+        if str(row["status"]).casefold() in {"completed", "cancelled"}:
+            return jsonify(error=f"Trip #{trip_id} is already {row['status'].lower()}. No change was made."), 409
+        draft = {"trip_id": row["trip_id"], "route_from": row["route_from"], "route_to": row["route_to"],
+                 "start_date": row["start_date"], "status": row["status"], "truck": row["registration_number"],
+                 "truck_model": row["model"], "driver": row["driver_name"]}
+        session["assistant_complete_trip_draft"] = draft
+        session["assistant_complete_trip_draft_at"] = datetime.utcnow().isoformat()
+        return jsonify(draft=draft), 200
+    finally:
+        conn.close()
+
+
+@assistant_bp.post("/api/assistant/trips/complete/confirm")
+@access_required
+def confirm_trip_completion_from_assistant():
+    if not _assistant_csrf_valid():
+        return jsonify(error="Your session token is invalid. Refresh the page and try again."), 403
+    if not (session.get("is_admin") or session.get("role") == "Admin"
+            or session.get("email", "").casefold() == SUPER_ADMIN_EMAIL.casefold()):
+        return jsonify(error="Only an administrator can mark a trip as completed."), 403
+    draft = session.get("assistant_complete_trip_draft")
+    created_at = session.get("assistant_complete_trip_draft_at", "")
+    if not isinstance(draft, dict) or not created_at:
+        return jsonify(error="There is no pending completion preview. Ask me to complete the trip again."), 400
+    try:
+        if (datetime.utcnow() - datetime.fromisoformat(created_at)).total_seconds() > 600:
+            raise ValueError("expired")
+        trip_id = int(draft["trip_id"])
+    except (KeyError, TypeError, ValueError):
+        session.pop("assistant_complete_trip_draft", None)
+        session.pop("assistant_complete_trip_draft_at", None)
+        return jsonify(error="This completion preview is invalid or expired. Ask again."), 400
+    conn = get_db()
+    try:
+        conn.execute("BEGIN IMMEDIATE")
+        state = {"email": session.get("email", ""), "role": session.get("role", "User"), "user_id": session["user_id"]}
+        scope, params = _owner_scope("trips", "owner_user_id", state)
+        row = conn.execute(
+            "SELECT trips.trip_id, trips.truck_id, trips.route_from, trips.route_to, trips.status, trucks.registration_number "
+            "FROM trips JOIN trucks ON trucks.truck_id = trips.truck_id "
+            f"WHERE trips.trip_id = ? AND {scope}", [trip_id] + params
+        ).fetchone()
+        if not row:
+            conn.rollback()
+            return jsonify(error="This trip is no longer available to your account. No change was made."), 409
+        if str(row["status"]).casefold() in {"completed", "cancelled"}:
+            conn.rollback()
+            return jsonify(error=f"Trip #{trip_id} is already {row['status'].lower()}. No change was made."), 409
+        conn.execute("UPDATE trips SET status = 'Completed' WHERE trip_id = ?", (trip_id,))
+        other_active = conn.execute(
+            "SELECT 1 FROM trips WHERE truck_id = ? AND trip_id != ? AND status IN ('Scheduled', 'In Progress') LIMIT 1",
+            (row["truck_id"], trip_id)
+        ).fetchone()
+        if not other_active:
+            conn.execute("UPDATE trucks SET status = 'Available' WHERE truck_id = ?", (row["truck_id"],))
+        conn.execute(
+            "INSERT INTO user_logs (user_id, action, details, actor_user_id) VALUES (?, ?, ?, ?)",
+            (session["user_id"], "Trip Completed",
+             f"Trip #{trip_id} marked Completed via FleetFlow Assistant: {row['route_from']} to {row['route_to']}; truck {row['registration_number']}.",
+             session["user_id"])
+        )
+        conn.commit()
+        session.pop("assistant_complete_trip_draft", None)
+        session.pop("assistant_complete_trip_draft_at", None)
+        return jsonify(message=f"Trip #{trip_id} marked Completed: {row['route_from']} → {row['route_to']}. "
+                       f"Truck {row['registration_number']} is marked Available only if it has no other active trip.",
+                       trip_id=trip_id), 200
+    except Exception:
+        conn.rollback()
+        current_app.logger.exception("Assistant trip completion failed")
+        return jsonify(error="The trip could not be marked completed. Please check the Trips page and try again."), 500
+    finally:
+        conn.close()
+
+
 def secrets_compare(left: str, right: str) -> bool:
     import hmac
     return hmac.compare_digest(left, right)
