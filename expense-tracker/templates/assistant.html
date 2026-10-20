@@ -97,7 +97,9 @@
 .ff-message-body{max-width:min(80%,720px);min-width:0}
 .ff-message-label{font-size:.72rem;font-weight:700;color:var(--ff-muted);margin:0 0 .35rem}
 .ff-message-bubble{padding:.9rem 1rem;border:1px solid #e9ebf2;border-radius:4px 14px 14px 14px;background:#fafbfe;line-height:1.7;font-size:.9rem;white-space:pre-wrap;overflow-wrap:anywhere}
-.ff-message.user .ff-message-bubble{background:#eef1ff;border-color:#e0e5ff;border-radius:14px 4px 14px 14px}.ff-message.error .ff-message-bubble{background:#fff6f6;border-color:#f4d3d3;color:#8f2727}.ff-message-bubble p{margin:0 0 .65rem}.ff-message-bubble p:last-child{margin-bottom:0}
+.ff-message.user .ff-message-bubble{background:#eef1ff;border-color:#e0e5ff;border-radius:14px 4px 14px 14px}
+.ff-message.error .ff-message-bubble{background:#fff6f6;border-color:#f4d3d3;color:#8f2727}
+.ff-message-bubble p{margin:0 0 .65rem}.ff-message-bubble p:last-child{margin-bottom:0}
 .ff-message-bubble ul{margin:.4rem 0 .2rem;padding-left:1.25rem}.ff-message-bubble li{margin:.3rem 0}
 .ff-typing{display:inline-flex;gap:4px;align-items:center;padding:.35rem 0}
 .ff-typing i{width:6px;height:6px;border-radius:50%;background:#8790b9;animation:ff-pulse .9s infinite alternate}
@@ -195,7 +197,8 @@
     const title = document.createElement('h3');
     title.className = 'ff-payment-title';
     const heading = lines.find((line) => /^\s*(received payments|payments received|payment records|payment details)\s*:?\s*$/i.test(line));
-    title.textContent = heading ? heading.trim().replace(/:$/, '') : 'Payment records';    result.appendChild(title);
+    title.textContent = heading ? heading.trim().replace(/:$/, '') : 'Payment records';
+    result.appendChild(title);
 
     const summaryMatch = String(text).match(/Total\s+(?:shown|received|amount)\s*:\s*(₹\s*[\d,]+(?:\.\d{1,2})?)\s*(?:across\s*(\d+)\s*payment record\(s\))?/i);
     const sum = rows.reduce((total, row) => total + Number(row.amount.replace(/[₹,]/g, '')), 0);
@@ -294,7 +297,8 @@
     const avatar = document.createElement('div');
     avatar.className = 'ff-message-avatar';
     avatar.setAttribute('aria-hidden', 'true');
-    avatar.textContent = kind === 'user' ? 'You' : '✦';    const body = document.createElement('div');
+    avatar.textContent = kind === 'user' ? 'You' : '✦';
+    const body = document.createElement('div');
     body.className = 'ff-message-body';
     const label = document.createElement('div');
     label.className = 'ff-message-label';
@@ -334,7 +338,8 @@
     card.appendChild(title);
     const fields = [
       ['Route', draft.route_from + ' → ' + draft.route_to],
-      ['Date', draft.start_date],      ['Truck', draft.truck + (draft.truck_model ? ' · ' + draft.truck_model : '')],
+      ['Date', draft.start_date],
+      ['Truck', draft.truck + (draft.truck_model ? ' · ' + draft.truck_model : '')],
       ['Driver', draft.driver],
       ['Freight', '₹' + Number(draft.freight_amount).toLocaleString('en-IN', {minimumFractionDigits:2, maximumFractionDigits:2})],
       ['Amount already received', '₹' + Number(draft.received_amount || 0).toLocaleString('en-IN', {minimumFractionDigits:2, maximumFractionDigits:2})],
@@ -394,7 +399,8 @@
   }
 
 
-  function showTruckPreview(draft) {    const item = addMessage('assistant', 'Truck details are ready. Please check them before saving:');
+  function showTruckPreview(draft) {
+    const item = addMessage('assistant', 'Truck details are ready. Please check them before saving:');
     const card = document.createElement('div');
     card.className = 'ff-trip-preview';
     const title = document.createElement('strong');
@@ -432,7 +438,8 @@
     button.disabled = true;
     button.textContent = 'Adding truck…';
     try {
-      const response = await fetch(truckConfirmUrl, {        method: 'POST', credentials: 'same-origin',
+      const response = await fetch(truckConfirmUrl, {
+        method: 'POST', credentials: 'same-origin',
         headers: {'Content-Type':'application/json', 'Accept':'application/json', 'X-CSRFToken':csrfToken},
         body: JSON.stringify({})
       });
@@ -493,7 +500,8 @@
 
   async function confirmTrip(button) {
     if (busy) return;
-    busy = true;    button.disabled = true;
+    busy = true;
+    button.disabled = true;
     button.textContent = 'Creating trip…';
     try {
       const response = await fetch(tripConfirmUrl, {
@@ -530,6 +538,7 @@
     messages.innerHTML = '<div class="ff-welcome" id="ff-welcome"><div class="ff-welcome-mark" aria-hidden="true">✦</div><h2>What can I help you with?</h2><p>Ask about your fleet operations. I’ll turn the available records into clear summaries.</p><div class="ff-starters" aria-label="Suggested prompts"><button type="button" class="ff-starter" data-question="Show my latest trips"><span aria-hidden="true">↗</span><span><strong>Latest trips</strong><small>Routes, drivers and trip status</small></span><span class="ff-starter-arrow">↗</span></button><button type="button" class="ff-starter" data-question="Summarize expenses"><span aria-hidden="true">₹</span><span><strong>Expense summary</strong><small>Totals and pending reviews</small></span><span class="ff-starter-arrow">↗</span></button><button type="button" class="ff-starter" data-question="How much payment has been recorded?"><span aria-hidden="true">▤</span><span><strong>Recorded payments</strong><small>Payment count and total</small></span><span class="ff-starter-arrow">↗</span></button><button type="button" class="ff-starter" data-question="Summarize maintenance costs"><span aria-hidden="true">⚙</span><span><strong>Maintenance</strong><small>Service records and costs</small></span><span class="ff-starter-arrow">↗</span></button></div></div>';
     bindStarters();
   }
+
   async function submitQuestion(question) {
     if (busy || !question.trim()) return;
     if (pendingTruckCreation && /\b(cancel|stop|chhodo|rehne do)\b/i.test(question)) {
@@ -629,7 +638,8 @@
         method: 'POST', credentials: 'same-origin',
         headers: {'Content-Type': 'application/json', 'X-CSRFToken': csrfToken},
         body: JSON.stringify({})
-      });    } catch (_) {}
+      });
+    } catch (_) {}
     resetWelcome();
     historyPanel.hidden = true;
     historyToggle.setAttribute('aria-expanded', 'false');
@@ -643,3 +653,86 @@
     if (!Array.isArray(items) || !items.length) {
       resetWelcome();
       return;
+    }
+    items.forEach((message) => addMessage(message.role === 'user' ? 'user' : 'assistant', message.content || '', {skipSave:true}));
+    scrollToLatest();
+  }
+
+  async function loadHistory() {
+    try {
+      const response = await fetch(historyUrl, {credentials: 'same-origin', headers: {'Accept':'application/json'}});
+      if (!response.ok) return;
+      const data = await response.json();
+      if (Array.isArray(data.messages) && data.messages.length) renderMessages(data.messages);
+    } catch (_) {}
+  }
+
+  async function showConversationList() {
+    historyPanel.hidden = false;
+    historyToggle.setAttribute('aria-expanded', 'true');
+    historyList.innerHTML = '<p class="ff-history-empty">Loading conversations…</p>';
+    try {
+      const response = await fetch(conversationsUrl, {credentials:'same-origin', headers:{'Accept':'application/json'}});
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || 'Could not load history.');
+      historyList.innerHTML = '';
+      if (!Array.isArray(data.conversations) || !data.conversations.length) {
+        historyList.innerHTML = '<p class="ff-history-empty">No saved conversations yet. Start chatting and your conversations will appear here.</p>';
+        return;
+      }
+      data.conversations.forEach((conversation) => {
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'ff-history-item';
+        button.innerHTML = '<span><strong></strong><small></small></span><span aria-hidden="true">›</span>';
+        button.querySelector('strong').textContent = conversation.title || 'New chat';
+        const updated = conversation.updated_at ? new Date(conversation.updated_at.replace(' ', 'T') + (conversation.updated_at.includes('Z') ? '' : 'Z')) : null;
+        button.querySelector('small').textContent = (conversation.message_count || 0) + ' messages' + (updated && !Number.isNaN(updated.getTime()) ? ' · ' + updated.toLocaleString() : '');
+        button.addEventListener('click', async () => {
+          if (busy) return;
+          button.disabled = true;
+          try {
+            const result = await fetch(conversationsUrl + '/' + encodeURIComponent(conversation.conversation_id), {credentials:'same-origin', headers:{'Accept':'application/json'}});
+            const payload = await result.json();
+            if (!result.ok) throw new Error(payload.error || 'Could not open this conversation.');
+            renderMessages(payload.messages);
+            historyPanel.hidden = true;
+            historyToggle.setAttribute('aria-expanded', 'false');
+          } catch (error) {
+            historyList.innerHTML = '';
+            const notice = document.createElement('p');
+            notice.className = 'ff-history-empty';
+            notice.textContent = error.message || 'Could not open conversation.';
+            historyList.appendChild(notice);
+          } finally {
+            button.disabled = false;
+          }
+        });
+        historyList.appendChild(button);
+      });
+    } catch (error) {
+      historyList.innerHTML = '';
+      const notice = document.createElement('p');
+      notice.className = 'ff-history-empty';
+      notice.textContent = error.message || 'Could not load history.';
+      historyList.appendChild(notice);
+    }
+  }
+
+  historyToggle.addEventListener('click', () => {
+    if (historyPanel.hidden) showConversationList();
+    else {
+      historyPanel.hidden = true;
+      historyToggle.setAttribute('aria-expanded', 'false');
+    }
+  });
+  historyClose.addEventListener('click', () => {
+    historyPanel.hidden = true;
+    historyToggle.setAttribute('aria-expanded', 'false');
+  });
+
+  bindStarters();
+  loadHistory();
+})();
+</script>
+{% endblock %}
