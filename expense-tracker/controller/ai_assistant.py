@@ -468,6 +468,12 @@ def _query_records(state: AssistantState) -> AssistantState:
                     query += " WHERE " + " AND ".join(conditions)
                 query += " ORDER BY registration_number COLLATE NOCASE LIMIT 30"
                 rows = conn.execute(query, values).fetchall()
+                if not reg_match and not status_match:
+                    ignored = {"truck", "trucks", "vehicle", "vehicles", "lorry", "gaadi", "gadi", "details", "record", "records", "status", "dikhao", "batao", "wali", "wala", "ka", "ki", "ke", "hai", "hain"}
+                    model_terms = [word for word in re.findall(r"[a-z0-9]+", question.lower()) if len(word) > 2 and word not in ignored]
+                    matching_models = [row for row in rows if any(term in str(row["model"]).lower() for term in model_terms)]
+                    if matching_models:
+                        rows = matching_models
                 answer = "Gaadi / Truck records:\n" + "\n".join(
                     "Truck #" + str(r["truck_id"]) + " | " + str(r["registration_number"]) + " | " + str(r["model"]) + " | Year " + str(r["year"]) + " | Capacity " + str(r["capacity_tons"] or "not listed") + " tons | Status " + str(r["status"]) + " | Last service " + str(r["last_service_date"] or "not recorded")
                     for r in rows
