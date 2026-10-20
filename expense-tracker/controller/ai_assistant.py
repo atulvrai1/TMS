@@ -193,6 +193,9 @@ def _detect_intent(question: str) -> str:
         "truck kharab", "theek kar", "mechanic", "servicing kar"
     )):
         return "maintenance"
+    # Route balance/due/payment questions before the generic trip intent.
+    if re.search(r"\\b(?:due|balance|remaining|outstanding|baaki|baki|kitna dena|kitna lena|payment|paid|received|receiving|mila|mili|mile|jama|bhugtan)\\b", text):
+        return "payments"
     if any(word in text for word in (
         "payment", "paid", "received", "freight", "collection", "mila", "mili",
         "mile", "jama", "paise aaye", "kitna paisa", "kitne paise", "bhugtan"
@@ -295,7 +298,8 @@ def _query_records(state: AssistantState) -> AssistantState:
             query = (
                 "SELECT trips.trip_id, trips.route_from, trips.route_to, trips.start_date, "
                 "trips.end_date, trips.status, trucks.registration_number, trucks.model, "
-                "drivers.name AS driver, trips.freight_amount "
+                "drivers.name AS driver, trips.freight_amount, "
+                "COALESCE((SELECT SUM(tp.amount) FROM trip_payments tp WHERE tp.trip_id = trips.trip_id), 0) AS amount_received "
                 "FROM trips JOIN trucks ON trucks.truck_id = trips.truck_id "
                 "JOIN drivers ON drivers.driver_id = trips.driver_id "
                 f"WHERE {scope}"
@@ -307,17 +311,29 @@ def _query_records(state: AssistantState) -> AssistantState:
             if not rows:
                 answer = "I couldn't find any trips in the records available to your account."
             else:
-                lines = [
-                    f"#{r['trip_id']} {r['route_from']} → {r['route_to']} | "
-                    f"{r['start_date']} | {r['status']} | {r['registration_number']} | {r['driver']}"
-                    for r in rows
-                ]
-                if trip_id_match:
-                    answer = "Trip details:\n" + "\n".join(lines)
+                due_question = bool(re.search(
+                    r"\\b(?:due|balance|remaining|outstanding|baaki|baki|kitna dena|kitna lena)\\b",
+                    question, re.I
+                ))
+                lines = []
+                for r in rows:
+                    line = (
+                        f"#{r['trip_id']} {r['route_from']} → {r['route_to']} | "
+                        f"{r['start_date']} | {r['status']} | {r['registration_number']} | {r['driver']}"
+                    )
+                    if due_question:
+                        freight = float(r["freight_amount"] or 0)
+                        received = float(r["amount_received"] or 0)
+                        line += f" | Freight ₹{freight:,.2f} | Received ₹{received:,.2f} | Due ₹{max(0, freight - received):,.2f}"
+                    lines.append(line)
+                if due_question:
+                    answer = "Outstanding amount:\\n" + "\\n".join(lines)
+                elif trip_id_match:
+                    answer = "Trip details:\\n" + "\\n".join(lines)
                 elif truck_match:
-                    answer = "Trips matching that truck:\n" + "\n".join(lines)
+                    answer = "Trips matching that truck:\\n" + "\\n".join(lines)
                 else:
-                    answer = "Here are the latest trips you can access:\n" + "\n".join(lines)
+                    answer = "Here are the latest trips you can access:\\n" + "\\n".join(lines)
         elif intent == "expenses":
             scope, params = _owner_scope("trips", "owner_user_id", state)
             question = state.get("routing_question", state.get("question", ""))
@@ -363,19 +379,79 @@ def _query_records(state: AssistantState) -> AssistantState:
                 label = truck_match.group(1).strip(" '\"")
                 filters.append("(upper(trucks.registration_number) = upper(?) OR lower(trucks.model) = lower(?) OR lower(trucks.registration_number) LIKE lower(?))")
                 filter_params.extend([label, label, "%" + label + "%"])
-            query = (
-                "SELECT COUNT(trip_payments.payment_id) AS count, "
-                "COALESCE(SUM(trip_payments.amount), 0) AS total "
-                "FROM trip_payments JOIN trips ON trips.trip_id = trip_payments.trip_id "
-                "JOIN trucks ON trucks.truck_id = trips.truck_id WHERE " + scope
-            )
-            if filters:
-                query += " AND " + " AND ".join(filters)
-            rows = conn.execute(query, params + filter_params).fetchone()
-            answer = (
-                f"Payment summary for records available to your account: "
-                f"{rows['count']} recorded payments totalling ₹{rows['total']:,.2f}."
-            )
+            due_question = bool(re.search(
+                r"\\b(?:due|balance|remaining|outstanding|baaki|baki|kitna dena|kitna lena)\\b",
+                question, re.I
+            ))
+            detail_question = bool(re.search(
+                r"\\b(?:show|list|details?|history|records?|entries|received payments?|payment details?)\\b",
+                question, re.I
+            ))
+            if due_question:
+                query = (
+                    "SELECT trips.trip_id, trips.route_from, trips.route_to, trips.freight_amount, "
+                    "trips.status, trucks.registration_number, "
+                    "COALESCE(SUM(trip_payments.amount), 0) AS amount_received "
+                    "FROM trips JOIN trucks ON trucks.truck_id = trips.truck_id "
+                    "LEFT JOIN trip_payments ON trip_payments.trip_id = trips.trip_id "
+                    "WHERE " + scope
+                )
+                if filters:
+                    query += " AND " + " AND ".join(filters)
+                query += " GROUP BY trips.trip_id ORDER BY trips.trip_id DESC LIMIT 20"
+                rows = conn.execute(query, params + filter_params).fetchall()
+                if not rows:
+                    answer = "I couldn't find that trip in the records available to your account."
+                else:
+                    lines = []
+                    for row in rows:
+                        freight = float(row["freight_amount"] or 0)
+                        received = float(row["amount_received"] or 0)
+                        lines.append(
+                            f"Trip #{row['trip_id']} ({row['route_from']} → {row['route_to']}): "
+                            f"freight ₹{freight:,.2f}, received ₹{received:,.2f}, outstanding ₹{max(0, freight - received):,.2f}."
+                        )
+                    answer = "Outstanding amount:\\n" + "\\n".join(lines)
+            elif detail_question:
+                query = (
+                    "SELECT trip_payments.payment_id, trip_payments.trip_id, trip_payments.amount, "
+                    "trip_payments.payment_date, trip_payments.reference, trips.route_from, trips.route_to "
+                    "FROM trip_payments JOIN trips ON trips.trip_id = trip_payments.trip_id "
+                    "JOIN trucks ON trucks.truck_id = trips.truck_id WHERE " + scope
+                )
+                if filters:
+                    query += " AND " + " AND ".join(filters)
+                query += " ORDER BY trip_payments.payment_date DESC, trip_payments.payment_id DESC LIMIT 30"
+                rows = conn.execute(query, params + filter_params).fetchall()
+                if not rows:
+                    answer = "No received payments were found for that trip in the records available to your account." if trip_id_match else "No received payments were found in the records available to your account."
+                else:
+                    lines = [
+                        f"Payment #{row['payment_id']} | Trip #{row['trip_id']} "
+                        f"({row['route_from']} → {row['route_to']}) | "
+                        f"₹{row['amount']:,.2f} | {row['payment_date']}"
+                        + (f" | {row['reference']}" if row["reference"] else "")
+                        for row in rows
+                    ]
+                    total = sum(float(row["amount"] or 0) for row in rows)
+                    answer = (
+                        "Received payments:\\n" + "\\n".join(lines)
+                        + f"\\nTotal shown: ₹{total:,.2f} across {len(rows)} payment record(s)."
+                    )
+            else:
+                query = (
+                    "SELECT COUNT(trip_payments.payment_id) AS count, "
+                    "COALESCE(SUM(trip_payments.amount), 0) AS total "
+                    "FROM trip_payments JOIN trips ON trips.trip_id = trip_payments.trip_id "
+                    "JOIN trucks ON trucks.truck_id = trips.truck_id WHERE " + scope
+                )
+                if filters:
+                    query += " AND " + " AND ".join(filters)
+                rows = conn.execute(query, params + filter_params).fetchone()
+                answer = (
+                    f"Payment summary for records available to your account: "
+                    f"{rows['count']} recorded payments totalling ₹{rows['total']:,.2f}."
+                )
         elif intent == "maintenance":
             scope, params = _owner_scope("maintenance", "owner_user_id", state)
             rows = conn.execute(
