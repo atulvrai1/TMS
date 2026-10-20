@@ -1139,6 +1139,185 @@ def confirm_assistant_trip():
     finally:
         conn.close()
 
+
+def _normalise_registration(value):
+    """Convert common Indian registration spellings into AA-00-AA-0000 form."""
+    raw = re.sub(r"[^A-Z0-9]", "", (value or "").upper())
+    match = re.fullmatch(r"([A-Z]{2})(\d{1,2})([A-Z]{1,3})(\d{1,4})", raw)
+    if not match:
+        return ""
+    state, district, series, number = match.groups()
+    if len(district) == 1:
+        district = "0" + district
+    return f"{state}-{district}-{series}-{number.zfill(4)}"
+
+
+def _parse_truck_addition(question, previous=None):
+    """Collect truck registration/model/year from any order and preserve partial details."""
+    text = " ".join((question or "").strip().split())
+    draft = dict(previous or {})
+    reg_match = re.search(
+        r"\b([A-Z]{2})\s*[- ]?\s*(\d{1,2})\s*[- ]?\s*([A-Z]{1,3})\s*[- ]?\s*(\d{1,4})\b",
+        text, re.I
+    )
+    if reg_match:
+        draft["registration_number"] = _normalise_registration("".join(reg_match.groups()))
+
+    year_match = re.search(r"\b(19\d{2}|20\d{2})\b", text)
+    if year_match:
+        draft["year"] = int(year_match.group(1))
+
+    capacity_match = re.search(r"\b(?:capacity|load)\s*(?:is|of|=|:)?\s*(\d+(?:\.\d+)?)\s*(?:tons?|tonnes?|t)?\b", text, re.I)
+    if capacity_match:
+        draft["capacity_tons"] = float(capacity_match.group(1))
+
+    status_match = re.search(r"\b(available|maintenance|in\s+trip)\b", text, re.I)
+    if status_match:
+        draft["status"] = re.sub(r"\s+", " ", status_match.group(1).title())
+
+    model_match = re.search(
+        r"\bmodel\s*(?:is|=|:)?\s*(.+?)(?=\s+\b(?:year|capacity|load|status|registration|number)\b|$)",
+        text, re.I
+    )
+    if model_match:
+        model = model_match.group(1).strip(" ,.")
+        model = re.sub(r"\b(?:truck|gaadi|gadi)\b", "", model, flags=re.I).strip(" ,.")
+        if model:
+            draft["model"] = model[:100]
+    elif year_match:
+        # Follow-up such as "Tata Prima 2022" completes an earlier partial request.
+        before_year = text[:year_match.start()].strip(" ,.")
+        before_year = re.sub(
+            r"\b(?:please|add|create|register|truck|gaadi|gadi|kro|kar do|karna|year|model|is|the|a|an)\b",
+            " ", before_year, flags=re.I
+        )
+        before_year = re.sub(r"\s+", " ", before_year).strip(" ,.-")
+        if before_year and not re.search(r"[A-Z]{2}[- ]?\d{1,2}[- ]?[A-Z]{1,3}[- ]?\d{1,4}", before_year, re.I):
+            draft["model"] = before_year[:100]
+
+    draft.setdefault("status", "Available")
+    missing = []
+    if not draft.get("registration_number"):
+        missing.append("truck registration number (example KA-50-EU-1045)")
+    if not draft.get("model"):
+        missing.append("truck model (example Tata Prima)")
+    if not draft.get("year"):
+        missing.append("manufacturing year (example 2022)")
+    if draft.get("year") and not (1980 <= int(draft["year"]) <= date.today().year + 2):
+        missing.append("a valid manufacturing year")
+    if draft.get("capacity_tons") is not None and not (0 < float(draft["capacity_tons"]) <= 200):
+        missing.append("capacity between 0 and 200 tons")
+    if draft.get("status") not in {"Available", "Maintenance", "In Trip"}:
+        draft["status"] = "Available"
+    return draft, missing
+
+
+@assistant_bp.post("/api/assistant/trucks/draft")
+@access_required
+def draft_truck_from_assistant():
+    if not _assistant_csrf_valid():
+        return jsonify(error="Your session token is invalid. Refresh the page and try again."), 403
+    if not (session.get("is_admin") or session.get("role") == "Admin"):
+        return jsonify(error="Only administrators can add trucks."), 403
+    payload = request.get_json(silent=True) or {}
+    question = payload.get("question")
+    if not isinstance(question, str) or not question.strip() or len(question) > MAX_QUESTION_LENGTH:
+        return jsonify(error="Tell me the truck details in a short message."), 400
+
+    previous = session.get("assistant_truck_partial", {})
+    # Start a fresh draft when the message includes a new registration.
+    if re.search(r"\b[A-Z]{2}\s*[- ]?\s*\d{1,2}\s*[- ]?\s*[A-Z]{1,3}\s*[- ]?\s*\d{1,4}\b", question, re.I):
+        previous = {}
+    draft, missing = _parse_truck_addition(question, previous)
+    if missing:
+        session["assistant_truck_partial"] = draft
+        return jsonify(missing=missing, prompt_hint=(
+            "You can send the missing details in your next message. Example: "
+            "'Tata Prima 2022 capacity 25 tons'. I'll keep the truck number you already gave me."
+        )), 200
+
+    conn = get_db()
+    try:
+        existing = conn.execute(
+            "SELECT truck_id FROM trucks WHERE upper(registration_number) = upper(?)",
+            (draft["registration_number"],)
+        ).fetchone()
+        if existing:
+            return jsonify(error=f"Truck {draft['registration_number']} is already registered. I won't create a duplicate."), 200
+    finally:
+        conn.close()
+
+    session.pop("assistant_truck_partial", None)
+    session["assistant_truck_draft"] = draft
+    session["assistant_truck_draft_at"] = datetime.utcnow().isoformat()
+    return jsonify(draft=draft), 200
+
+
+@assistant_bp.post("/api/assistant/trucks/confirm")
+@access_required
+def confirm_assistant_truck():
+    if not _assistant_csrf_valid():
+        return jsonify(error="Your session token is invalid. Refresh the page and try again."), 403
+    if not (session.get("is_admin") or session.get("role") == "Admin"):
+        return jsonify(error="Only administrators can add trucks."), 403
+    draft = session.get("assistant_truck_draft")
+    created_at = session.get("assistant_truck_draft_at", "")
+    if not isinstance(draft, dict) or not created_at:
+        return jsonify(error="There is no truck preview to confirm. Tell me the truck details again."), 400
+    try:
+        if (datetime.utcnow() - datetime.fromisoformat(created_at)).total_seconds() > 600:
+            raise ValueError("expired")
+        registration = _normalise_registration(draft.get("registration_number", ""))
+        model = str(draft.get("model", "")).strip()
+        year = int(draft.get("year", 0))
+        capacity = draft.get("capacity_tons")
+        status = draft.get("status", "Available")
+        if not registration or not model or len(model) > 100:
+            raise ValueError("details")
+        if not (1980 <= year <= date.today().year + 2):
+            raise ValueError("year")
+        if capacity is not None and not (0 < float(capacity) <= 200):
+            raise ValueError("capacity")
+        if status not in {"Available", "Maintenance", "In Trip"}:
+            raise ValueError("status")
+    except (TypeError, ValueError, OverflowError):
+        session.pop("assistant_truck_draft", None)
+        session.pop("assistant_truck_draft_at", None)
+        return jsonify(error="This truck preview is invalid or expired. Send the details again."), 400
+
+    conn = get_db()
+    try:
+        conn.execute("BEGIN IMMEDIATE")
+        existing = conn.execute(
+            "SELECT truck_id FROM trucks WHERE upper(registration_number) = upper(?)",
+            (registration,)
+        ).fetchone()
+        if existing:
+            conn.rollback()
+            return jsonify(error=f"Truck {registration} is already registered. No duplicate was added."), 409
+        cursor = conn.execute(
+            "INSERT INTO trucks (registration_number, model, year, capacity_tons, status) "
+            "VALUES (?, ?, ?, ?, ?)",
+            (registration, model, year, capacity, status)
+        )
+        truck_id = cursor.lastrowid
+        conn.execute(
+            "INSERT INTO user_logs (user_id, action, details, actor_user_id) VALUES (?, ?, ?, ?)",
+            (session["user_id"], "Truck Added",
+             f"Added truck {registration} ({model}, {year}, {status}).", session["user_id"])
+        )
+        conn.commit()
+        session.pop("assistant_truck_draft", None)
+        session.pop("assistant_truck_draft_at", None)
+        return jsonify(message=f"Truck {registration} added successfully (Truck #{truck_id}). Model: {model}; year: {year}; status: {status}.",
+                       truck_id=truck_id), 201
+    except Exception:
+        conn.rollback()
+        current_app.logger.exception("Assistant truck creation failed")
+        return jsonify(error="I couldn't add this truck. Please try again or check the application logs."), 500
+    finally:
+        conn.close()
+
 def secrets_compare(left: str, right: str) -> bool:
     import hmac
     return hmac.compare_digest(left, right)
