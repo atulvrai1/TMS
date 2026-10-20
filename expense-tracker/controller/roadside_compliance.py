@@ -125,7 +125,7 @@ def register_compliance_module(app, ns):
             "d.expiry_date, d.document_id DESC LIMIT 200",
             doc_params,
         ).fetchall()
-        inspections = conn.execute(
+        inspection_rows = conn.execute(
             "SELECT i.*, t.registration_number, dr.name AS driver_name "
             "FROM roadside_inspections i JOIN trucks t ON t.truck_id=i.truck_id "
             "LEFT JOIN drivers dr ON dr.driver_id=i.driver_id "
@@ -133,6 +133,14 @@ def register_compliance_module(app, ns):
             "ORDER BY i.inspection_date DESC, i.inspection_id DESC LIMIT 100",
             inspection_params,
         ).fetchall()
+        inspections = []
+        for row in inspection_rows:
+            item = dict(row)
+            try:
+                item["findings"] = json.loads(item.get("findings_json") or "[]")
+            except (TypeError, ValueError):
+                item["findings"] = []
+            inspections.append(item)
         trucks = conn.execute("SELECT truck_id, registration_number, model FROM trucks ORDER BY registration_number").fetchall()
         drivers = conn.execute("SELECT driver_id, name, license_number FROM drivers ORDER BY name").fetchall()
         trips = conn.execute("SELECT trip_id, route_from, route_to, status FROM trips ORDER BY trip_id DESC LIMIT 100").fetchall()
@@ -155,8 +163,6 @@ def register_compliance_module(app, ns):
             documents, inspections, trucks, drivers, trips, challans = fetch_page_data(conn)
             today = date.today().isoformat()
             expired = sum(1 for d in documents if d["expiry_date"] and d["expiry_date"] < today)
-            expiring = sum(1 for d in documents if d["expiry_date"] and today <= d["expiry_date"] <= date.today().replace(day=date.today().day).isoformat() and False)
-            expiring = sum(1 for d in documents if d["expiry_date"] and today <= d["expiry_date"] <= __import__("datetime").datetime.strptime(today, "%Y-%m-%d").date().isoformat()) if False else sum(1 for d in documents if d["expiry_date"] and today <= d["expiry_date"] <= date.fromisoformat(today).replace() .isoformat()) if False else 0
             # Date arithmetic without relying on database timezone: due within 30 days.
             from datetime import timedelta
             expiring = sum(1 for d in documents if d["expiry_date"] and today <= d["expiry_date"] <= (date.today() + timedelta(days=30)).isoformat())
