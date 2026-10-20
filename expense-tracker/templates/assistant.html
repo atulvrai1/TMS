@@ -36,7 +36,7 @@
       <label class="ff-sr-only" for="ff-chat-input">Ask FleetFlow Assistant</label>
       <textarea id="ff-chat-input" name="question" rows="1" maxlength="500" placeholder="Message FleetFlow Assistant…" required></textarea>
       <button type="submit" id="ff-chat-send" aria-label="Send message"><span aria-hidden="true">↑</span></button>
-      <div class="ff-composer-note"><span>↵ Enter to send · Shift + Enter for a new line</span><span>Assistant can only read records, not modify them.</span></div>
+      <div class="ff-composer-note"><span>↵ Enter to send · Shift + Enter for a new line</span><span>Assistant can answer questions and prepare trip drafts; creating a trip requires admin access and your confirmation.</span></div>
     </form>
   </div>
 </section>
@@ -92,7 +92,7 @@
 .ff-composer button{position:absolute;right:.7rem;top:.62rem;width:36px;height:36px;border:0;border-radius:11px;background:linear-gradient(140deg,#655cf3,#347cda);color:#fff;font-size:1.45rem;cursor:pointer;box-shadow:0 3px 9px rgba(79,99,217,.2)}
 .ff-composer button:disabled{opacity:.45;cursor:wait}
 .ff-composer-note{display:flex;justify-content:space-between;gap:.7rem;padding:.35rem .45rem 0;color:#9297a7;font-size:.68rem;line-height:1.4}
-.ff-sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+.ff-trip-preview{margin-top:.8rem;padding:1rem;border:1px solid #dfe3f2;border-radius:12px;background:#fff;box-shadow:0 4px 15px rgba(35,45,90,.04)}.ff-trip-preview>strong{display:block;margin-bottom:.6rem;font-size:.92rem}.ff-trip-preview dl{display:grid;grid-template-columns:minmax(95px,.35fr) minmax(0,1fr);gap:.45rem .8rem;margin:.2rem 0 1rem;font-size:.82rem}.ff-trip-preview dt{color:var(--ff-muted)}.ff-trip-preview dd{margin:0;font-weight:600;overflow-wrap:anywhere}.ff-trip-confirm{border:0;border-radius:9px;background:linear-gradient(130deg,#4f63d9,#347cda);color:#fff;padding:.65rem .9rem;font:inherit;font-size:.82rem;font-weight:700;cursor:pointer}.ff-trip-confirm:disabled{opacity:.65;cursor:wait}.ff-trip-note{margin:.65rem 0 0;font-size:.73rem;color:var(--ff-muted)}.ff-trip-open-link{display:inline-block;margin-top:.5rem;color:#4257cb;font-weight:700;text-decoration:underline}.ff-sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
 @keyframes ff-fade-in{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:translateY(0)}}
 @keyframes ff-pulse{from{opacity:.35;transform:translateY(0)}to{opacity:1;transform:translateY(-3px)}}
 @media(max-width:700px){.ff-agent{min-height:calc(100vh - 115px)}.ff-agent-workspace{min-height:500px}.ff-chat-messages{max-height:none;padding:1rem}.ff-starters{grid-template-columns:1fr}.ff-message-body{max-width:88%}.ff-composer{width:calc(100% - 1rem)}.ff-composer-note{display:block}.ff-composer-note span{display:block}.ff-agent-actions{width:100%;justify-content:space-between}}
@@ -149,6 +149,76 @@
     return item.row;
   }
 
+  function showTripPreview(draft) {
+    const item = addMessage('assistant', 'I’ve checked the available records. Review this trip before creating it:');
+    const card = document.createElement('div');
+    card.className = 'ff-trip-preview';
+    const title = document.createElement('strong');
+    title.textContent = 'Trip preview';
+    card.appendChild(title);
+    const fields = [
+      ['Route', draft.route_from + ' → ' + draft.route_to],
+      ['Date', draft.start_date],
+      ['Truck', draft.truck + (draft.truck_model ? ' · ' + draft.truck_model : '')],
+      ['Driver', draft.driver],
+      ['Freight', '₹' + Number(draft.freight_amount).toLocaleString('en-IN', {minimumFractionDigits:2, maximumFractionDigits:2})],
+      ['Assigned account', draft.owner_email]
+    ];
+    const list = document.createElement('dl');
+    fields.forEach(([label, value]) => {
+      const dt = document.createElement('dt'); dt.textContent = label;
+      const dd = document.createElement('dd'); dd.textContent = value;
+      list.append(dt, dd);
+    });
+    const confirm = document.createElement('button');
+    confirm.type = 'button';
+    confirm.className = 'ff-trip-confirm';
+    confirm.textContent = 'Confirm and create trip';
+    confirm.addEventListener('click', () => confirmTrip(confirm));
+    const note = document.createElement('p');
+    note.className = 'ff-trip-note';
+    note.textContent = 'Nothing has been saved yet. Confirming will schedule this trip.';
+    card.append(list, confirm, note);
+    item.bubble.appendChild(card);
+    scrollToLatest();
+  }
+
+  async function confirmTrip(button) {
+    if (busy) return;
+    busy = true;
+    button.disabled = true;
+    button.textContent = 'Creating trip…';
+    try {
+      const response = await fetch(tripConfirmUrl, {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: {'Content-Type': 'application/json', 'Accept': 'application/json', 'X-CSRFToken': csrfToken},
+        body: JSON.stringify({})
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        addMessage('assistant', data.error || 'Trip creation failed. Please try again.', {error:true});
+        button.textContent = 'Confirmation failed';
+      } else {
+        button.textContent = 'Trip created ✓';
+        const item = addMessage('assistant', data.message || 'Trip created successfully.');
+        const link = document.createElement('a');
+        link.href = {{ url_for('trips')|tojson }};
+        link.className = 'ff-trip-open-link';
+        link.textContent = 'Open trips';
+        item.bubble.appendChild(document.createElement('br'));
+        item.bubble.appendChild(link);
+      }
+    } catch (_) {
+      addMessage('assistant', 'Could not confirm the trip because of a connection error. Please check the Trips page before retrying.', {error:true});
+      button.disabled = false;
+      button.textContent = 'Try confirmation again';
+    } finally {
+      busy = false;
+      scrollToLatest();
+    }
+  }
+
   function resetWelcome() {
     messages.innerHTML = '<div class="ff-welcome" id="ff-welcome"><div class="ff-welcome-mark" aria-hidden="true">✦</div><h2>What can I help you with?</h2><p>Ask about your fleet operations. I’ll turn the available records into clear summaries.</p><div class="ff-starters" aria-label="Suggested prompts"><button type="button" class="ff-starter" data-question="Show my latest trips"><span aria-hidden="true">↗</span><span><strong>Latest trips</strong><small>Routes, drivers and trip status</small></span><span class="ff-starter-arrow">↗</span></button><button type="button" class="ff-starter" data-question="Summarize expenses"><span aria-hidden="true">₹</span><span><strong>Expense summary</strong><small>Totals and pending reviews</small></span><span class="ff-starter-arrow">↗</span></button><button type="button" class="ff-starter" data-question="How much payment has been recorded?"><span aria-hidden="true">▤</span><span><strong>Recorded payments</strong><small>Payment count and total</small></span><span class="ff-starter-arrow">↗</span></button><button type="button" class="ff-starter" data-question="Summarize maintenance costs"><span aria-hidden="true">⚙</span><span><strong>Maintenance</strong><small>Service records and costs</small></span><span class="ff-starter-arrow">↗</span></button></div></div>';
     bindStarters();
@@ -164,7 +234,8 @@
     input.value = '';
     resizeInput();
     try {
-      const response = await fetch(askUrl, {
+      const isTripCreate = /\\b(create|schedule|book|dispatch)\\b/i.test(question) && /\\btrip\\b/i.test(question);
+      const response = await fetch(isTripCreate ? tripDraftUrl : askUrl, {
         method: 'POST',
         credentials: 'same-origin',
         headers: {'Content-Type': 'application/json', 'Accept': 'application/json', 'X-CSRFToken': csrfToken},
@@ -176,6 +247,12 @@
       typing.remove();
       if (!response.ok) {
         addMessage('assistant', data.error || ('Request failed (HTTP ' + response.status + '). Please try again.'), {error:true});
+      } else if (isTripCreate && Array.isArray(data.missing)) {
+        addMessage('assistant', 'I need a few more details before I can prepare the trip. Missing: ' + data.missing.join(', ') + '.\\n\\n' + (data.prompt_hint || 'Please include all required trip details in one message.'));
+      } else if (isTripCreate && data.draft) {
+        showTripPreview(data.draft);
+      } else if (isTripCreate && data.error) {
+        addMessage('assistant', data.error, {error:true});
       } else if (typeof data.answer !== 'string' || !data.answer.trim()) {
         addMessage('assistant', data.error || 'The request completed, but no answer was returned. Please try another question.', {error:true});
       } else {
