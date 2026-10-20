@@ -33,7 +33,7 @@ def _load_prompt_section(section: str) -> str:
         current_app.logger.warning("FleetFlow prompt.md could not be read; using built-in prompt")
         return ""
     match = re.search(
-        rf"^##\\s+{re.escape(section)}\\s*\\n(.*?)(?=^##\\s+|\\Z)",
+        rf"^##\s+{re.escape(section)}\s*\n(.*?)(?=^##\s+|\Z)",
         text,
         flags=re.IGNORECASE | re.MULTILINE | re.DOTALL,
     )
@@ -262,7 +262,7 @@ def _classify(state: AssistantState) -> AssistantState:
             )
             prompt_rules = _load_prompt_section("intent_classification")
             if prompt_rules:
-                prompt = prompt_rules + "\\n\\n" + prompt
+                prompt = prompt_rules + chr(10) + chr(10) + prompt
             history = state.get("conversation_history", [])
             if history:
                 recent = "\n".join(
@@ -597,7 +597,7 @@ def _help(state: AssistantState) -> AssistantState:
             )
             prompt_rules = _load_prompt_section("help")
             if prompt_rules:
-                prompt = prompt_rules + "\\n\\n" + prompt
+                prompt = prompt_rules + chr(10) + chr(10) + prompt
             answer = model.invoke(prompt).content
             if isinstance(answer, str) and answer.strip() and len(answer) <= 5000:
                 return {"answer": answer.strip()}
@@ -631,7 +631,7 @@ def _format_answer_for_user(question: str, answer: str) -> str:
             )
             prompt_rules = _load_prompt_section("answer_formatting")
             if prompt_rules:
-                prompt = prompt_rules + "\\n\\n" + prompt
+                prompt = prompt_rules + chr(10) + chr(10) + prompt
             rewritten = model.invoke(prompt).content
             if isinstance(rewritten, str) and rewritten.strip() and len(rewritten) <= 7000:
                 return rewritten.strip()
