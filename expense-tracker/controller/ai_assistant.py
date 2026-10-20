@@ -146,6 +146,14 @@ def _resolve_contextual_question(question: str, history: list) -> str:
             candidate = re.split(r"\b(?:for|on|trip|truck|status|from|to|and)\b", driver_match.group(1), maxsplit=1, flags=re.I)[0].strip(" .,:;")
             if candidate:
                 driver = candidate
+        # Trip result rows end with the assigned driver's name after pipe separators.
+        if driver is None:
+            for line in content.splitlines():
+                if re.match(r"^\s*#\d+\s", line) and "|" in line:
+                    candidate = line.rsplit("|", 1)[-1].strip(" .,:;")
+                    if candidate and not re.fullmatch(r"[A-Z0-9 -]+", candidate):
+                        driver = candidate
+                        break
 
     if truck and re.search(r"\b(that truck|this truck|same truck)\b", text, re.I):
         return text + f" (context: truck {truck})"
