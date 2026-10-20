@@ -6,7 +6,7 @@ import os
 import re
 from typing import TypedDict
 
-from flask import Blueprint, jsonify, request, session
+from flask import Blueprint, jsonify, render_template, request, session
 from langgraph.graph import END, START, StateGraph
 
 from controller.access_controller import SUPER_ADMIN_EMAIL, access_required
@@ -199,6 +199,13 @@ def _build_graph():
 
 
 assistant_graph = _build_graph()
+
+
+@assistant_bp.get("/assistant")
+@access_required
+def assistant_page():
+    """Render the dedicated, signed-in FleetFlow Assistant workspace."""
+    return render_template("assistant.html", block_content="dashboard")
 
 
 @assistant_bp.post("/api/assistant")
