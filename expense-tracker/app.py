@@ -2313,15 +2313,37 @@ def _load_admin_notifications(conn):
         "AND password_reset_tokens.expires_at > CURRENT_TIMESTAMP "
         "ORDER BY password_reset_tokens.created_at DESC LIMIT 50"
     ).fetchall()
+    compliance_scope, compliance_scope_params = _record_owner_filter("compliance_documents")
+    compliance_expiry_alerts = conn.execute(
+        "SELECT d.document_id, d.subject_type, d.document_type, d.document_number, "
+        "d.expiry_date, d.verified, t.registration_number, dr.name AS driver_name, "
+        "tr.route_from, tr.route_to, tr.trip_id AS related_trip_id, "
+        "CASE WHEN d.expiry_date < date('now') THEN 'Expired' "
+        "WHEN d.expiry_date = date('now') THEN 'Expires today' "
+        "WHEN d.expiry_date <= date('now', '+7 days') THEN 'Expires within 7 days' "
+        "ELSE 'Expires within 30 days' END AS alert_level, "
+        "CAST(julianday(d.expiry_date) - julianday(date('now')) AS INTEGER) AS days_remaining "
+        "FROM compliance_documents d "
+        "LEFT JOIN trucks t ON t.truck_id = d.truck_id "
+        "LEFT JOIN drivers dr ON dr.driver_id = d.driver_id "
+        "LEFT JOIN trips tr ON tr.trip_id = d.trip_id "
+        "WHERE " + compliance_scope.replace("compliance_documents.", "d.") + " "
+        "AND d.expiry_date IS NOT NULL "
+        "AND d.expiry_date <= date('now', '+30 days') "
+        "ORDER BY d.expiry_date ASC, d.document_id DESC LIMIT 100",
+        compliance_scope_params
+    ).fetchall()
     return {
         "pending_users": pending_users,
         "pending_expenses": pending_expenses,
         "reset_links": reset_links,
+        "compliance_expiry": compliance_expiry_alerts,
     }
 
 
 def _count_admin_notifications(conn):
     expense_scope, expense_scope_params = _record_owner_filter("trips")
+    compliance_scope, compliance_scope_params = _record_owner_filter("compliance_documents")
     counts = conn.execute(
         "SELECT "
         "(SELECT COUNT(*) FROM users "
@@ -2335,10 +2357,14 @@ def _count_admin_notifications(conn):
         "AND password_reset_tokens.requested_by IS NULL "
         "AND password_reset_tokens.delivery_status = 'admin_queue' "
         "AND password_reset_tokens.used_at IS NULL "
-        "AND password_reset_tokens.expires_at > CURRENT_TIMESTAMP) AS reset_links"
-        , expense_scope_params
+        "AND password_reset_tokens.expires_at > CURRENT_TIMESTAMP) AS reset_links, "
+        "(SELECT COUNT(*) FROM compliance_documents "
+        "WHERE " + compliance_scope + " "
+        "AND expiry_date IS NOT NULL "
+        "AND expiry_date <= date('now', '+30 days')) AS compliance_expiry"
+        , [*expense_scope_params, *compliance_scope_params]
     ).fetchone()
-    return {key: counts[key] for key in ("pending_users", "pending_expenses", "reset_links")}
+    return {key: counts[key] for key in ("pending_users", "pending_expenses", "reset_links", "compliance_expiry")}
 
 
 @app.context_processor
