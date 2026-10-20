@@ -54,7 +54,9 @@ def test_answer_quality_gate_replaces_empty_answers():
     assert "couldn't verify" in result["answer"].lower()
 
 
-def test_saved_hinglish_preference_applies_to_english_follow_up():
+def test_saved_hinglish_preference_applies_to_english_follow_up(monkeypatch):
+    monkeypatch.delenv("GEMINI_API_KEY", raising=False)
+    monkeypatch.delenv("GOOGLE_API_KEY", raising=False)
     answer = _format_answer_for_user(
         "show details",
         "Trip details: #4 Fatuha to Patna",
