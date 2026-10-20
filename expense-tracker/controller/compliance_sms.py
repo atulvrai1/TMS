@@ -297,7 +297,7 @@ def register_compliance_sms_module(app, ns):
         try:
             sample_row = {"document_type": "TEST DOCUMENT", "subject_type": "truck", "registration_number": "TEST-TRUCK", "truck_id": 0, "driver_id": None, "trip_id": None, "driver_name": None, "expiry_date": date.today().isoformat()}
             sample = _render_message(sample_row, 7)
-            _send_fast2sms(mobile, sample)
+            _send_msg07(mobile, sample)
             flash("Msg07 accepted the test message. This confirms API submission, not handset delivery.", "success")
         except Exception as exc:
             logger.exception("Msg07 test failed")
