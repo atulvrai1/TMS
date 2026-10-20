@@ -124,9 +124,9 @@ def _resolve_contextual_question(question: str, history: list) -> str:
     trip_id = truck = driver = None
     for item in reversed(history[-12:]):
         content = str(item.get("content", ""))
-        trip_match = re.search(r"\\btrip\\s*#?\\s*(\\d+)\\b", content, re.I)
+        trip_match = re.search(r"\\btrip\\s*#?\\s*(\\d+)\\b|#(\\d+)\\b", content, re.I)
         if trip_id is None and trip_match:
-            trip_id = trip_match.group(1)
+            trip_id = next((group for group in trip_match.groups() if group), None)
         reg_match = re.search(
             r"\\b([A-Z]{1,3}\\s*[- ]?\\d{1,2}\\s*[- ]?[A-Z]{0,3}\\s*[- ]?\\d{1,4})\\b",
             content, re.I
