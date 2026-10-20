@@ -4,6 +4,7 @@ The assistant never accepts SQL, performs writes, or exposes unscoped records.
 """
 import os
 import re
+import uuid
 from datetime import date, datetime, timedelta
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 from typing import TypedDict
@@ -28,6 +29,72 @@ class AssistantState(TypedDict, total=False):
     role: str
     driver_id: int | None
     answer: str
+
+
+def _ensure_history_tables(conn):
+    """Create durable, user-scoped assistant history tables on demand."""
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS assistant_conversations (
+            conversation_id TEXT PRIMARY KEY,
+            user_id INTEGER NOT NULL,
+            title TEXT NOT NULL DEFAULT 'New chat',
+            created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE
+        )
+    """)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS assistant_messages (
+            message_id INTEGER PRIMARY KEY AUTOINCREMENT,
+            conversation_id TEXT NOT NULL,
+            user_id INTEGER NOT NULL,
+            role TEXT NOT NULL CHECK(role IN ('user', 'assistant')),
+            content TEXT NOT NULL,
+            created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (conversation_id) REFERENCES assistant_conversations(conversation_id) ON DELETE CASCADE,
+            FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE
+        )
+    """)
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_assistant_messages_user_conversation "
+        "ON assistant_messages(user_id, conversation_id, message_id)"
+    )
+
+
+def _conversation_id():
+    """Return a stable conversation identifier scoped to the signed-in session."""
+    if not session.get("assistant_conversation_id"):
+        session["assistant_conversation_id"] = str(uuid.uuid4())
+    return session["assistant_conversation_id"]
+
+
+def _save_conversation_message(role, content):
+    """Persist a bounded chat turn for the current user and conversation."""
+    user_id = session.get("user_id")
+    if not user_id or not isinstance(content, str) or not content.strip():
+        return
+    conn = get_db()
+    try:
+        _ensure_history_tables(conn)
+        conversation_id = _conversation_id()
+        conn.execute(
+            "INSERT OR IGNORE INTO assistant_conversations "
+            "(conversation_id, user_id, title) VALUES (?, ?, ?)",
+            (conversation_id, user_id, content.strip()[:70] if role == "user" else "New chat")
+        )
+        conn.execute(
+            "INSERT INTO assistant_messages (conversation_id, user_id, role, content) "
+            "VALUES (?, ?, ?, ?)",
+            (conversation_id, user_id, role, content.strip()[:4000])
+        )
+        conn.execute(
+            "UPDATE assistant_conversations SET updated_at = CURRENT_TIMESTAMP "
+            "WHERE conversation_id = ? AND user_id = ?",
+            (conversation_id, user_id)
+        )
+        conn.commit()
+    finally:
+        conn.close()
 
 
 def _detect_intent(question: str) -> str:
@@ -96,14 +163,30 @@ def _query_records(state: AssistantState) -> AssistantState:
     try:
         if intent == "trips":
             scope, params = _owner_scope("trips", "owner_user_id", state)
-            rows = conn.execute(
+            question = state.get("question", "")
+            trip_id_match = re.search(r"\btrip\s*#?\s*(\d+)\b", question, re.IGNORECASE)
+            truck_match = re.search(r"\btruck\s+(.+?)(?=\s+(?:trip|driver|status|from|to|with)\b|[?.!,]|$)", question, re.IGNORECASE)
+            filters = []
+            filter_params = []
+            if trip_id_match:
+                filters.append("trips.trip_id = ?")
+                filter_params.append(int(trip_id_match.group(1)))
+            if truck_match:
+                truck_label = truck_match.group(1).strip(" '\"")
+                filters.append("(upper(trucks.registration_number) = upper(?) OR lower(trucks.model) = lower(?) OR lower(trucks.registration_number) LIKE lower(?))")
+                filter_params.extend([truck_label, truck_label, "%" + truck_label + "%"])
+            query = (
                 "SELECT trips.trip_id, trips.route_from, trips.route_to, trips.start_date, "
-                "trips.end_date, trips.status, trucks.registration_number, drivers.name AS driver "
+                "trips.end_date, trips.status, trucks.registration_number, trucks.model, "
+                "drivers.name AS driver, trips.freight_amount "
                 "FROM trips JOIN trucks ON trucks.truck_id = trips.truck_id "
                 "JOIN drivers ON drivers.driver_id = trips.driver_id "
-                f"WHERE {scope} ORDER BY trips.start_date DESC, trips.trip_id DESC LIMIT 8",
-                params,
-            ).fetchall()
+                f"WHERE {scope}"
+            )
+            if filters:
+                query += " AND " + " AND ".join(filters)
+            query += " ORDER BY trips.start_date DESC, trips.trip_id DESC LIMIT 8"
+            rows = conn.execute(query, params + filter_params).fetchall()
             if not rows:
                 answer = "I couldn't find any trips in the records available to your account."
             else:
@@ -112,7 +195,12 @@ def _query_records(state: AssistantState) -> AssistantState:
                     f"{r['start_date']} | {r['status']} | {r['registration_number']} | {r['driver']}"
                     for r in rows
                 ]
-                answer = "Here are the latest trips you can access:\n" + "\n".join(lines)
+                if trip_id_match:
+                    answer = "Trip details:\n" + "\n".join(lines)
+                elif truck_match:
+                    answer = "Trips matching that truck:\n" + "\n".join(lines)
+                else:
+                    answer = "Here are the latest trips you can access:\n" + "\n".join(lines)
         elif intent == "expenses":
             scope, params = _owner_scope("trips", "owner_user_id", state)
             rows = conn.execute(
@@ -229,11 +317,28 @@ def ask_fleetflow_assistant():
         "driver_id": session.get("driver_id"),
     }
     try:
+        # Include recent turns as explicit context for follow-up questions.
+        conn = get_db()
+        try:
+            _ensure_history_tables(conn)
+            conversation_id = _conversation_id()
+            history = conn.execute(
+                "SELECT role, content FROM assistant_messages WHERE user_id = ? "
+                "AND conversation_id = ? ORDER BY message_id DESC LIMIT 8",
+                (session["user_id"], conversation_id)
+            ).fetchall()
+            state["conversation_history"] = [
+                {"role": row["role"], "content": row["content"]} for row in reversed(history)
+            ]
+        finally:
+            conn.close()
         result = assistant_graph.invoke(state)
         answer = result.get("answer")
         if not isinstance(answer, str) or not answer.strip():
             current_app.logger.error("FleetFlow assistant graph returned an empty answer")
             return jsonify(error="The assistant returned an empty response. Please try again."), 503
+        _save_conversation_message("user", question.strip())
+        _save_conversation_message("assistant", answer.strip())
         return jsonify(answer=answer), 200
     except Exception:
         current_app.logger.exception("FleetFlow assistant request failed")
@@ -305,6 +410,186 @@ def _parse_trip_prompt(question):
         missing.append("a valid freight amount")
     draft["freight_amount"] = str(freight) if freight is not None else ""
     return draft, missing
+
+
+@assistant_bp.get("/api/assistant/history")
+@access_required
+def assistant_history():
+    conn = get_db()
+    try:
+        _ensure_history_tables(conn)
+        conversation_id = _conversation_id()
+        rows = conn.execute(
+            "SELECT role, content, created_at FROM assistant_messages "
+            "WHERE user_id = ? AND conversation_id = ? ORDER BY message_id ASC LIMIT 100",
+            (session["user_id"], conversation_id)
+        ).fetchall()
+        return jsonify(messages=[dict(row) for row in rows])
+    finally:
+        conn.close()
+
+
+@assistant_bp.post("/api/assistant/new-chat")
+@access_required
+def assistant_new_chat():
+    if not _assistant_csrf_valid():
+        return jsonify(error="Your session token is invalid. Refresh the page and try again."), 403
+    session["assistant_conversation_id"] = str(uuid.uuid4())
+    session.pop("assistant_trip_draft", None)
+    session.pop("assistant_trip_draft_at", None)
+    session.pop("assistant_payment_draft", None)
+    session.pop("assistant_payment_draft_at", None)
+    return jsonify(ok=True), 200
+
+
+
+
+def _parse_payment_prompt(question):
+    """Understand natural phrases such as 'I got ₹10,000 for trip 3'."""
+    text = " ".join(question.strip().split())
+    trip_match = re.search(r"\btrip\s*#?\s*(\d+)\b", text, re.IGNORECASE)
+    amount_match = re.search(
+        r"(?:₹|rs\.?|inr)?\s*([0-9][0-9,]*(?:\.\d{1,2})?)\s*(?:rupees|rs\.?)?\b",
+        text, re.IGNORECASE
+    )
+    if not amount_match:
+        amount_match = re.search(
+            r"\b(?:got|received|collected|payment(?:\s+of)?)\s+(?:₹|rs\.?|inr)?\s*([0-9][0-9,]*(?:\.\d{1,2})?)",
+            text, re.IGNORECASE
+        )
+    amount = None
+    if amount_match:
+        try:
+            amount = Decimal(amount_match.group(1).replace(",", "")).quantize(
+                Decimal("0.01"), rounding=ROUND_HALF_UP
+            )
+        except (InvalidOperation, ValueError):
+            amount = None
+    missing = []
+    if not trip_match:
+        missing.append("trip number (for example, Trip 3)")
+    if amount is None or not amount.is_finite() or amount <= 0 or amount > Decimal("100000000"):
+        missing.append("amount received greater than zero")
+    return {
+        "trip_id": int(trip_match.group(1)) if trip_match else None,
+        "amount": str(amount) if amount is not None else "",
+        "payment_date": date.today().isoformat(),
+        "reference": text[:200],
+    }, missing
+
+
+@assistant_bp.post("/api/assistant/payments/draft")
+@access_required
+def draft_payment_from_assistant():
+    if not _assistant_csrf_valid():
+        return jsonify(error="Your session token is invalid. Refresh the page and try again."), 403
+    if not (session.get("is_admin") or session.get("role") == "Admin"):
+        return jsonify(error="Recording a payment from the assistant is available to administrators only."), 403
+    session.pop("assistant_payment_draft", None)
+    session.pop("assistant_payment_draft_at", None)
+    payload = request.get_json(silent=True) or {}
+    question = payload.get("question")
+    if not isinstance(question, str) or not question.strip() or len(question) > MAX_QUESTION_LENGTH:
+        return jsonify(error="Enter a payment note of 1–500 characters."), 400
+    draft, missing = _parse_payment_prompt(question)
+    if missing:
+        return jsonify(missing=missing, prompt_hint="Example: I received 10000 for Trip 3."), 200
+    conn = get_db()
+    try:
+        scope, params = _owner_scope("trips", "owner_user_id", {
+            "email": session.get("email", ""), "role": session.get("role", "User"),
+            "user_id": session["user_id"]
+        })
+        trip = conn.execute(
+            "SELECT trips.trip_id, trips.route_from, trips.route_to, trips.start_date, "
+            "trips.status, trucks.registration_number, trucks.model, trips.freight_amount "
+            "FROM trips JOIN trucks ON trucks.truck_id = trips.truck_id "
+            f"WHERE trips.trip_id = ? AND {scope}",
+            [draft["trip_id"]] + params
+        ).fetchone()
+        if not trip:
+            return jsonify(error=f"Trip #{draft['trip_id']} was not found in the records available to your account."), 200
+        existing = conn.execute(
+            "SELECT COALESCE(SUM(amount), 0) AS total FROM trip_payments WHERE trip_id = ?",
+            (draft["trip_id"],)
+        ).fetchone()
+        draft.update({
+            "route_from": trip["route_from"], "route_to": trip["route_to"],
+            "truck": trip["registration_number"], "truck_model": trip["model"],
+            "trip_status": trip["status"], "freight_amount": float(trip["freight_amount"] or 0),
+            "previously_received": float(existing["total"] or 0),
+        })
+        session["assistant_payment_draft"] = draft
+        session["assistant_payment_draft_at"] = datetime.utcnow().isoformat()
+        return jsonify(draft=draft), 200
+    finally:
+        conn.close()
+
+
+@assistant_bp.post("/api/assistant/payments/confirm")
+@access_required
+def confirm_assistant_payment():
+    if not _assistant_csrf_valid():
+        return jsonify(error="Your session token is invalid. Refresh the page and try again."), 403
+    if not (session.get("is_admin") or session.get("role") == "Admin"):
+        return jsonify(error="Recording a payment from the assistant is available to administrators only."), 403
+    draft = session.get("assistant_payment_draft")
+    created_at = session.get("assistant_payment_draft_at", "")
+    if not isinstance(draft, dict) or not created_at:
+        return jsonify(error="There is no pending payment to confirm. Send the payment note again."), 400
+    try:
+        staged_at = datetime.fromisoformat(created_at)
+        amount = Decimal(draft["amount"]).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+        if (datetime.utcnow() - staged_at).total_seconds() > 600:
+            raise ValueError("expired")
+        if amount <= 0 or amount > Decimal("100000000"):
+            raise ValueError("amount")
+    except (KeyError, ValueError, InvalidOperation):
+        session.pop("assistant_payment_draft", None)
+        session.pop("assistant_payment_draft_at", None)
+        return jsonify(error="This payment preview is invalid or expired. Please send the payment note again."), 400
+    conn = get_db()
+    try:
+        conn.execute("BEGIN IMMEDIATE")
+        scope, params = _owner_scope("trips", "owner_user_id", {
+            "email": session.get("email", ""), "role": session.get("role", "User"),
+            "user_id": session["user_id"]
+        })
+        trip = conn.execute(
+            "SELECT trips.trip_id, trips.route_from, trips.route_to, trucks.registration_number "
+            "FROM trips JOIN trucks ON trucks.truck_id = trips.truck_id "
+            f"WHERE trips.trip_id = ? AND {scope}",
+            [draft["trip_id"]] + params
+        ).fetchone()
+        if not trip:
+            conn.rollback()
+            return jsonify(error="The trip is no longer available to your account."), 409
+        cursor = conn.execute(
+            "INSERT INTO trip_payments (trip_id, amount, payment_date, reference, recorded_by) "
+            "VALUES (?, ?, ?, ?, ?)",
+            (draft["trip_id"], float(amount), draft["payment_date"], draft["reference"], session["user_id"])
+        )
+        payment_id = cursor.lastrowid
+        conn.execute(
+            "INSERT INTO user_logs (user_id, action, details, actor_user_id) VALUES (?, ?, ?, ?)",
+            (session["user_id"], "Payment Recorded",
+             f"Payment #{payment_id}: ₹{amount:.2f} recorded for Trip #{draft['trip_id']} "
+             f"({trip['route_from']} to {trip['route_to']}, truck {trip['registration_number']}).",
+             session["user_id"])
+        )
+        conn.commit()
+        session.pop("assistant_payment_draft", None)
+        session.pop("assistant_payment_draft_at", None)
+        return jsonify(message=(
+            f"Payment #{payment_id} recorded: ₹{amount:,.2f} received for Trip #{draft['trip_id']} "
+            f"({trip['route_from']} → {trip['route_to']}, truck {trip['registration_number']})."
+        ), payment_id=payment_id), 201
+    except Exception:
+        conn.rollback()
+        current_app.logger.exception("Assistant payment recording failed")
+        return jsonify(error="The payment could not be recorded. Please check the application logs and try again."), 500
+    finally:
+        conn.close()
 
 
 @assistant_bp.post("/api/assistant/trips/draft")
