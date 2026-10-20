@@ -229,7 +229,7 @@ def _classify(state: AssistantState) -> AssistantState:
                 "You classify user requests for FleetFlow, a truck and trip management app. "
                 "The user may be new to computers, use short/simple sentences, make spelling mistakes, "
                 "or write in Hindi/Hinglish written with English letters. Understand the MEANING, not just exact keywords. "
-                "Examples: 'gaadi kahan hai', 'trip ka status batao', 'Bhopal se Indore trip lagao' => trips; "
+                "Examples: 'gaadi kahan hai' => trucks; 'driver ka record' => drivers; 'challan kitna pending hai' => challans; 'trip ka status batao', 'Bhopal se Indore trip lagao' => trips; "
                 "'diesel ka kharcha kitna', 'kitna paisa laga' => expenses; "
                 "'trip 3 ke paise mile', '10000 us trip ke mile' => payments; "
                 "'gaadi kharab hai', 'service kab hui' => maintenance; "
