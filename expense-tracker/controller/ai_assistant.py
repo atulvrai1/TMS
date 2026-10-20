@@ -463,7 +463,8 @@ def _query_records(state: AssistantState) -> AssistantState:
                         for r in rows
                     ]
                     noun = "trip" if pending_count == 1 else "trips"
-                    answer = f"Abhi {pending_count} {noun} pending hain (Scheduled ya In Progress):\n" + "\n".join(lines)
+                    verb = "hai" if pending_count == 1 else "hain"
+                    answer = f"Abhi {pending_count} {noun} pending {verb} (Scheduled ya In Progress):\n" + "\n".join(lines)
             elif not rows:
                 answer = "I couldn't find any trips in the records available to your account."
             else:
