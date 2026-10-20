@@ -486,6 +486,50 @@ def assistant_history():
         conn.close()
 
 
+@assistant_bp.get("/api/assistant/conversations")
+@access_required
+def assistant_conversations():
+    """List the signed-in user's recent assistant conversations."""
+    conn = get_db()
+    try:
+        _ensure_history_tables(conn)
+        rows = conn.execute(
+            "SELECT c.conversation_id, c.title, c.created_at, c.updated_at, "
+            "(SELECT COUNT(*) FROM assistant_messages m "
+            " WHERE m.conversation_id = c.conversation_id AND m.user_id = c.user_id) AS message_count "
+            "FROM assistant_conversations c WHERE c.user_id = ? "
+            "ORDER BY c.updated_at DESC LIMIT 50",
+            (session["user_id"],)
+        ).fetchall()
+        return jsonify(conversations=[dict(row) for row in rows])
+    finally:
+        conn.close()
+
+
+@assistant_bp.get("/api/assistant/conversations/<conversation_id>")
+@access_required
+def load_assistant_conversation(conversation_id):
+    """Load a conversation only if it belongs to the signed-in user."""
+    conn = get_db()
+    try:
+        _ensure_history_tables(conn)
+        exists = conn.execute(
+            "SELECT 1 FROM assistant_conversations WHERE conversation_id = ? AND user_id = ?",
+            (conversation_id, session["user_id"])
+        ).fetchone()
+        if not exists:
+            return jsonify(error="Conversation not found."), 404
+        rows = conn.execute(
+            "SELECT role, content, created_at FROM assistant_messages "
+            "WHERE conversation_id = ? AND user_id = ? ORDER BY message_id ASC LIMIT 100",
+            (conversation_id, session["user_id"])
+        ).fetchall()
+        session["assistant_conversation_id"] = conversation_id
+        return jsonify(messages=[dict(row) for row in rows])
+    finally:
+        conn.close()
+
+
 @assistant_bp.post("/api/assistant/history")
 @access_required
 def save_assistant_history_message():
