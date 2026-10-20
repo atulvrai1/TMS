@@ -147,12 +147,12 @@ def _resolve_contextual_question(question: str, history: list) -> str:
             if candidate:
                 driver = candidate
 
-    if trip_id and re.search(r"\b(it|that|this|there|same|them|that one)\b", text, re.I):
-        return text + f" (context: Trip #{trip_id})"
-    if truck and re.search(r"\b(that truck|this truck|it|that one|same truck)\b", text, re.I):
+    if truck and re.search(r"\b(that truck|this truck|same truck)\b", text, re.I):
         return text + f" (context: truck {truck})"
-    if driver and re.search(r"\b(that driver|this driver|he|she|them|that one)\b", text, re.I):
+    if driver and re.search(r"\b(that driver|this driver|he|she|that one)\b", text, re.I):
         return text + f" (context: driver {driver})"
+    if trip_id and re.search(r"\b(it|its|that|this|there|same|them|that one)\b", text, re.I):
+        return text + f" (context: Trip #{trip_id})"
     return text
 
 
