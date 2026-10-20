@@ -177,6 +177,31 @@
   function renderAssistantResponse(bubble, text) {
     const lines = String(text || '').split(/\r?\n/);
     const rowPattern = /^\s*Payment\s+#?(\d+)\s*\|\s*Trip\s+#?(\d+)\s*(?:\((.*?)\))?\s*\|\s*(₹\s*[\d,]+(?:\.\d{1,2})?)\s*\|\s*(\d{4}-\d{2}-\d{2})(?:\s*\|\s*(.*))?\s*$/i;
+    const expensePattern = /^\\s*Expense\\s+#?(\\d+)\\s*\\|\\s*Trip\\s+#?(\\d+)\\s*(?:\\((.*?)\\))?\\s*\\|\\s*([^|]+)\\s*\\|\\s*(₹\\s*[\\d,]+(?:\\.\\d{1,2})?)\\s*\\|\\s*(\\d{4}-\\d{2}-\\d{2})\\s*\\|\\s*([^|]+)(?:\\s*\\|\\s*(.*))?\\s*$/i;
+    const expenseRows = lines.map((line) => {
+      const match = line.match(expensePattern);
+      return match ? {id:match[1], tripId:match[2], route:(match[3]||'').trim(), category:match[4].trim(),
+        amount:match[5].replace(/\\s+/g,''), date:match[6], status:match[7].trim(), description:(match[8]||'').trim()} : null;
+    }).filter(Boolean);
+    if (expenseRows.length) {
+      const result=document.createElement('section'); result.className='ff-payment-results';
+      const title=document.createElement('h3'); title.className='ff-payment-title'; title.textContent='Expense records'; result.appendChild(title);
+      const wrapper=document.createElement('div'); wrapper.className='ff-payment-table-wrap';
+      const table=document.createElement('table'); table.className='ff-payment-table';
+      const thead=document.createElement('thead'), header=document.createElement('tr');
+      ['Expense ID','Trip / Route','Category','Amount','Date','Status','Description'].forEach(label=>{const th=document.createElement('th');th.scope='col';th.textContent=label;header.appendChild(th);});
+      thead.appendChild(header); table.appendChild(thead);
+      const tbody=document.createElement('tbody');
+      expenseRows.forEach(row=>{const tr=document.createElement('tr');
+        ['#'+row.id,'Trip #'+row.tripId+(row.route?' · '+row.route:''),row.category,row.amount,row.date,row.status,row.description||'—'].forEach((value,index)=>{
+          const td=document.createElement('td');td.textContent=value;if(index===3)td.className='ff-payment-amount';tr.appendChild(td);
+        });tbody.appendChild(tr);
+      });
+      table.appendChild(tbody);wrapper.appendChild(table);result.appendChild(wrapper);
+      const summary=lines.find(line=>/Total excluding rejected:/i.test(line));
+      if(summary){const note=document.createElement('p');note.className='ff-payment-footnote';note.textContent=summary.trim();result.appendChild(note);}
+      bubble.replaceChildren(result);return;
+    }
     const rows = lines.map((line) => {
       const match = line.match(rowPattern);
       return match ? {
