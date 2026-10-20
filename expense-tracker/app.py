@@ -2975,7 +2975,7 @@ register_challan_module(app, globals())
 from controller.roadside_compliance import register_compliance_module
 register_compliance_module(app, globals())
 
-# Register Fast2SMS settings and scheduled compliance reminder support.
+# Register Msg07 settings and scheduled compliance reminder support.
 from controller.compliance_sms import register_compliance_sms_module
 register_compliance_sms_module(app, globals())
 
