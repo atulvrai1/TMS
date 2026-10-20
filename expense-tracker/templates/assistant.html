@@ -234,7 +234,7 @@
     input.value = '';
     resizeInput();
     try {
-      const isTripCreate = /\\b(create|schedule|book|dispatch)\\b/i.test(question) && /\\btrip\\b/i.test(question);
+      const isTripCreate = /\b(create|schedule|book|dispatch)\b/i.test(question) && /\btrip\b/i.test(question);
       const response = await fetch(isTripCreate ? tripDraftUrl : askUrl, {
         method: 'POST',
         credentials: 'same-origin',
@@ -248,7 +248,7 @@
       if (!response.ok) {
         addMessage('assistant', data.error || ('Request failed (HTTP ' + response.status + '). Please try again.'), {error:true});
       } else if (isTripCreate && Array.isArray(data.missing)) {
-        addMessage('assistant', 'I need a few more details before I can prepare the trip. Missing: ' + data.missing.join(', ') + '.\\n\\n' + (data.prompt_hint || 'Please include all required trip details in one message.'));
+        addMessage('assistant', 'I need a few more details before I can prepare the trip. Missing: ' + data.missing.join(', ') + '.\n\n' + (data.prompt_hint || 'Please include all required trip details in one message.'));
       } else if (isTripCreate && data.draft) {
         showTripPreview(data.draft);
       } else if (isTripCreate && data.error) {
