@@ -19,6 +19,11 @@ services:
       GEMINI_API_KEY: ${GEMINI_API_KEY:-}
       GOOGLE_API_KEY: ${GOOGLE_API_KEY:-}
       FLEETFLOW_AI_MODEL: ${FLEETFLOW_AI_MODEL:-gemini-2.5-flash}
+      # Optional LangSmith observability for LangGraph runs (disabled by default).
+      LANGSMITH_TRACING: ${LANGSMITH_TRACING:-false}
+      LANGCHAIN_TRACING_V2: ${LANGCHAIN_TRACING_V2:-false}
+      LANGSMITH_API_KEY: ${LANGSMITH_API_KEY:-}
+      LANGSMITH_PROJECT: ${LANGSMITH_PROJECT:-fleetflow-assistant}
       # Configure SMTP only when you want password-reset emails.
       SMTP_HOST: ${SMTP_HOST:-}
       SMTP_PORT: ${SMTP_PORT:-587}
