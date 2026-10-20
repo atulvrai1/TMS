@@ -174,7 +174,7 @@ def _query_records(state: AssistantState) -> AssistantState:
             scope, params = _owner_scope("trips", "owner_user_id", state)
             question = state.get("routing_question", state.get("question", ""))
             trip_id_match = re.search(r"\btrip\s*#?\s*(\d+)\b", question, re.IGNORECASE)
-            truck_match = re.search(r"\btruck\s+(.+?)(?=\s+(?:trip|driver|status|from|to|with)\b|[?.!,]|$)", question, re.IGNORECASE)
+            truck_match = re.search(r"\b(?:truck\s+number|registration(?:\s+number)?|vehicle|truck)\s+(.+?)(?=\s+(?:trip|driver|status|from|to|with|on|for|and)\b|[?.!,]|$)", question, re.IGNORECASE)
             filters = []
             filter_params = []
             if trip_id_match:
@@ -214,7 +214,7 @@ def _query_records(state: AssistantState) -> AssistantState:
             scope, params = _owner_scope("trips", "owner_user_id", state)
             question = state.get("routing_question", state.get("question", ""))
             trip_id_match = re.search(r"\btrip\s*#?\s*(\d+)\b", question, re.IGNORECASE)
-            truck_match = re.search(r"\btruck\s+(.+?)(?=\s+(?:trip|driver|status|from|to|with)\b|[?.!,]|$)", question, re.IGNORECASE)
+            truck_match = re.search(r"\b(?:truck\s+number|registration(?:\s+number)?|vehicle|truck)\s+(.+?)(?=\s+(?:trip|driver|status|from|to|with|on|for|and)\b|[?.!,]|$)", question, re.IGNORECASE)
             filters = []
             filter_params = []
             if trip_id_match:
@@ -245,7 +245,7 @@ def _query_records(state: AssistantState) -> AssistantState:
             scope, params = _owner_scope("trips", "owner_user_id", state)
             question = state.get("routing_question", state.get("question", ""))
             trip_id_match = re.search(r"\btrip\s*#?\s*(\d+)\b", question, re.IGNORECASE)
-            truck_match = re.search(r"\btruck\s+(.+?)(?=\s+(?:trip|driver|status|from|to|with)\b|[?.!,]|$)", question, re.IGNORECASE)
+            truck_match = re.search(r"\b(?:truck\s+number|registration(?:\s+number)?|vehicle|truck)\s+(.+?)(?=\s+(?:trip|driver|status|from|to|with|on|for|and)\b|[?.!,]|$)", question, re.IGNORECASE)
             filters = []
             filter_params = []
             if trip_id_match:
@@ -285,7 +285,7 @@ def _query_records(state: AssistantState) -> AssistantState:
                 "I can help with read-only summaries. Try asking:\n"
                 "• Show my latest trips\n• Summarize expenses or pending reviews\n"
                 "• How much payment has been recorded?\n• Summarize maintenance costs\n\n"
-                "I won't create, edit, approve, delete, or pay for anything from chat."
+                "For actions such as scheduling a trip or recording a received payment, I show a preview first and require an administrator to confirm it."
             )
         return {"answer": answer}
     finally:
@@ -297,7 +297,7 @@ def _help(state: AssistantState) -> AssistantState:
         "answer": (
             "I can summarize trips, expenses, payments, and maintenance records that your account "
             "is allowed to see. Try: “Show my latest trips” or “Summarize expenses”. "
-            "For security, I only answer supported read-only questions here."
+            "For actions such as scheduling a trip or recording a received payment, I show a preview first and require an administrator to confirm it."
         )
     }
 
