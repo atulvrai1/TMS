@@ -6,7 +6,7 @@ import os
 import re
 from typing import TypedDict
 
-from flask import Blueprint, jsonify, render_template, request, session
+from flask import Blueprint, current_app, jsonify, render_template, request, session
 from langgraph.graph import END, START, StateGraph
 
 from controller.access_controller import SUPER_ADMIN_EMAIL, access_required
@@ -66,8 +66,7 @@ def _classify(state: AssistantState) -> AssistantState:
             if candidate in INTENTS:
                 intent = candidate
         except Exception:
-            # The read-only assistant must remain available when the provider is down.
-            pass
+            current_app.logger.exception("FleetFlow assistant intent classification failed; using fallback intent")
     return {"intent": intent}
 
 
@@ -94,10 +93,7 @@ def _query_records(state: AssistantState) -> AssistantState:
     conn = get_db()
     try:
         if intent == "trips":
-            if state["role"] != "Admin" and state["email"].lower() != SUPER_ADMIN_EMAIL.lower():
-                scope, params = _owner_scope("trips", "owner_user_id", state)
-            else:
-                scope, params = _owner_scope("trips", "owner_user_id", state)
+            scope, params = _owner_scope("trips", "owner_user_id", state)
             rows = conn.execute(
                 "SELECT trips.trip_id, trips.route_from, trips.route_to, trips.start_date, "
                 "trips.end_date, trips.status, trucks.registration_number, drivers.name AS driver "
@@ -116,10 +112,7 @@ def _query_records(state: AssistantState) -> AssistantState:
                 ]
                 answer = "Here are the latest trips you can access:\n" + "\n".join(lines)
         elif intent == "expenses":
-            if state["role"] == "Admin" or state["email"].lower() == SUPER_ADMIN_EMAIL.lower():
-                scope, params = _owner_scope("trips", "owner_user_id", state)
-            else:
-                scope, params = _owner_scope("trips", "owner_user_id", state)
+            scope, params = _owner_scope("trips", "owner_user_id", state)
             rows = conn.execute(
                 "SELECT COUNT(*) AS count, COALESCE(SUM(CASE WHEN expenses.status != 'Rejected' "
                 "THEN expenses.amount ELSE 0 END), 0) AS total, "
@@ -234,9 +227,13 @@ def ask_fleetflow_assistant():
     }
     try:
         result = assistant_graph.invoke(state)
-        return jsonify(answer=result.get("answer", "I couldn't prepare an answer.")), 200
+        answer = result.get("answer")
+        if not isinstance(answer, str) or not answer.strip():
+            current_app.logger.error("FleetFlow assistant graph returned an empty answer")
+            return jsonify(error="The assistant returned an empty response. Please try again."), 503
+        return jsonify(answer=answer), 200
     except Exception:
-        # Avoid returning database/provider internals to the browser.
+        current_app.logger.exception("FleetFlow assistant request failed")
         return jsonify(error="The assistant couldn't answer right now. Please try again later."), 503
 
 
