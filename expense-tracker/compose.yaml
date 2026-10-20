@@ -35,7 +35,7 @@ services:
       FAST2SMS_SENDER_ID: ${FAST2SMS_SENDER_ID:-}
       FAST2SMS_ENTITY_ID: ${FAST2SMS_ENTITY_ID:-}
       FAST2SMS_TEMPLATE_ID: ${FAST2SMS_TEMPLATE_ID:-}
-      FAST2SMS_MESSAGE_TEMPLATE: ${FAST2SMS_MESSAGE_TEMPLATE:-FleetFlow alert: {document} for {vehicle}. Please check and renew the compliance document.}
+      FAST2SMS_MESSAGE_TEMPLATE: ${FAST2SMS_MESSAGE_TEMPLATE:-}
     volumes:
       - fleetflow_data:/data
       - fleetflow_uploads:/app/uploads
