@@ -6,7 +6,10 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from flask import Flask, session
 
-from controller.ai_assistant import (\n    _detect_intent, _format_answer_for_user, _parse_payment_prompt,\n    _parse_trip_prompt, _validate_graph_answer, assistant_graph,\n)
+from controller.ai_assistant import (
+    _detect_intent, _format_answer_for_user, _parse_payment_prompt,
+    _parse_trip_prompt, _validate_graph_answer, assistant_graph,
+)
 
 
 def test_intent_router_recognizes_trip_questions():
