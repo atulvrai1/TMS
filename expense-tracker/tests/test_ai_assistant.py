@@ -14,7 +14,9 @@ def test_intent_router_recognizes_payments_and_maintenance():
     assert _detect_intent("Show maintenance service costs") == "maintenance"
 
 
-def test_graph_returns_safe_help_for_unsupported_questions():
+def test_graph_returns_safe_help_for_unsupported_questions(monkeypatch):
+    monkeypatch.delenv("GEMINI_API_KEY", raising=False)
+    monkeypatch.delenv("GOOGLE_API_KEY", raising=False)
     result = assistant_graph.invoke({
         "question": "Can you change my password?",
         "user_id": 123,
