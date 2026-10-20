@@ -29,7 +29,7 @@ Examples:
 - "service kab hui", "gaadi repair" -> maintenance
 - greetings, app how-to questions, unrelated or unclear requests -> help
 
-Choose payments for received-payment, payment-history, paid, balance, due, outstanding, or remaining-amount questions, especially when a trip is named. Do not route a due-amount question to trip details only.
+Choose payments for received-payment, payment-history, paid, balance, due, outstanding, or remaining-amount questions, especially when a trip is named. Do not route a due-amount question to trip details only.\n\nTrip completion requests such as “complete trip 4”, “trip4 complete kr do”, “finish that trip”, or “trip khatam kar do” are write actions, not read-only trip-detail questions. The application must resolve the exact trip, enforce administrator permissions, show the current status and route, and require explicit confirmation before changing its status. Never claim completion until the database confirms the update.
 
 ## help
 
