@@ -198,6 +198,7 @@ assistant_graph = _build_graph()
 @access_required
 def assistant_page():
     """Render the dedicated, signed-in FleetFlow Assistant workspace."""
+    session.setdefault("csrf_token", __import__("secrets").token_urlsafe(32))
     return render_template("assistant.html", block_content="dashboard")
 
 
