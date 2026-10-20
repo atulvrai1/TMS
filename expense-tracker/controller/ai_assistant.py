@@ -256,6 +256,7 @@ def _parse_trip_prompt(question):
     )
     route_from = route_match.group(1).strip(" ,.") if route_match else ""
     route_to = route_match.group(2).strip(" ,.") if route_match else ""
+    route_to = re.sub(r"\\s+(?:day after tomorrow|tomorrow|today|20\\d{2}-\\d{2}-\\d{2})$", "", route_to, flags=re.IGNORECASE).strip(" ,.")
     date_value = None
     iso_match = re.search(r"\\b(20\\d{2}-\\d{2}-\\d{2})\\b", text)
     lowered = text.lower()
