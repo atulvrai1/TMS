@@ -150,7 +150,8 @@
   const send = document.getElementById('ff-chat-send');
   const messages = document.getElementById('ff-chat-messages');
   const newChat = document.getElementById('ff-new-chat');
-  const csrfToken = {{ session.get('csrf_token', '')|tojson }};
+  let csrfToken = {{ session.get('csrf_token', '')|tojson }};
+  const csrfUrl = {{ url_for("fleetflow_assistant.assistant_csrf_token")|tojson }};
   const askUrl = {{ url_for("fleetflow_assistant.ask_fleetflow_assistant")|tojson }};
   const tripDraftUrl = {{ url_for("fleetflow_assistant.draft_trip_from_assistant")|tojson }};
   const tripConfirmUrl = {{ url_for("fleetflow_assistant.confirm_assistant_trip")|tojson }};
@@ -652,6 +653,16 @@
       const isTruckCreate = pendingTruckCreation || (/\b(add|create|register|new|naya|nayi|jodo|jodna)\b/i.test(question) && /\b(truck|lorry|gaadi|gadi|vehicle)\b/i.test(question));
       const isPaymentRecord = /\b(got|received|collected|mila|mili|mile|jama|payment|record|add|log)\b/i.test(question) && (/(?:₹\s*\d[\d,]*(?:\.\d{1,2})?|\b\d[\d,]*(?:\.\d{1,2})?\b|\b(payment|amount|rupees|rs\.?|inr|paise|paisa)\b)/i.test(question)) && !/\b(show|list|how much|summary|total|kitna mila|kitna received)\b/i.test(question);
       const targetUrl = isTripComplete ? tripCompleteDraftUrl : (isTripCreate ? tripDraftUrl : (isTruckCreate ? truckDraftUrl : (isPaymentRecord ? paymentDraftUrl : askUrl)));
+      // Refresh the token for the current signed-in session. This recovers when a tab
+      // was left open across login/session renewal and avoids stale-token 403 errors.
+      const csrfResponse = await fetch(csrfUrl, {credentials: 'same-origin', headers: {'Accept': 'application/json'}, cache: 'no-store'});
+      let csrfData;
+      try { csrfData = await csrfResponse.json(); }
+      catch (_) { throw new Error('Your session may have expired. Refresh the page and sign in again.'); }
+      if (!csrfResponse.ok || !csrfData.csrf_token) {
+        throw new Error(csrfData.error || 'Your session may have expired. Refresh the page and sign in again.');
+      }
+      csrfToken = csrfData.csrf_token;
       const response = await fetch(targetUrl, {
         method: 'POST',
         credentials: 'same-origin',
