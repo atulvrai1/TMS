@@ -157,6 +157,7 @@
   const tripConfirmUrl = {{ url_for("fleetflow_assistant.confirm_assistant_trip")|tojson }};
   const tripCompleteDraftUrl = {{ url_for("fleetflow_assistant.draft_trip_completion_from_assistant")|tojson }};
   const tripCompleteConfirmUrl = {{ url_for("fleetflow_assistant.confirm_trip_completion_from_assistant")|tojson }};
+  const tripCompleteCancelUrl = {{ url_for("fleetflow_assistant.cancel_trip_completion_from_assistant")|tojson }};
   const paymentDraftUrl = {{ url_for("fleetflow_assistant.draft_payment_from_assistant")|tojson }};
   const paymentConfirmUrl = {{ url_for("fleetflow_assistant.confirm_assistant_payment")|tojson }};
   const truckDraftUrl = {{ url_for("fleetflow_assistant.draft_truck_from_assistant")|tojson }};
@@ -192,14 +193,64 @@
       const tbody=document.createElement('tbody');
       tripRows.forEach(row=>{const tr=document.createElement('tr');['#'+row.id,row.from+' → '+row.to,row.date,row.status,row.truck,row.driver].forEach(value=>{const td=document.createElement('td');td.textContent=value;tr.appendChild(td);});tbody.appendChild(tr);});
       table.appendChild(tbody);wrapper.appendChild(table);result.appendChild(wrapper);
-      const extraLines = lines.filter(line => line.trim() && !tripPattern.test(line) && !/^trip details:\s*$/i.test(line));
+      const money = value => '₹' + Number(String(value || '0').replace(/[₹,\s]/g, '')).toLocaleString('en-IN', {minimumFractionDigits:2, maximumFractionDigits:2});
+      const makeTable = (headingText, headers, dataRows, totalLabel, totalValue) => {
+        const section = document.createElement('section');
+        section.style.marginTop = '14px';
+        const heading = document.createElement('h3'); heading.className = 'ff-payment-title'; heading.textContent = headingText; section.appendChild(heading);
+        const tableWrap = document.createElement('div'); tableWrap.className = 'ff-payment-table-wrap';
+        const detailTable = document.createElement('table'); detailTable.className = 'ff-payment-table';
+        const head = document.createElement('thead'), hr = document.createElement('tr');
+        headers.forEach(label => { const th=document.createElement('th'); th.scope='col'; th.textContent=label; hr.appendChild(th); });
+        head.appendChild(hr); detailTable.appendChild(head);
+        const body = document.createElement('tbody');
+        dataRows.forEach(values => { const tr=document.createElement('tr'); values.forEach((value,index) => { const td=document.createElement('td'); td.textContent=value; if (headers[index] && /amount|freight|received|due|expenses|total/i.test(headers[index])) td.className='ff-payment-amount'; tr.appendChild(td); }); body.appendChild(tr); });
+        detailTable.appendChild(body);
+        if (totalLabel) {
+          const foot=document.createElement('tfoot'), tr=document.createElement('tr'), label=document.createElement('td'), value=document.createElement('td');
+          label.colSpan=Math.max(1, headers.length-1); label.className='ff-payment-total-label'; label.textContent=totalLabel;
+          value.colSpan=1; value.className='ff-payment-total-amount'; value.textContent=totalValue;
+          tr.append(label,value); foot.appendChild(tr); detailTable.appendChild(foot);
+        }
+        tableWrap.appendChild(detailTable); section.appendChild(tableWrap); result.appendChild(section);
+      };
+      const financialLine = lines.find(line => /Financial summary:/i.test(line));
+      const financialMatch = financialLine && financialLine.match(/Freight\s*₹\s*([\d,]+(?:\.\d{1,2})?).*?Received\s*₹\s*([\d,]+(?:\.\d{1,2})?).*?(?:Remaining due|Due)\s*₹\s*([\d,]+(?:\.\d{1,2})?).*?Expenses[^₹]*₹\s*([\d,]+(?:\.\d{1,2})?)/i);
+      if (financialMatch) {
+        makeTable('Trip financial summary', ['Freight charge','Payment received','Due','Expenses'],
+          [[money(financialMatch[1]), money(financialMatch[2]), money(financialMatch[3]), money(financialMatch[4])]]);
+      }
+      const paymentStart = lines.findIndex(line => /^\s*Received payments:\s*$/i.test(line));
+      const expenseStart = lines.findIndex(line => /^\s*Expenses:\s*$/i.test(line));
+      const paymentEnd = expenseStart >= 0 ? expenseStart : lines.length;
+      const paymentLines = lines.slice(paymentStart >= 0 ? paymentStart + 1 : lines.length, paymentEnd);
+      const detailPayments = paymentLines.map(line => {
+        const m=line.match(/^\s*Payment\s+#?(\d+)\s*\|\s*₹\s*([\d,]+(?:\.\d{1,2})?)\s*\|\s*(\d{4}-\d{2}-\d{2})(?:\s*\|\s*(.*))?\s*$/i);
+        return m ? {id:m[1],amount:Number(m[2].replace(/,/g,'')),date:m[3],reference:(m[4]||'—').trim()} : null;
+      }).filter(Boolean);
+      if (detailPayments.length) {
+        const total=detailPayments.reduce((sum,p)=>sum+p.amount,0);
+        makeTable('Received payments', ['Payment ID','Amount received','Date','Reference'],
+          detailPayments.map(p=>['#'+p.id,money(p.amount),p.date,p.reference]), 'Total received · '+detailPayments.length+' record(s)', money(total));
+      }
+      const detailExpenseLines = lines.slice(expenseStart >= 0 ? expenseStart + 1 : lines.length);
+      const detailExpenses = detailExpenseLines.map(line => {
+        const m=line.match(/^\s*Expense\s+#?(\d+)\s*\|\s*([^|]+)\s*\|\s*₹\s*([\d,]+(?:\.\d{1,2})?)\s*\|\s*(\d{4}-\d{2}-\d{2})\s*\|\s*([^|]+)(?:\s*\|\s*(.*))?\s*$/i);
+        return m ? {id:m[1],category:m[2].trim(),amount:Number(m[3].replace(/,/g,'')),date:m[4],status:m[5].trim(),description:(m[6]||'—').trim()} : null;
+      }).filter(Boolean);
+      if (detailExpenses.length) {
+        const total=detailExpenses.filter(e=>e.status.toLowerCase()!=='rejected').reduce((sum,e)=>sum+e.amount,0);
+        makeTable('Trip expenses', ['Expense ID','Category','Amount','Date','Status','Description'],
+          detailExpenses.map(e=>['#'+e.id,e.category,money(e.amount),e.date,e.status,e.description]), 'Total expenses (excluding rejected)', money(total));
+      }
+      const consumed = line => tripPattern.test(line) || /^trip details:\s*$/i.test(line) || /Financial summary:/i.test(line) ||
+        /^\s*(Received payments|Expenses):\s*$/i.test(line) ||
+        /^\s*Payment\s+#?\d+\s*\|\s*₹/i.test(line) || /^\s*Expense\s+#?\d+\s*\|/i.test(line) ||
+        /No payments recorded|No expenses recorded/i.test(line);
+      const extraLines = lines.filter(line => line.trim() && !consumed(line));
       if (extraLines.length) {
-        const financialDetails = document.createElement('div');
-        financialDetails.className = 'ff-trip-financial-details';
-        financialDetails.style.whiteSpace = 'pre-wrap';
-        financialDetails.style.marginTop = '12px';
-        financialDetails.textContent = extraLines.join('\n');
-        result.appendChild(financialDetails);
+        const note = document.createElement('p'); note.className='ff-payment-footnote';
+        note.textContent=extraLines.join(' '); result.appendChild(note);
       }
       bubble.replaceChildren(result);return;
     }
@@ -435,20 +486,50 @@
   }
 
   function showTripCompletionPreview(draft) {
-    const item = addMessage('assistant', 'Trip mil gayi. Status update karne se pehle details confirm karein:');
+    const item = addMessage('assistant', 'Trip mil gayi. Status update karne se pehle financial details bhi check karein:');
     const card = document.createElement('div'); card.className = 'ff-trip-preview';
-    const title = document.createElement('strong'); title.textContent = 'Complete trip · confirmation required'; card.appendChild(title);
+    const title = document.createElement('strong'); title.textContent = 'Complete trip · review before confirming'; card.appendChild(title);
     const list = document.createElement('dl');
+    const fmt = value => '₹' + Number(value || 0).toLocaleString('en-IN', {minimumFractionDigits:2, maximumFractionDigits:2});
     [['Trip', '#' + draft.trip_id], ['Route', draft.route_from + ' → ' + draft.route_to],
      ['Date', draft.start_date || 'Not recorded'], ['Truck', draft.truck + (draft.truck_model ? ' · ' + draft.truck_model : '')],
      ['Driver', draft.driver], ['Current status', draft.status], ['New status', 'Completed']].forEach(([label,value]) => {
       const dt=document.createElement('dt'); dt.textContent=label; const dd=document.createElement('dd'); dd.textContent=value; list.append(dt,dd);
     });
+    const financialWrap=document.createElement('div'); financialWrap.className='ff-payment-table-wrap'; financialWrap.style.margin='0 0 1rem';
+    const financialTable=document.createElement('table'); financialTable.className='ff-payment-table';
+    const head=document.createElement('thead'), hr=document.createElement('tr');
+    ['Freight charge','Payment received','Due','Expenses'].forEach(label=>{const th=document.createElement('th');th.scope='col';th.textContent=label;hr.appendChild(th);});
+    head.appendChild(hr);financialTable.appendChild(head);
+    const body=document.createElement('tbody'), tr=document.createElement('tr');
+    [fmt(draft.freight_amount),fmt(draft.amount_received),fmt(draft.amount_due),fmt(draft.amount_expenses)].forEach(value=>{const td=document.createElement('td');td.className='ff-payment-amount';td.textContent=value;tr.appendChild(td);});
+    body.appendChild(tr);financialTable.appendChild(body);financialWrap.appendChild(financialTable);
     const confirm=document.createElement('button'); confirm.type='button'; confirm.className='ff-trip-confirm';
     confirm.textContent='Confirm trip completion'; confirm.addEventListener('click',()=>confirmTripCompletion(confirm));
+    const cancel=document.createElement('button'); cancel.type='button'; cancel.className='ff-trip-cancel';
+    cancel.textContent='Cancel'; cancel.style.marginLeft='.55rem'; cancel.style.border='1px solid #d9deea'; cancel.style.borderRadius='9px';
+    cancel.style.background='#fff'; cancel.style.color='#38415a'; cancel.style.padding='.65rem .9rem'; cancel.style.font='inherit'; cancel.style.fontSize='.82rem'; cancel.style.fontWeight='700'; cancel.style.cursor='pointer';
+    cancel.addEventListener('click',()=>cancelTripCompletion(cancel,card));
     const note=document.createElement('p'); note.className='ff-trip-note';
-    note.textContent='This updates the trip status. The truck becomes Available only if it has no other active trip.';
-    card.append(list,confirm,note); item.bubble.appendChild(card); scrollToLatest();
+    note.textContent='Only confirm if the freight, received payment, due and expenses look correct. Cancel leaves the trip unchanged.';
+    card.append(list,financialWrap,confirm,cancel,note); item.bubble.appendChild(card); scrollToLatest();
+  }
+
+  async function cancelTripCompletion(button, card) {
+    if (busy) return;
+    busy=true; button.disabled=true; button.textContent='Cancelling…';
+    try {
+      const response=await fetch(tripCompleteCancelUrl,{method:'POST',credentials:'same-origin',
+        headers:{'Content-Type':'application/json','Accept':'application/json','X-CSRFToken':csrfToken},body:JSON.stringify({})});
+      const data=await response.json();
+      if(!response.ok) throw new Error(data.error || 'Could not cancel the preview.');
+      card.replaceChildren();
+      const message=document.createElement('p'); message.className='ff-trip-note'; message.textContent=data.message || 'Completion cancelled. No changes were made.';
+      card.appendChild(message);
+    } catch(error) {
+      button.disabled=false; button.textContent='Cancel';
+      addMessage('assistant',error.message || 'Could not cancel the completion preview.',{error:true});
+    } finally { busy=false; scrollToLatest(); }
   }
 
   async function confirmTripCompletion(button) {
