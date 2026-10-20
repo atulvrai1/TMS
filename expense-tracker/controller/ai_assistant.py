@@ -115,7 +115,8 @@ def _detect_intent(question: str) -> str:
 
 def _classify(state: AssistantState) -> AssistantState:
     """Use Gemini for intent routing when configured; otherwise use deterministic routing."""
-    intent = _detect_intent(state["question"])
+    routed_question = state.get("routing_question", state["question"])
+    intent = _detect_intent(routed_question)
     api_key = os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")
     if api_key:
         try:
@@ -171,7 +172,7 @@ def _query_records(state: AssistantState) -> AssistantState:
     try:
         if intent == "trips":
             scope, params = _owner_scope("trips", "owner_user_id", state)
-            question = state.get("question", "")
+            question = state.get("routing_question", state.get("question", ""))
             trip_id_match = re.search(r"\btrip\s*#?\s*(\d+)\b", question, re.IGNORECASE)
             truck_match = re.search(r"\btruck\s+(.+?)(?=\s+(?:trip|driver|status|from|to|with)\b|[?.!,]|$)", question, re.IGNORECASE)
             filters = []
@@ -338,6 +339,24 @@ def ask_fleetflow_assistant():
             state["conversation_history"] = [
                 {"role": row["role"], "content": row["content"]} for row in reversed(history)
             ]
+            routing_question = question.strip()
+            if history:
+                previous_user = next(
+                    (row["content"] for row in reversed(history) if row["role"] == "user"),
+                    ""
+                )
+                is_follow_up = bool(re.match(
+                    r"^(and\b|also\b|what about\b|how about\b|what about it\b|"
+                    r"how much for it\b|for that\b|that one\b|it\??$)",
+                    routing_question, re.IGNORECASE
+                ))
+                has_entity = bool(re.search(
+                    r"\btrip\s*#?\s*\d+\b|\btruck\s+\S+",
+                    routing_question, re.IGNORECASE
+                ))
+                if is_follow_up and previous_user and not has_entity:
+                    routing_question = previous_user + " Follow-up question: " + routing_question
+            state["routing_question"] = routing_question
         finally:
             conn.close()
         result = assistant_graph.invoke(state)
