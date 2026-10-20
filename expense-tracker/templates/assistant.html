@@ -234,7 +234,7 @@
     input.value = '';
     resizeInput();
     try {
-      const isTripCreate = /\b(create|schedule|book|dispatch)\b/i.test(question) && /\btrip\b/i.test(question);
+      const isTripCreate = /\b(create|make|plan|schedule|book|dispatch)\b/i.test(question) && /\btrip\b/i.test(question);
       const response = await fetch(isTripCreate ? tripDraftUrl : askUrl, {
         method: 'POST',
         credentials: 'same-origin',
