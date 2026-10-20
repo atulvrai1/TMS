@@ -23,7 +23,7 @@ def test_intent_router_recognizes_pending_trip_count_in_hinglish():
 def test_vague_details_follow_up_uses_single_trip_from_previous_result():
     history = [
         {"role": "user", "content": "Abhi kitne trips pending hain?"},
-        {"role": "assistant", "content": "| Trip ID | Route | Date | Status |\\n| --- | --- | --- | --- |\\n| #7 | Bhopal → Indore | 2026-10-21 | Scheduled |\\nAbhi 1 trip pending hai."},
+        {"role": "assistant", "content": "\n".join(["| Trip ID | Route | Date | Status |", "| --- | --- | --- | --- |", "| #7 | Bhopal → Indore | 2026-10-21 | Scheduled |", "Abhi 1 trip pending hai."])},
     ]
     assert _resolve_contextual_question("give me all details", history) == "Trip #7 details"
 
