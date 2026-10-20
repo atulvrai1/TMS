@@ -26,6 +26,8 @@ def test_vague_details_follow_up_uses_single_trip_from_previous_result():
         {"role": "assistant", "content": "\n".join(["| Trip ID | Route | Date | Status |", "| --- | --- | --- | --- |", "| #7 | Bhopal → Indore | 2026-10-21 | Scheduled |", "Abhi 1 trip pending hai."])},
     ]
     assert _resolve_contextual_question("give me all details", history) == "Trip #7 details"
+    assert _resolve_contextual_question("give me complete details", history) == "Trip #7 details"
+    assert _resolve_contextual_question("show complete details", history) == "Trip #7 details"
 
 
 def test_intent_router_recognizes_expense_questions():
