@@ -580,8 +580,8 @@ def _parse_trip_prompt(question):
         text, re.IGNORECASE
     )
     received_match = re.search(
-        rf"\b(?:receiving\s+amount|received\s+amount|amount\s+received|payment\s+received|"
-        rf"received|receiving|advance(?:\s+amount)?|collection(?:\s+amount)?)\s*"
+        rf"\b(?:receiving\s+(?:amou?nt|ammount)|received\s+(?:amou?nt|ammount)|(?:amou?nt|ammount)\s+received|payment\s+received|"
+        rf"received|receiving|advance(?:\s+(?:amou?nt|ammount))?|collection(?:\s+(?:amou?nt|ammount))?)\s*"
         rf"(?:is|of|=|:)?\s*(?:₹|rs\.?|inr)?\s*({amount_token})",
         text, re.IGNORECASE
     )
@@ -979,8 +979,13 @@ def confirm_assistant_trip():
             return jsonify(error="This trip preview expired. Please send the request again."), 400
         trip_date = datetime.strptime(draft["start_date"], "%Y-%m-%d").date()
         freight = Decimal(draft["freight_amount"]).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+        received_amount = Decimal(draft.get("received_amount", "0") or "0").quantize(
+            Decimal("0.01"), rounding=ROUND_HALF_UP
+        )
         if (not draft["route_from"] or not draft["route_to"] or len(draft["route_from"]) > 120
-                or len(draft["route_to"]) > 120 or not Decimal("0") < freight <= Decimal("100000000")):
+                or len(draft["route_to"]) > 120 or not Decimal("0") < freight <= Decimal("100000000")
+                or not received_amount.is_finite() or received_amount < 0
+                or received_amount > Decimal("100000000")):
             raise ValueError("Invalid trip draft")
     except (KeyError, ValueError, InvalidOperation):
         session.pop("assistant_trip_draft", None)
