@@ -227,7 +227,7 @@ def _resolve_contextual_question(question: str, history: list) -> str:
 
     # Continue the current topic when a user asks for more details.
     wants_details = bool(re.search(
-        r"^(?:please )?(?:give|show|tell|provide|share) (?:me )?(?:all )?(?:the )?details\b|^(?:all )?details[?.!]*$|^(?:tell me more|more details|full details)[?.!]*$",
+        r"^(?:please )?(?:give|show|tell|provide|share) (?:me )?(?:(?:all|complete|full) )?(?:the )?(?:complete |full )?details\b|^(?:(?:all|complete|full) )?details[?.!]*$|^(?:tell me more|more details)[?.!]*$",
         text, re.I
     ))
     if wants_details:
