@@ -107,51 +107,51 @@ def _resolve_contextual_question(question: str, history: list) -> str:
     text = " ".join((question or "").split())
     if not history or not text:
         return text
-    if re.search(r"\\btrip\\s*#?\\s*\\d+\\b", text, re.I):
+    if re.search(r"\btrip\s*#?\s*\d+\b", text, re.I):
         return text
-    if re.search(r"\\b[A-Z]{1,3}\\s*[- ]?\\d{1,2}\\s*[- ]?[A-Z]{0,3}\\s*[- ]?\\d{1,4}\\b", text, re.I):
+    if re.search(r"\b[A-Z]{1,3}\s*[- ]?\d{1,2}\s*[- ]?[A-Z]{0,3}\s*[- ]?\d{1,4}\b", text, re.I):
         return text
-    if re.search(r"\\b(?:truck|vehicle|registration)\\s+(?!number\\b|details?\\b|status\\b)[\\w-]+", text, re.I):
+    if re.search(r"\b(?:truck|vehicle|registration)\s+(?!number\b|details?\b|status\b|that\b|this\b|same\b)[\w-]+", text, re.I):
         return text
 
     follow_up = bool(re.search(
-        r"\\b(it|that|those|this|there|same|them|he|she|that one|that truck|that driver)\\b",
+        r"\b(it|that|those|this|there|same|them|he|she|that one|that truck|that driver)\b",
         text, re.I
-    )) or bool(re.match(r"^(and|also|what about|how about|for|then)\\b", text, re.I))
+    )) or bool(re.match(r"^(and|also|what about|how about|for|then)\b", text, re.I))
     if not follow_up:
         return text
 
     trip_id = truck = driver = None
     for item in reversed(history[-12:]):
         content = str(item.get("content", ""))
-        trip_match = re.search(r"\\btrip\\s*#?\\s*(\\d+)\\b|#(\\d+)\\b", content, re.I)
+        trip_match = re.search(r"\btrip\s*#?\s*(\d+)\b|#(\d+)\b", content, re.I)
         if trip_id is None and trip_match:
             trip_id = next((group for group in trip_match.groups() if group), None)
         reg_match = re.search(
-            r"\\b([A-Z]{1,3}\\s*[- ]?\\d{1,2}\\s*[- ]?[A-Z]{0,3}\\s*[- ]?\\d{1,4})\\b",
+            r"\b([A-Z]{1,3}\s*[- ]?\d{1,2}\s*[- ]?[A-Z]{0,3}\s*[- ]?\d{1,4})\b",
             content, re.I
         )
         if truck is None and reg_match:
-            truck = re.sub(r"\\s+", "", reg_match.group(1)).upper()
+            truck = re.sub(r"\s+", "", reg_match.group(1)).upper()
         truck_match = re.search(
-            r"\\b(?:truck|vehicle|registration(?: number)?)\\s+(?:number\\s+)?([A-Z0-9][A-Z0-9 -]{2,20})",
+            r"\b(?:truck|vehicle|registration(?: number)?)\s+(?:number\s+)?([A-Z0-9][A-Z0-9 -]{2,20})",
             content, re.I
         )
         if truck is None and truck_match:
-            candidate = re.split(r"\\b(?:trip|driver|status|from|to|with|for|and|on)\\b", truck_match.group(1), maxsplit=1, flags=re.I)[0].strip(" .,:;")
+            candidate = re.split(r"\b(?:trip|driver|status|from|to|with|for|and|on)\b", truck_match.group(1), maxsplit=1, flags=re.I)[0].strip(" .,:;")
             if candidate and candidate.lower() not in {"details", "records", "trips", "number"}:
                 truck = candidate
-        driver_match = re.search(r"\\bdriver\\s+(?:named\\s+)?([A-Za-z][A-Za-z .'-]{1,40})", content, re.I)
+        driver_match = re.search(r"\bdriver\s+(?:named\s+)?([A-Za-z][A-Za-z .'-]{1,40})", content, re.I)
         if driver is None and driver_match:
-            candidate = re.split(r"\\b(?:for|on|trip|truck|status|from|to|and)\\b", driver_match.group(1), maxsplit=1, flags=re.I)[0].strip(" .,:;")
+            candidate = re.split(r"\b(?:for|on|trip|truck|status|from|to|and)\b", driver_match.group(1), maxsplit=1, flags=re.I)[0].strip(" .,:;")
             if candidate:
                 driver = candidate
 
-    if trip_id and re.search(r"\\b(it|that|this|there|same|them|that one)\\b", text, re.I):
+    if trip_id and re.search(r"\b(it|that|this|there|same|them|that one)\b", text, re.I):
         return text + f" (context: Trip #{trip_id})"
-    if truck and re.search(r"\\b(that truck|this truck|it|that one|same truck)\\b", text, re.I):
+    if truck and re.search(r"\b(that truck|this truck|it|that one|same truck)\b", text, re.I):
         return text + f" (context: truck {truck})"
-    if driver and re.search(r"\\b(that driver|this driver|he|she|them|that one)\\b", text, re.I):
+    if driver and re.search(r"\b(that driver|this driver|he|she|them|that one)\b", text, re.I):
         return text + f" (context: driver {driver})"
     return text
 
@@ -678,7 +678,7 @@ def draft_payment_from_assistant():
             if not (item["role"] == "user" and item["content"].strip() == question.strip())
         ]
         contextual_question = _resolve_contextual_question(question, usable_history)
-        contextual_trip = re.search(r"\\bTrip\\s*#?\\s*(\\d+)\\b", contextual_question, re.I)
+        contextual_trip = re.search(r"\bTrip\s*#?\s*(\d+)\b", contextual_question, re.I)
         if contextual_trip:
             question = question.rstrip(" .?!") + f" for Trip #{contextual_trip.group(1)}"
             draft, missing = _parse_payment_prompt(question)
