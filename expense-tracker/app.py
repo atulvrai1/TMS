@@ -2396,11 +2396,20 @@ def inject_admin_notification_count():
 def admin_notifications():
     session.setdefault("csrf_token", secrets.token_urlsafe(32))
     conn = get_db()
-    notifications = _load_admin_notifications(conn)
-    conn.close()
+    try:
+        notifications = _load_admin_notifications(conn)
+        sms_settings = conn.execute(
+            "SELECT recipient_mobile, enabled, updated_at FROM compliance_sms_settings WHERE setting_id=1"
+        ).fetchone()
+    finally:
+        conn.close()
     return render_template(
         "admin_notifications.html",
         notifications=notifications,
+        sms_settings=sms_settings,
+        sms_provider_configured=all(os.environ.get(name, "").strip() for name in (
+            "FAST2SMS_API_KEY", "FAST2SMS_SENDER_ID", "FAST2SMS_ENTITY_ID", "FAST2SMS_TEMPLATE_ID"
+        )),
         csrf_token=session["csrf_token"],
         block_content="dashboard"
     )
