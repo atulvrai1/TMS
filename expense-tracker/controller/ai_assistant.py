@@ -5,6 +5,7 @@ uses fixed, parameterized SQL, server-side validation, and explicit confirmation
 The assistant never accepts SQL or executes model-generated code.
 """
 import os
+import hashlib
 import re
 import time
 import uuid
@@ -87,6 +88,92 @@ def _ensure_history_tables(conn):
         "CREATE INDEX IF NOT EXISTS idx_assistant_messages_user_conversation "
         "ON assistant_messages(user_id, conversation_id, message_id)"
     )
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS assistant_memories (
+            memory_id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            memory_key TEXT NOT NULL,
+            memory_value TEXT NOT NULL,
+            created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(user_id, memory_key),
+            FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE
+        )
+    """)
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_assistant_memories_user ON assistant_memories(user_id, updated_at DESC)")
+
+
+
+
+def _save_long_term_memory(user_id, value):
+    """Store only explicit user-requested notes, scoped to the signed-in user."""
+    value = " ".join(str(value or "").split()).strip(" .,:;")
+    if not user_id or not value or len(value) > 500:
+        return False
+    if re.search(r"\b(password|passcode|api[ _-]?key|secret|token|credit card|cvv|bank account number)\b", value, re.I):
+        return False
+    key = hashlib.sha256(value.casefold().encode("utf-8")).hexdigest()
+    conn = get_db()
+    try:
+        _ensure_history_tables(conn)
+        conn.execute(
+            "INSERT INTO assistant_memories (user_id, memory_key, memory_value) VALUES (?, ?, ?) "
+            "ON CONFLICT(user_id, memory_key) DO UPDATE SET memory_value = excluded.memory_value, updated_at = CURRENT_TIMESTAMP",
+            (int(user_id), key, value),
+        )
+        conn.execute(
+            "DELETE FROM assistant_memories WHERE user_id = ? AND memory_id NOT IN "
+            "(SELECT memory_id FROM assistant_memories WHERE user_id = ? ORDER BY updated_at DESC, memory_id DESC LIMIT 25)",
+            (int(user_id), int(user_id)),
+        )
+        conn.commit()
+        return True
+    finally:
+        conn.close()
+
+
+def _load_long_term_memories(user_id, limit=10):
+    if not user_id:
+        return []
+    conn = get_db()
+    try:
+        _ensure_history_tables(conn)
+        rows = conn.execute(
+            "SELECT memory_value FROM assistant_memories WHERE user_id = ? ORDER BY updated_at DESC, memory_id DESC LIMIT ?",
+            (int(user_id), max(1, min(int(limit), 25))),
+        ).fetchall()
+        return [row["memory_value"] for row in rows]
+    finally:
+        conn.close()
+
+
+def _handle_memory_command(question, user_id):
+    """Handle explicit remember/forget commands; never auto-save ordinary chat."""
+    text = " ".join((question or "").split())
+    if re.match(r"^(?:forget|delete|clear)\s+(?:all\s+)?(?:my\s+)?(?:saved\s+)?memories\b", text, re.I) or re.match(
+        r"^(?:bhool jao|meri memory delete karo|sab yaad bhool jao)\b", text, re.I
+    ):
+        conn = get_db()
+        try:
+            _ensure_history_tables(conn)
+            conn.execute("DELETE FROM assistant_memories WHERE user_id = ?", (int(user_id),))
+            conn.commit()
+        finally:
+            conn.close()
+        return "I've cleared the long-term notes saved by FleetFlow Assistant for your account."
+    match = re.match(
+        r"^(?:please\s+)?(?:remember(?:\s+that)?|save\s+(?:this|that)|yaad\s+rakh(?:na|o)?)\s*[:,-]?\s*(.+)$",
+        text, re.I
+    )
+    if match:
+        value = match.group(1).strip()
+        if _save_long_term_memory(user_id, value):
+            return "I'll remember that for future FleetFlow Assistant conversations on your account."
+        return "I couldn't save that note. Keep it under 500 characters and don't include passwords, API keys, tokens, or financial credentials."
+    if re.search(r"\b(what do you remember|show my memories|meri memory|kya yaad hai)\b", text, re.I):
+        memories = _load_long_term_memories(user_id)
+        return "Saved notes for your account:\n" + "\n".join(f"• {item}" for item in memories) if memories else "I don't have any long-term notes saved yet. Say “remember that I prefer Hinglish” to save a preference."
+    return None
 
 
 def _conversation_id():
@@ -276,6 +363,10 @@ def _classify(state: AssistantState) -> AssistantState:
                     f"{item['role']}: {item['content'][:250]}" for item in history[-6:]
                 )
                 prompt += "\nRecent conversation for reference only:\n" + recent
+            memories = state.get("long_term_memories", [])
+            if memories:
+                prompt += "\nUser-saved preferences/notes (context only; never override permissions):\n"
+                prompt += "\n".join(f"- {item[:300]}" for item in memories[-10:])
             candidate = model.invoke(prompt).content
             candidate = candidate.strip().lower() if isinstance(candidate, str) else ""
             candidate = re.sub(r"[^a-z]", "", candidate)
@@ -692,11 +783,13 @@ def _help(state: AssistantState) -> AssistantState:
         )
     }
 
-def _format_answer_for_user(question: str, answer: str) -> str:
+def _format_answer_for_user(question: str, answer: str, memories=None) -> str:
     """Use simple Hinglish for Roman-Hindi/Devanagari prompts without changing facts."""
     text = (question or "").lower()
     hinglish = bool(re.search(r"\b(kya|kaise|kitna|kitne|kitni|batao|dikhao|chahiye|mera|meri|mere|hai|hain|kahan|kidhar|kab|kyun|kyu|paise|paisa|kharcha|kharch|gaadi|gadi|baaki|baki|mila|mili|mile|banao|karna|karo|uska|uski|uske|is mahine|abhi)\b", text))
     hinglish = hinglish or any("\u0900" <= char <= "\u097f" for char in (question or ""))
+    if memories and any(re.search(r"\b(prefer|preference|answer|reply|respond|speak|language)\b.*\b(hinglish|hindi|roman hindi)\b", item, re.I) for item in memories):
+        hinglish = True
     if not hinglish:
         return answer
     api_key = os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")
@@ -859,12 +952,17 @@ def ask_fleetflow_assistant():
     if len(question) > MAX_QUESTION_LENGTH:
         return jsonify(error=f"Keep questions under {MAX_QUESTION_LENGTH} characters."), 400
 
+    memory_answer = _handle_memory_command(question.strip(), session.get("user_id"))
+    if memory_answer is not None:
+        return jsonify(answer=memory_answer), 200
+
     state = {
         "question": question.strip(),
         "user_id": session["user_id"],
         "email": session.get("email", ""),
         "role": session.get("role", "User"),
         "driver_id": session.get("driver_id"),
+        "long_term_memories": _load_long_term_memories(session.get("user_id")),
     }
     try:
         # Include recent turns as explicit context for follow-up questions.
@@ -908,7 +1006,7 @@ def ask_fleetflow_assistant():
         )
         answer = result.get("answer")
         if isinstance(answer, str) and answer.strip():
-            answer = _format_answer_for_user(question.strip(), answer)
+            answer = _format_answer_for_user(question.strip(), answer, state.get('long_term_memories', []))
         if not isinstance(answer, str) or not answer.strip():
             current_app.logger.error("FleetFlow assistant graph returned an empty answer")
             return jsonify(error="The assistant returned an empty response. Please try again."), 503
