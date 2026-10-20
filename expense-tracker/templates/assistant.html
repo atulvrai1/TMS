@@ -191,7 +191,17 @@
       thead.appendChild(header);table.appendChild(thead);
       const tbody=document.createElement('tbody');
       tripRows.forEach(row=>{const tr=document.createElement('tr');['#'+row.id,row.from+' → '+row.to,row.date,row.status,row.truck,row.driver].forEach(value=>{const td=document.createElement('td');td.textContent=value;tr.appendChild(td);});tbody.appendChild(tr);});
-      table.appendChild(tbody);wrapper.appendChild(table);result.appendChild(wrapper);bubble.replaceChildren(result);return;
+      table.appendChild(tbody);wrapper.appendChild(table);result.appendChild(wrapper);
+      const extraLines = lines.filter(line => line.trim() && !tripPattern.test(line) && !/^trip details:\s*$/i.test(line));
+      if (extraLines.length) {
+        const financialDetails = document.createElement('div');
+        financialDetails.className = 'ff-trip-financial-details';
+        financialDetails.style.whiteSpace = 'pre-wrap';
+        financialDetails.style.marginTop = '12px';
+        financialDetails.textContent = extraLines.join('\n');
+        result.appendChild(financialDetails);
+      }
+      bubble.replaceChildren(result);return;
     }
     const driverPattern = /^\s*Driver\s+#?(\d+)\s*\|\s*([^|]+)\s*\|\s*Status\s+([^|]+)\s*\|\s*License\s+([^|]+)\s*\|\s*Contact\s+(.+)$/i;
     const driverRows = lines.map(line=>{const m=line.match(driverPattern);return m?{id:m[1],name:m[2].trim(),status:m[3].trim(),license:m[4].trim(),contact:m[5].trim()}:null;}).filter(Boolean);
