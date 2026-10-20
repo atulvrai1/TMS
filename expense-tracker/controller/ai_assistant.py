@@ -227,7 +227,7 @@ def _resolve_contextual_question(question: str, history: list) -> str:
 
     # Continue the current topic when a user asks for more details.
     wants_details = bool(re.search(
-        r"^(?:please )?(?:give|show|tell|provide|share) (?:me )?(?:all )?(?:the )?details\\b|^(?:all )?details[?.!]*$|^(?:tell me more|more details|full details)[?.!]*$",
+        r"^(?:please )?(?:give|show|tell|provide|share) (?:me )?(?:all )?(?:the )?details\b|^(?:all )?details[?.!]*$|^(?:tell me more|more details|full details)[?.!]*$",
         text, re.I
     ))
     if wants_details:
@@ -235,19 +235,19 @@ def _resolve_contextual_question(question: str, history: list) -> str:
             if item.get("role") != "assistant":
                 continue
             previous_answer = str(item.get("content", ""))
-            if not re.search(r"\\b(?:trip|trips|pending|scheduled|in progress)\\b", previous_answer, re.I):
+            if not re.search(r"\b(?:trip|trips|pending|scheduled|in progress)\b", previous_answer, re.I):
                 continue
             trip_ids = []
             for line in previous_answer.splitlines():
-                match = re.match(r"^\\s*\\|\\s*#?(\\d+)\\s*\\|", line)
+                match = re.match(r"^\s*\|\s*#?(\d+)\s*\|", line)
                 if not match:
-                    match = re.match(r"^\\s*#(\\d+)\\s+", line)
+                    match = re.match(r"^\s*#(\d+)\s+", line)
                 if match:
                     trip_ids.append(match.group(1))
             trip_ids = list(dict.fromkeys(trip_ids))
             if len(trip_ids) == 1:
                 return f"Trip #{trip_ids[0]} details"
-            if re.search(r"\\bpending\\b", previous_answer, re.I):
+            if re.search(r"\bpending\b", previous_answer, re.I):
                 return "show details of pending trips"
             break
 
