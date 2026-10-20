@@ -22,6 +22,13 @@ def test_intent_router_recognizes_payments_and_maintenance():
     assert _detect_intent("Show maintenance service costs") == "maintenance"
 
 
+def test_intent_router_recognizes_hinglish_and_fleet_records():
+    assert _detect_intent("Trip 4 ka status batao") == "trips"
+    assert _detect_intent("KA50EU1043 wali gaadi dikhao") == "trucks"
+    assert _detect_intent("Rakesh driver ka record") == "drivers"
+    assert _detect_intent("pending challan dikhao") == "challans"
+
+
 def test_graph_returns_safe_help_for_unsupported_questions(monkeypatch):
     monkeypatch.delenv("GEMINI_API_KEY", raising=False)
     monkeypatch.delenv("GOOGLE_API_KEY", raising=False)
@@ -39,6 +46,7 @@ def test_graph_returns_safe_help_for_unsupported_questions(monkeypatch):
 
 def test_trip_prompt_parser_extracts_required_details():
     app = Flask(__name__)
+    app.secret_key = "test-only-secret-key"
     with app.test_request_context("/assistant"):
         session["email"] = "admin@example.com"
         draft, missing = _parse_trip_prompt(
