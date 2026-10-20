@@ -503,18 +503,49 @@ def _assistant_csrf_valid():
 
 
 def _parse_trip_prompt(question):
-    """Parse explicit trip details from a prompt; never execute model-generated code."""
+    """Parse trip details in flexible order, including common spoken Indian amounts."""
     text = " ".join(question.strip().split())
+    lowered = text.lower()
+
+    def money_value(raw):
+        if not raw:
+            return ""
+        value = raw.strip().lower().replace(",", "").replace("₹", "").strip()
+        word_amounts = {
+            "one lakh": "100000", "a lakh": "100000", "lakh": "100000",
+            "one lac": "100000", "a lac": "100000", "lac": "100000",
+            "two lakh": "200000", "three lakh": "300000",
+            "half lakh": "50000", "half a lakh": "50000",
+            "one crore": "10000000", "a crore": "10000000", "crore": "10000000",
+            "one thousand": "1000", "a thousand": "1000", "thousand": "1000",
+        }
+        if value in word_amounts:
+            return word_amounts[value]
+        scale_match = re.fullmatch(r"(\d+(?:\.\d+)?)\s*(lakh|lac|crore|cr|thousand|k)", value)
+        if scale_match:
+            scale = {"lakh": 100000, "lac": 100000, "crore": 10000000,
+                     "cr": 10000000, "thousand": 1000, "k": 1000}[scale_match.group(2)]
+            return str(Decimal(scale_match.group(1)) * scale)
+        try:
+            return str(Decimal(value))
+        except (InvalidOperation, ValueError):
+            return ""
+
+    amount_token = r"(?:one\s+lakh|a\s+lakh|one\s+lac|a\s+lac|half\s+(?:a\s+)?lakh|two\s+lakh|three\s+lakh|one\s+crore|a\s+crore|one\s+thousand|a\s+thousand|\d[\d,]*(?:\.\d{1,2})?\s*(?:lakh|lac|crore|cr|thousand|k)?)"
+
+    # Find the route independently from truck/driver/money/date details, so fields
+    # can appear before or after the route in the user's sentence.
     route_match = re.search(
-        r"\bfrom\s+(.+?)\s+to\s+(.+?)(?=\s+(?:on\s+|using\s+|with\s+|truck\s+|driver\s+|freight\s+|assign(?:ed)?\s+to\s+)|$)",
+        r"\bfrom\s+(.+?)\s+to\s+(.+?)(?=\s+(?:today|tomorrow|day\s+after\s+tomorrow|"
+        r"20\d{2}-\d{2}-\d{2}|receiv(?:e|ed|ing)\b|advance\b|payment\b|amount\b|"
+        r"freight\b|driver\b|(?:using\s+)?truck\b|on\s+|with\s+|assign(?:ed)?\s+to\b)|$)",
         text, re.IGNORECASE
     )
     route_from = route_match.group(1).strip(" ,.") if route_match else ""
     route_to = route_match.group(2).strip(" ,.") if route_match else ""
-    route_to = re.sub(r"\s+(?:day after tomorrow|tomorrow|today|20\d{2}-\d{2}-\d{2})$", "", route_to, flags=re.IGNORECASE).strip(" ,.")
+
     date_value = None
     iso_match = re.search(r"\b(20\d{2}-\d{2}-\d{2})\b", text)
-    lowered = text.lower()
     try:
         if iso_match:
             date_value = datetime.strptime(iso_match.group(1), "%Y-%m-%d").date()
@@ -526,39 +557,80 @@ def _parse_trip_prompt(question):
             date_value = date.today()
     except ValueError:
         date_value = None
-    truck_match = re.search(r"\btruck\s+(.+?)(?=\s+(?:driver\s+|freight\s+|with\s+|assign(?:ed)?\s+to\s+)|$)", text, re.IGNORECASE)
-    driver_match = re.search(r"\bdriver\s+(.+?)(?=\s+(?:freight\s+|with\s+|assign(?:ed)?\s+to\s+)|$)", text, re.IGNORECASE)
-    freight_match = re.search(r"\bfreight\s*(?:of|amount|charge)?\s*(?:₹|rs\.?|inr)?\s*([0-9][0-9,]*(?:\.\d{1,2})?)", text, re.IGNORECASE)
+
+    # Registration can appear as "truck KA-50-EU-1045", "using truck ...",
+    # or before/after the route.
+    truck_match = re.search(
+        r"\b(?:using\s+)?truck\s+(?:number\s+)?([A-Z]{2}\s*[- ]?\s*\d{1,2}\s*[- ]?\s*[A-Z]{1,3}\s*[- ]?\s*\d{1,4}|[A-Z0-9][A-Z0-9 -]{3,20}?)"
+        r"(?=\s+(?:and\b|driver\b|freight\b|receiv(?:e|ed|ing)\b|advance\b|payment\b|amount\b|today\b|tomorrow\b|on\b|from\b|to\b)|[,.!?]|$)",
+        text, re.IGNORECASE
+    )
+    truck_label = re.sub(r"\s+", "", truck_match.group(1)).upper() if truck_match else ""
+
+    driver_match = re.search(
+        r"\bdriver\s+(?:name\s+is\s+|named\s+|is\s+)?(.+?)"
+        r"(?=\s+(?:and\b|using\s+truck\b|truck\b|freight\b|receiv(?:e|ed|ing)\b|"
+        r"advance\b|payment\b|amount\b|today\b|tomorrow\b|on\b|from\b|to\b)|[,.!?]|$)",
+        text, re.IGNORECASE
+    )
+    driver_label = driver_match.group(1).strip(" ,.") if driver_match else ""
+
+    freight_match = re.search(
+        rf"\bfreight(?:\s+amount)?\s*(?:amount\s*)?(?:is|of|=|:)?\s*(?:₹|rs\.?|inr)?\s*({amount_token})",
+        text, re.IGNORECASE
+    )
+    received_match = re.search(
+        rf"\b(?:receiving\s+amount|received\s+amount|amount\s+received|payment\s+received|"
+        rf"received|receiving|advance(?:\s+amount)?|collection(?:\s+amount)?)\s*"
+        rf"(?:is|of|=|:)?\s*(?:₹|rs\.?|inr)?\s*({amount_token})",
+        text, re.IGNORECASE
+    )
+    freight_raw = money_value(freight_match.group(1)) if freight_match else ""
+    received_raw = money_value(received_match.group(1)) if received_match else ""
     owner_match = re.search(r"\bassign(?:ed)?\s+to\s+([\w.+-]+@[\w.-]+\.[A-Za-z]{2,})", text, re.IGNORECASE)
+
     draft = {
         "route_from": route_from, "route_to": route_to,
         "start_date": date_value.isoformat() if date_value else "",
-        "truck_label": truck_match.group(1).strip(" ,.") if truck_match else "",
-        "driver_label": driver_match.group(1).strip(" ,.") if driver_match else "",
-        "freight_raw": freight_match.group(1).replace(",", "") if freight_match else "",
+        "truck_label": truck_label,
+        "driver_label": driver_label,
+        "freight_raw": freight_raw,
+        "received_amount_raw": received_raw,
+        "received_amount": "",
+        "payment_date": date.today().isoformat(),
+        "payment_reference": text[:200],
         "owner_email": owner_match.group(1).lower() if owner_match else session.get("email", "").lower(),
     }
     missing = []
     for key, label in (
-        ("route_from", "origin (from …)"), ("route_to", "destination (to …)"),
-        ("start_date", "date (today, tomorrow, or YYYY-MM-DD)"),
-        ("truck_label", "truck registration"), ("driver_label", "driver full name"),
-        ("freight_raw", "freight amount greater than zero")
+        ("route_from", "starting place (from …)"), ("route_to", "destination (to …)"),
+        ("start_date", "trip date (today, tomorrow, or YYYY-MM-DD)"),
+        ("truck_label", "truck number"), ("driver_label", "driver name"),
+        ("freight_raw", "freight amount (for example, 25000 or one lakh)")
     ):
         if not draft[key]:
             missing.append(label)
     if draft["route_from"] and len(draft["route_from"]) > 120:
-        missing.append("origin must be 120 characters or fewer")
+        missing.append("starting place must be 120 characters or fewer")
     if draft["route_to"] and len(draft["route_to"]) > 120:
         missing.append("destination must be 120 characters or fewer")
+
     try:
         freight = Decimal(draft["freight_raw"]).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP) if draft["freight_raw"] else None
         if freight is not None and (not freight.is_finite() or not Decimal("0") < freight <= Decimal("100000000")):
-            missing.append("freight amount must be greater than zero and at most 100,000,000")
+            missing.append("freight must be greater than zero and at most 100,000,000")
     except (InvalidOperation, ValueError):
         freight = None
-        missing.append("a valid freight amount")
+        missing.append("enter a valid freight amount")
+    try:
+        received = Decimal(draft["received_amount_raw"]).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP) if draft["received_amount_raw"] else Decimal("0.00")
+        if not received.is_finite() or received < 0 or received > Decimal("100000000"):
+            missing.append("received amount must be zero or more and at most 100,000,000")
+    except (InvalidOperation, ValueError):
+        received = Decimal("0.00")
+        missing.append("enter a valid received amount")
     draft["freight_amount"] = str(freight) if freight is not None else ""
+    draft["received_amount"] = str(received)
     return draft, missing
 
 
@@ -880,7 +952,8 @@ def draft_trip_from_assistant():
             "route_from": draft["route_from"], "route_to": draft["route_to"],
             "start_date": draft["start_date"], "truck": draft["truck_label"],
             "truck_model": draft["truck_model"], "driver": draft["driver_label"],
-            "freight_amount": draft["freight_amount"], "owner_email": draft["owner_email"],
+            "freight_amount": draft["freight_amount"], "received_amount": draft["received_amount"],
+            "owner_email": draft["owner_email"],
         }), 200
     finally:
         conn.close()
@@ -949,12 +1022,25 @@ def confirm_assistant_trip():
              draft["route_from"], draft["route_to"], float(freight), draft["owner_user_id"])
         )
         trip_id = cursor.lastrowid
+        received_amount = Decimal(draft.get("received_amount", "0") or "0").quantize(
+            Decimal("0.01"), rounding=ROUND_HALF_UP
+        )
+        payment_id = None
+        if received_amount > 0:
+            payment_cursor = conn.execute(
+                "INSERT INTO trip_payments (trip_id, amount, payment_date, reference, recorded_by) "
+                "VALUES (?, ?, ?, ?, ?)",
+                (trip_id, float(received_amount), draft.get("payment_date") or date.today().isoformat(),
+                 draft.get("payment_reference") or "Initial payment received during trip creation",
+                 session["user_id"])
+            )
+            payment_id = payment_cursor.lastrowid
         conn.execute(
             "INSERT INTO user_logs (user_id, action, details, actor_user_id) VALUES (?, ?, ?, ?)",
             (draft["owner_user_id"], "Trip Scheduled",
              f"Trip #{trip_id} created via FleetFlow Assistant: {draft['route_from']} to "
              f"{draft['route_to']}; truck {truck['registration_number']}; driver {driver['name']}; "
-             f"freight {freight:.2f}.", session["user_id"])
+             f"freight {freight:.2f}; initial payment {received_amount:.2f}.", session["user_id"])
         )
         conn.commit()
         session.pop("assistant_trip_draft", None)
@@ -963,7 +1049,8 @@ def confirm_assistant_trip():
             f"Trip #{trip_id} has been scheduled successfully: {draft['route_from']} → "
             f"{draft['route_to']} on {trip_date.isoformat()}. Truck: {truck['registration_number']}; "
             f"driver: {driver['name']}; freight: ₹{freight:,.2f}."
-        ), trip_id=trip_id), 201
+            + (f" Initial payment recorded: ₹{received_amount:,.2f} (Payment #{payment_id})." if payment_id else "")
+        ), trip_id=trip_id, payment_id=payment_id), 201
     except Exception:
         conn.rollback()
         current_app.logger.exception("Assistant trip creation failed")
