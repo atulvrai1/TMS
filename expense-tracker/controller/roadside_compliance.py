@@ -43,9 +43,10 @@ def _ensure_compliance_schema(get_db):
         conn.execute("""
             CREATE TABLE IF NOT EXISTS compliance_documents (
                 document_id INTEGER PRIMARY KEY AUTOINCREMENT,
-                subject_type TEXT NOT NULL CHECK(subject_type IN ('truck','driver')),
+                subject_type TEXT NOT NULL CHECK(subject_type IN ('truck','driver','trip')),
                 truck_id INTEGER REFERENCES trucks(truck_id),
                 driver_id INTEGER REFERENCES drivers(driver_id),
+                trip_id INTEGER REFERENCES trips(trip_id),
                 document_type TEXT NOT NULL,
                 document_number TEXT,
                 issue_date DATE,
@@ -116,9 +117,11 @@ def register_compliance_module(app, ns):
         doc_scope, doc_params = _record_owner_filter("compliance_documents")
         inspection_scope, inspection_params = _record_owner_filter("roadside_inspections")
         documents = conn.execute(
-            "SELECT d.*, t.registration_number, dr.name AS driver_name "
+            "SELECT d.*, t.registration_number, dr.name AS driver_name, "
+            "tr.trip_id AS related_trip_id, tr.route_from, tr.route_to "
             "FROM compliance_documents d LEFT JOIN trucks t ON t.truck_id=d.truck_id "
             "LEFT JOIN drivers dr ON dr.driver_id=d.driver_id "
+            "LEFT JOIN trips tr ON tr.trip_id=d.trip_id "
             f"WHERE {doc_scope.replace('compliance_documents.', 'd.')} "
             "ORDER BY CASE WHEN d.expiry_date IS NOT NULL AND d.expiry_date < date('now') THEN 0 "
             "WHEN d.expiry_date IS NOT NULL AND d.expiry_date <= date('now','+30 days') THEN 1 ELSE 2 END, "
@@ -197,7 +200,7 @@ def register_compliance_module(app, ns):
             method = request.form.get("verification_method", "Physical original").strip()
             verified = 1 if request.form.get("verified") == "1" else 0
             notes = request.form.get("notes", "").strip()[:500]
-            if subject not in {"truck", "driver"}:
+            if subject not in {"truck", "driver", "trip"}:
                 raise ValueError("Choose whether this document belongs to a truck or driver.")
             if doc_type not in DOCUMENT_TYPES:
                 raise ValueError("Choose a supported document type.")
@@ -205,23 +208,30 @@ def register_compliance_module(app, ns):
                 raise ValueError("Choose a valid verification method.")
             if expiry and issue and expiry < issue:
                 raise ValueError("Expiry date cannot be earlier than issue date.")
+            trip_id = request.form.get("trip_id", "").strip()
             if subject == "truck":
                 if not truck_id.isdigit() or not conn.execute("SELECT 1 FROM trucks WHERE truck_id=?", (int(truck_id),)).fetchone():
                     raise ValueError("Select a valid truck.")
-                if doc_type == "Driving Licence (HMV)":
-                    raise ValueError("Driving Licence belongs to a driver, not a truck.")
-                truck_id_value, driver_id_value = int(truck_id), None
-            else:
+                if doc_type in {"Driving Licence (HMV)", "Trip Sheet / E-Way Bill / Cargo Manifest"}:
+                    raise ValueError("Select the driver for a licence or the trip for a trip document.")
+                truck_id_value, driver_id_value, trip_id_value = int(truck_id), None, None
+            elif subject == "driver":
                 if not driver_id.isdigit() or not conn.execute("SELECT 1 FROM drivers WHERE driver_id=?", (int(driver_id),)).fetchone():
                     raise ValueError("Select a valid driver.")
                 if doc_type != "Driving Licence (HMV)":
-                    raise ValueError("Select a truck for vehicle documents; only the Driving Licence belongs to a driver.")
-                truck_id_value, driver_id_value = None, int(driver_id)
+                    raise ValueError("Only the Driving Licence belongs to a driver.")
+                truck_id_value, driver_id_value, trip_id_value = None, int(driver_id), None
+            else:
+                if not trip_id.isdigit() or not conn.execute("SELECT 1 FROM trips WHERE trip_id=?", (int(trip_id),)).fetchone():
+                    raise ValueError("Select a valid trip.")
+                if doc_type != "Trip Sheet / E-Way Bill / Cargo Manifest":
+                    raise ValueError("Select Trip Sheet / E-Way Bill / Cargo Manifest for trip records.")
+                truck_id_value, driver_id_value, trip_id_value = None, None, int(trip_id)
             conn.execute(
-                "INSERT INTO compliance_documents (subject_type,truck_id,driver_id,document_type,document_number,"
+                "INSERT INTO compliance_documents (subject_type,truck_id,driver_id,trip_id,document_type,document_number,"
                 "issue_date,expiry_date,verification_method,verified,notes,owner_user_id,created_by,created_at) "
-                "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,CURRENT_TIMESTAMP)",
-                (subject, truck_id_value, driver_id_value, doc_type, number or None, issue, expiry, method, verified,
+                "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,CURRENT_TIMESTAMP)",
+                (subject, truck_id_value, driver_id_value, trip_id_value, doc_type, number or None, issue, expiry, method, verified,
                  notes or None, session["user_id"], session["user_id"]),
             )
             _record_user_activity(conn, "Compliance Document Added", f"{doc_type} added to {subject} record.")
