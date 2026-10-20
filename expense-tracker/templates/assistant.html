@@ -111,6 +111,8 @@
   const newChat = document.getElementById('ff-new-chat');
   const csrfToken = {{ session.get('csrf_token', '')|tojson }};
   const askUrl = {{ url_for("fleetflow_assistant.ask_fleetflow_assistant")|tojson }};
+  const tripDraftUrl = {{ url_for("fleetflow_assistant.draft_trip_from_assistant")|tojson }};
+  const tripConfirmUrl = {{ url_for("fleetflow_assistant.confirm_assistant_trip")|tojson }};
   let busy = false;
 
   function scrollToLatest() { messages.scrollTop = messages.scrollHeight; }
