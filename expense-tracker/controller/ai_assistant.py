@@ -317,6 +317,13 @@ def _query_records(state: AssistantState) -> AssistantState:
                     truck_match = re.match(r"(.*)", model_label)
             filters = []
             filter_params = []
+            status_match = re.search(r"\b(scheduled|in progress|completed|cancelled|canceled)\b", question, re.I)
+            if status_match:
+                status_value = status_match.group(1).title()
+                if status_value == "Canceled":
+                    status_value = "Cancelled"
+                filters.append("lower(trips.status) = lower(?)")
+                filter_params.append(status_value)
             if trip_id_match:
                 filters.append("trips.trip_id = ?")
                 filter_params.append(int(trip_id_match.group(1)))
@@ -361,6 +368,8 @@ def _query_records(state: AssistantState) -> AssistantState:
                     answer = "Trip details:\n" + "\n".join(lines)
                 elif truck_match:
                     answer = "Trips matching that truck:\n" + "\n".join(lines)
+                elif status_match:
+                    answer = f"{status_match.group(1).title()} trips ({len(lines)} shown):\n" + "\n".join(lines)
                 else:
                     answer = "Here are the latest trips you can access:\n" + "\n".join(lines)
         elif intent == "expenses":
@@ -530,10 +539,13 @@ def _query_records(state: AssistantState) -> AssistantState:
                         rows = conn.execute("SELECT driver_id, name, status, license_number, contact_info FROM drivers WHERE lower(name) LIKE lower(?) ORDER BY name COLLATE NOCASE LIMIT 30", ("%" + label + "%",)).fetchall()
                     else:
                         rows = conn.execute("SELECT driver_id, name, status, license_number, contact_info FROM drivers ORDER BY name COLLATE NOCASE LIMIT 30").fetchall()
-                answer = "Driver records:\n" + "\n".join(
-                    "Driver #" + str(r["driver_id"]) + " | " + str(r["name"]) + " | Status " + str(r["status"]) + " | License " + str(r["license_number"]) + " | Contact " + str(r["contact_info"] or "not recorded")
-                    for r in rows
-                ) if rows else "Aapke access mein driver record nahi mila."
+                if re.search(r"\b(total|count|kitne|kitna|number of|how many)\b", question, re.I):
+                    answer = f"Total drivers in records available to your account: {len(rows)}."
+                else:
+                    answer = "Driver records:\n" + "\n".join(
+                        "Driver #" + str(r["driver_id"]) + " | " + str(r["name"]) + " | Status " + str(r["status"]) + " | License " + str(r["license_number"]) + " | Contact " + str(r["contact_info"] or "not recorded")
+                        for r in rows
+                    ) if rows else "Aapke access mein driver record nahi mila."
             else:
                 if state.get("role") != "Admin" and state.get("email", "").lower() != SUPER_ADMIN_EMAIL.lower():
                     return {"answer": "Challan records dekhne ke liye administrator access chahiye."}
