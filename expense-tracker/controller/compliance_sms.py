@@ -117,9 +117,8 @@ def _document_label(row):
 
 
 def _render_message(row, days_remaining):
-    template = os.environ.get(
-        "FAST2SMS_MESSAGE_TEMPLATE",
-        "FleetFlow alert: {document} for {vehicle}. Please check and renew the compliance document.",
+    template = os.environ.get("FAST2SMS_MESSAGE_TEMPLATE", "").strip() or (
+        "FleetFlow alert: {document} for {vehicle}. Please check and renew the compliance document."
     )
     document = row["document_type"]
     vehicle = _document_label(row)
