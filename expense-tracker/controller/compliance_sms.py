@@ -1,7 +1,6 @@
-"""Fast2SMS integration for scheduled FleetFlow compliance-expiry reminders.
+"""Msg07 REST API integration for scheduled FleetFlow compliance-expiry reminders.
 
-Domestic production SMS must use an operator-approved DLT header and content template.
-The configured message template must match the approved template text exactly.
+Configure the endpoint, authentication, and JSON payload from your Msg07 workspace API docs.
 """
 import json
 import logging
@@ -15,7 +14,7 @@ from urllib.request import Request, urlopen
 from flask import abort, flash, redirect, request, url_for
 
 logger = logging.getLogger(__name__)
-FAST2SMS_ENDPOINT = "https://www.fast2sms.com/dev/bulkV2"
+MSG07_DEFAULT_PAYLOAD = '{"to":"{{mobile}}","message":"{{message}}"}'
 
 
 def ensure_sms_schema(get_db):
@@ -64,46 +63,66 @@ def _normalise_mobile(raw):
     return digits
 
 
-def _send_fast2sms(mobile, message):
-    api_key = os.environ.get("FAST2SMS_API_KEY", "").strip()
-    sender_id = os.environ.get("FAST2SMS_SENDER_ID", "").strip()
-    entity_id = os.environ.get("FAST2SMS_ENTITY_ID", "").strip()
-    template_id = os.environ.get("FAST2SMS_TEMPLATE_ID", "").strip()
-    if not all((api_key, sender_id, entity_id, template_id)):
-        raise RuntimeError(
-            "Fast2SMS is not fully configured. Set FAST2SMS_API_KEY, "
-            "FAST2SMS_SENDER_ID, FAST2SMS_ENTITY_ID and FAST2SMS_TEMPLATE_ID."
-        )
-    payload = {
-        "route": "dlt_manual",
-        "sender_id": sender_id,
-        "message": message,
-        "template_id": template_id,
-        "entity_id": entity_id,
-        "numbers": mobile,
-        "sms_details": "1",
-    }
-    req = Request(
-        FAST2SMS_ENDPOINT,
-        data=json.dumps(payload).encode("utf-8"),
-        headers={
-            "Authorization": api_key,
-            "Content-Type": "application/json",
-            "Accept": "application/json",
-        },
-        method="POST",
-    )
+def _replace_payload_placeholders(value, mobile, message):
+    if isinstance(value, dict):
+        return {key: _replace_payload_placeholders(item, mobile, message) for key, item in value.items()}
+    if isinstance(value, list):
+        return [_replace_payload_placeholders(item, mobile, message) for item in value]
+    if isinstance(value, str):
+        return value.replace("{{mobile}}", mobile).replace("{{message}}", message)
+    return value
+
+
+def _msg07_payload(mobile, message):
+    raw_template = os.environ.get("MSG07_PAYLOAD_TEMPLATE", "").strip() or MSG07_DEFAULT_PAYLOAD
+    try:
+        template = json.loads(raw_template)
+    except json.JSONDecodeError as exc:
+        raise RuntimeError("MSG07_PAYLOAD_TEMPLATE must be valid JSON.") from exc
+    if not isinstance(template, (dict, list)):
+        raise RuntimeError("MSG07_PAYLOAD_TEMPLATE must be a JSON object or array.")
+    return _replace_payload_placeholders(template, mobile, message)
+
+
+def _send_msg07(mobile, message):
+    api_url = os.environ.get("MSG07_API_URL", "").strip()
+    api_key = os.environ.get("MSG07_API_KEY", "").strip()
+    auth_header = os.environ.get("MSG07_AUTH_HEADER", "Authorization").strip() or "Authorization"
+    auth_scheme = os.environ.get("MSG07_AUTH_SCHEME", "Bearer").strip()
+    if not api_url or not api_key:
+        raise RuntimeError("Msg07 is not configured. Set MSG07_API_URL and MSG07_API_KEY.")
+    if not api_url.lower().startswith("https://"):
+        raise RuntimeError("MSG07_API_URL must use HTTPS.")
+    headers = {"Content-Type": "application/json", "Accept": "application/json"}
+    headers[auth_header] = f"{auth_scheme} {api_key}".strip()
+    payload = _msg07_payload(mobile, message)
+    req = Request(api_url, data=json.dumps(payload).encode("utf-8"), headers=headers, method="POST")
     try:
         with urlopen(req, timeout=20) as response:
-            result = json.loads(response.read().decode("utf-8"))
+            raw = response.read().decode("utf-8", errors="replace")
+            status_code = getattr(response, "status", 200)
     except HTTPError as exc:
         detail = exc.read().decode("utf-8", errors="replace")[:500]
-        raise RuntimeError(f"Fast2SMS HTTP {exc.code}: {detail}") from exc
-    except (URLError, TimeoutError, json.JSONDecodeError) as exc:
-        raise RuntimeError(f"Fast2SMS request failed: {exc}") from exc
-    if not result.get("return"):
-        raise RuntimeError(str(result.get("message") or result)[:500])
-    return str(result.get("request_id") or ""), str(result.get("message") or "Accepted")[:500]
+        raise RuntimeError(f"Msg07 HTTP {exc.code}: {detail}") from exc
+    except (URLError, TimeoutError) as exc:
+        raise RuntimeError(f"Msg07 request failed: {exc}") from exc
+    if not 200 <= int(status_code) < 300:
+        raise RuntimeError(f"Msg07 returned HTTP {status_code}: {raw[:300]}")
+    if raw.strip():
+        try:
+            result = json.loads(raw)
+        except json.JSONDecodeError:
+            result = {"message": raw.strip()}
+        if isinstance(result, dict):
+            if result.get("success") is False or str(result.get("status", "")).lower() in {"failed", "error", "rejected"}:
+                raise RuntimeError(str(result.get("message") or result.get("error") or result)[:500])
+            request_id = result.get("request_id") or result.get("message_id") or result.get("id") or ""
+            response_message = result.get("message") or result.get("status") or "Accepted"
+        else:
+            request_id, response_message = "", "Accepted"
+    else:
+        request_id, response_message = "", "Accepted"
+    return str(request_id)[:200], str(response_message)[:500]
 
 
 def _document_label(row):
@@ -117,7 +136,7 @@ def _document_label(row):
 
 
 def _render_message(row, days_remaining):
-    template = os.environ.get("FAST2SMS_MESSAGE_TEMPLATE", "").strip() or (
+    template = os.environ.get("MSG07_MESSAGE_TEMPLATE", "").strip() or (
         "FleetFlow alert: {document} for {vehicle}. Please check and renew the compliance document."
     )
     document = row["document_type"]
@@ -134,7 +153,7 @@ def _render_message(row, days_remaining):
     try:
         message = template.format(document=document, vehicle=vehicle)
     except (KeyError, ValueError) as exc:
-        raise RuntimeError("FAST2SMS_MESSAGE_TEMPLATE must use only {document} and {vehicle} placeholders.") from exc
+        raise RuntimeError("MSG07_MESSAGE_TEMPLATE must use only {document} and {vehicle} placeholders.") from exc
     if len(message) > 500:
         raise RuntimeError("The configured SMS template expands beyond 500 characters.")
     return message
@@ -203,7 +222,7 @@ def send_due_compliance_sms(get_db):
             conn.commit()
             try:
                 message = _render_message(row, days)
-                request_id, response_message = _send_fast2sms(mobile, message)
+                request_id, response_message = _send_msg07(mobile, message)
                 conn.execute(
                     "UPDATE compliance_sms_log SET status='submitted', provider_request_id=?, "
                     "response_message=? WHERE sms_id=?",
@@ -252,7 +271,7 @@ def register_compliance_sms_module(app, ns):
             conn.commit()
         finally:
             conn.close()
-        flash("SMS notification settings saved. A Fast2SMS DLT configuration is still required before delivery.", "success")
+        flash("SMS notification settings saved. A Msg07 API endpoint and API key must be configured before delivery.", "success")
         return redirect(url_for("admin_notifications"))
 
     @app.route("/admin/notifications/sms-test", methods=["POST"], endpoint="compliance_sms_test")
@@ -279,8 +298,8 @@ def register_compliance_sms_module(app, ns):
             sample_row = {"document_type": "TEST DOCUMENT", "subject_type": "truck", "registration_number": "TEST-TRUCK", "truck_id": 0, "driver_id": None, "trip_id": None, "driver_name": None, "expiry_date": date.today().isoformat()}
             sample = _render_message(sample_row, 7)
             _send_fast2sms(mobile, sample)
-            flash("Fast2SMS accepted the test message. This confirms API submission, not handset delivery.", "success")
+            flash("Msg07 accepted the test message. This confirms API submission, not handset delivery.", "success")
         except Exception as exc:
-            logger.exception("Fast2SMS test failed")
+            logger.exception("Msg07 test failed")
             flash(f"Test SMS failed: {str(exc)[:220]}", "error")
         return redirect(url_for("admin_notifications"))
