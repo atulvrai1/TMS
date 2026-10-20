@@ -580,8 +580,8 @@ def _parse_trip_prompt(question):
         text, re.IGNORECASE
     )
     received_match = re.search(
-        rf"\b(?:receiving\s+(?:amou?nt|ammount)|received\s+(?:amou?nt|ammount)|(?:amou?nt|ammount)\s+received|payment\s+received|"
-        rf"received|receiving|advance(?:\s+(?:amou?nt|ammount))?|collection(?:\s+(?:amou?nt|ammount))?)\s*"
+        rf"\b(?:receiving\s+(?:(?:amount|amout)|ammount)|received\s+(?:(?:amount|amout)|ammount)|(?:(?:amount|amout)|ammount)\s+received|payment\s+received|"
+        rf"received|receiving|advance(?:\s+(?:(?:amount|amout)|ammount))?|collection(?:\s+(?:(?:amount|amout)|ammount))?)\s*"
         rf"(?:is|of|=|:)?\s*(?:₹|rs\.?|inr)?\s*({amount_token})",
         text, re.IGNORECASE
     )
