@@ -315,6 +315,9 @@ def draft_trip_from_assistant():
         return jsonify(error="Your session token is invalid. Refresh the page and try again."), 403
     if not (session.get("is_admin") or session.get("role") == "Admin"):
         return jsonify(error="Trip creation from the assistant is available to administrators only."), 403
+    # A new request invalidates any older preview so an old button cannot create a stale trip.
+    session.pop("assistant_trip_draft", None)
+    session.pop("assistant_trip_draft_at", None)
     payload = request.get_json(silent=True) or {}
     question = payload.get("question")
     if not isinstance(question, str) or not question.strip() or len(question) > MAX_QUESTION_LENGTH:
