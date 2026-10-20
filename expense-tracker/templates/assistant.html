@@ -198,6 +198,7 @@
       ['Truck', draft.truck + (draft.truck_model ? ' · ' + draft.truck_model : '')],
       ['Driver', draft.driver],
       ['Freight', '₹' + Number(draft.freight_amount).toLocaleString('en-IN', {minimumFractionDigits:2, maximumFractionDigits:2})],
+      ['Amount already received', '₹' + Number(draft.received_amount || 0).toLocaleString('en-IN', {minimumFractionDigits:2, maximumFractionDigits:2})],
       ['Assigned account', draft.owner_email]
     ];
     const list = document.createElement('dl');
@@ -213,7 +214,7 @@
     confirm.addEventListener('click', () => confirmTrip(confirm));
     const note = document.createElement('p');
     note.className = 'ff-trip-note';
-    note.textContent = 'Nothing has been saved yet. Confirming will schedule this trip.';
+    note.textContent = 'Nothing has been saved yet. Confirming will schedule the trip and record the received amount as a payment, if one was entered.';
     card.append(list, confirm, note);
     item.bubble.appendChild(card);
     scrollToLatest();
