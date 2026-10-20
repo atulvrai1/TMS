@@ -251,30 +251,30 @@ def _parse_trip_prompt(question):
     """Parse explicit trip details from a prompt; never execute model-generated code."""
     text = " ".join(question.strip().split())
     route_match = re.search(
-        r"\\bfrom\\s+(.+?)\\s+to\\s+(.+?)(?=\\s+(?:on\\s+|using\\s+|with\\s+|truck\\s+|driver\\s+|freight\\s+|assign(?:ed)?\\s+to\\s+)|$)",
+        r"\bfrom\s+(.+?)\s+to\s+(.+?)(?=\s+(?:on\s+|using\s+|with\s+|truck\s+|driver\s+|freight\s+|assign(?:ed)?\s+to\s+)|$)",
         text, re.IGNORECASE
     )
     route_from = route_match.group(1).strip(" ,.") if route_match else ""
     route_to = route_match.group(2).strip(" ,.") if route_match else ""
-    route_to = re.sub(r"\\s+(?:day after tomorrow|tomorrow|today|20\\d{2}-\\d{2}-\\d{2})$", "", route_to, flags=re.IGNORECASE).strip(" ,.")
+    route_to = re.sub(r"\s+(?:day after tomorrow|tomorrow|today|20\d{2}-\d{2}-\d{2})$", "", route_to, flags=re.IGNORECASE).strip(" ,.")
     date_value = None
-    iso_match = re.search(r"\\b(20\\d{2}-\\d{2}-\\d{2})\\b", text)
+    iso_match = re.search(r"\b(20\d{2}-\d{2}-\d{2})\b", text)
     lowered = text.lower()
     try:
         if iso_match:
             date_value = datetime.strptime(iso_match.group(1), "%Y-%m-%d").date()
-        elif re.search(r"\\bday after tomorrow\\b", lowered):
+        elif re.search(r"\bday after tomorrow\b", lowered):
             date_value = date.today() + timedelta(days=2)
-        elif re.search(r"\\btomorrow\\b", lowered):
+        elif re.search(r"\btomorrow\b", lowered):
             date_value = date.today() + timedelta(days=1)
-        elif re.search(r"\\btoday\\b", lowered):
+        elif re.search(r"\btoday\b", lowered):
             date_value = date.today()
     except ValueError:
         date_value = None
-    truck_match = re.search(r"\\btruck\\s+(.+?)(?=\\s+(?:driver\\s+|freight\\s+|with\\s+|assign(?:ed)?\\s+to\\s+)|$)", text, re.IGNORECASE)
-    driver_match = re.search(r"\\bdriver\\s+(.+?)(?=\\s+(?:freight\\s+|with\\s+|assign(?:ed)?\\s+to\\s+)|$)", text, re.IGNORECASE)
-    freight_match = re.search(r"\\bfreight\\s*(?:of|amount|charge)?\\s*(?:₹|rs\\.?|inr)?\\s*([0-9][0-9,]*(?:\\.\\d{1,2})?)", text, re.IGNORECASE)
-    owner_match = re.search(r"\\bassign(?:ed)?\\s+to\\s+([\\w.+-]+@[\\w.-]+\\.[A-Za-z]{2,})", text, re.IGNORECASE)
+    truck_match = re.search(r"\btruck\s+(.+?)(?=\s+(?:driver\s+|freight\s+|with\s+|assign(?:ed)?\s+to\s+)|$)", text, re.IGNORECASE)
+    driver_match = re.search(r"\bdriver\s+(.+?)(?=\s+(?:freight\s+|with\s+|assign(?:ed)?\s+to\s+)|$)", text, re.IGNORECASE)
+    freight_match = re.search(r"\bfreight\s*(?:of|amount|charge)?\s*(?:₹|rs\.?|inr)?\s*([0-9][0-9,]*(?:\.\d{1,2})?)", text, re.IGNORECASE)
+    owner_match = re.search(r"\bassign(?:ed)?\s+to\s+([\w.+-]+@[\w.-]+\.[A-Za-z]{2,})", text, re.IGNORECASE)
     draft = {
         "route_from": route_from, "route_to": route_to,
         "start_date": date_value.isoformat() if date_value else "",
