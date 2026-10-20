@@ -145,7 +145,7 @@
   const historyList = document.getElementById('ff-history-list');
   const historyClose = document.getElementById('ff-history-close');
   let busy = false;
-  let pendingTruckCreation = false;
+  let pendingTruckCreation = sessionStorage.getItem('ffPendingTruckCreation') === 'true';
 
   function scrollToLatest() { messages.scrollTop = messages.scrollHeight; }
 
@@ -309,6 +309,7 @@
       } else {
         button.textContent = 'Truck added ✓';
         pendingTruckCreation = false;
+        sessionStorage.removeItem('ffPendingTruckCreation');
         const item = addMessage('assistant', data.message || 'Truck added successfully.');
         const link = document.createElement('a');
         link.href = {{ url_for('trucks')|tojson }};
@@ -424,12 +425,16 @@
       if (!response.ok) {
         addMessage('assistant', data.error || ('Request failed (HTTP ' + response.status + '). Please try again.'), {error:true});
       } else if ((isTripCreate || isTruckCreate || isPaymentRecord) && Array.isArray(data.missing)) {
-        if (isTruckCreate) pendingTruckCreation = true;
+        if (isTruckCreate) {
+          pendingTruckCreation = true;
+          sessionStorage.setItem('ffPendingTruckCreation', 'true');
+        }
         addMessage('assistant', 'I need a few more details first. Missing: ' + data.missing.join(', ') + '.\n\n' + (data.prompt_hint || 'You can send the details in any order.'));
       } else if (isTripCreate && data.draft) {
         showTripPreview(data.draft);
       } else if (isTruckCreate && data.draft) {
         pendingTruckCreation = false;
+        sessionStorage.removeItem('ffPendingTruckCreation');
         showTruckPreview(data.draft);
       } else if (isPaymentRecord && data.draft) {
         showPaymentPreview(data.draft);
