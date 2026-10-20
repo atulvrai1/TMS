@@ -2926,6 +2926,10 @@ from controller.challan_enhancements import register_challan_module
 register_challan_module(app, globals())
 
 
+from controller.ai_assistant import assistant_bp
+app.register_blueprint(assistant_bp)
+
+
 if __name__ == "__main__":
     # Never enable the interactive debugger by default.
     app.run(debug=False, host=os.environ.get("FLASK_HOST", "127.0.0.1"), port=int(os.environ.get("PORT", "5001")))
