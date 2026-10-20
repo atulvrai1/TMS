@@ -107,3 +107,23 @@ def test_payment_prompt_understands_trip_number_without_space():
     assert missing == []
     assert draft["trip_id"] == 3
     assert draft["amount"] == "10000.00"
+
+from controller.roadside_compliance import DOCUMENT_TYPES, FINDINGS, INSPECTION_TYPES, SEVERITIES, STATUSES
+
+
+def test_roadside_compliance_catalog_covers_requested_inspection_areas():
+    assert "Driving Licence (HMV)" in DOCUMENT_TYPES
+    assert "Registration Certificate (RC)" in DOCUMENT_TYPES
+    assert "Commercial Permit" in DOCUMENT_TYPES
+    assert "Fitness Certificate" in DOCUMENT_TYPES
+    assert "PUC Certificate" in DOCUMENT_TYPES
+    assert "Third-Party Insurance" in DOCUMENT_TYPES
+    assert "Trip Sheet / E-Way Bill / Cargo Manifest" in DOCUMENT_TYPES
+    assert {"Documents", "Weight and Cargo", "Vehicle Safety", "Driver Behaviour", "Operational Rules"} <= INSPECTION_TYPES
+    assert "Overloading / weight limit concern" in FINDINGS
+    assert "RUPD missing / damaged" in FINDINGS
+    assert "LUPD missing / damaged" in FINDINGS
+    assert "Mobile phone use while driving" in FINDINGS
+    assert "Unauthorized passengers in goods vehicle" in FINDINGS
+    assert {"Low", "Medium", "High", "Critical"} == SEVERITIES
+    assert {"Open", "Corrected", "Referred", "Closed"} == STATUSES
