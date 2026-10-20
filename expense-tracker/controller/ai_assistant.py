@@ -1602,7 +1602,10 @@ def draft_trip_completion_from_assistant():
         scope, params = _owner_scope("trips", "owner_user_id", state)
         row = conn.execute(
             "SELECT trips.trip_id, trips.route_from, trips.route_to, trips.start_date, trips.status, "
-            "trucks.registration_number, trucks.model, drivers.name AS driver_name "
+            "trips.freight_amount, trucks.registration_number, trucks.model, drivers.name AS driver_name, "
+            "COALESCE((SELECT SUM(tp.amount) FROM trip_payments tp WHERE tp.trip_id = trips.trip_id), 0) AS amount_received, "
+            "COALESCE((SELECT SUM(e.amount) FROM expenses e WHERE e.trip_id = trips.trip_id "
+            "AND lower(COALESCE(e.status, '')) != 'rejected'), 0) AS amount_expenses "
             "FROM trips JOIN trucks ON trucks.truck_id = trips.truck_id "
             "JOIN drivers ON drivers.driver_id = trips.driver_id "
             f"WHERE trips.trip_id = ? AND {scope}", [trip_id] + params
@@ -1611,14 +1614,30 @@ def draft_trip_completion_from_assistant():
             return jsonify(error=f"Trip #{trip_id} was not found in the records available to your account."), 404
         if str(row["status"]).casefold() in {"completed", "cancelled"}:
             return jsonify(error=f"Trip #{trip_id} is already {row['status'].lower()}. No change was made."), 409
+        freight = float(row["freight_amount"] or 0)
+        received = float(row["amount_received"] or 0)
+        expenses_total = float(row["amount_expenses"] or 0)
         draft = {"trip_id": row["trip_id"], "route_from": row["route_from"], "route_to": row["route_to"],
                  "start_date": row["start_date"], "status": row["status"], "truck": row["registration_number"],
-                 "truck_model": row["model"], "driver": row["driver_name"]}
+                 "truck_model": row["model"], "driver": row["driver_name"],
+                 "freight_amount": freight, "amount_received": received,
+                 "amount_due": max(0, freight - received), "amount_expenses": expenses_total}
         session["assistant_complete_trip_draft"] = draft
         session["assistant_complete_trip_draft_at"] = datetime.utcnow().isoformat()
         return jsonify(draft=draft), 200
     finally:
         conn.close()
+
+
+
+@assistant_bp.post("/api/assistant/trips/complete/cancel")
+@access_required
+def cancel_trip_completion_from_assistant():
+    if not _assistant_csrf_valid():
+        return jsonify(error="Your session token is invalid. Refresh the page and try again."), 403
+    session.pop("assistant_complete_trip_draft", None)
+    session.pop("assistant_complete_trip_draft_at", None)
+    return jsonify(message="Trip completion cancelled. No trip status was changed."), 200
 
 
 @assistant_bp.post("/api/assistant/trips/complete/confirm")
