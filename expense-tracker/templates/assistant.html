@@ -11,10 +11,14 @@
       <div><p class="ff-agent-kicker">FLEETFLOW INTELLIGENCE</p><h1 id="ff-agent-title">FleetFlow Assistant</h1></div>
     </div>
     <div class="ff-agent-actions">
-      <span class="ff-safe-pill"><span aria-hidden="true">●</span> Context-aware · confirmation required</span>
+      <button type="button" id="ff-history-toggle" class="ff-history-toggle" aria-expanded="false" aria-controls="ff-history-panel">◷ History</button>
       <button type="button" id="ff-new-chat" class="ff-new-chat">＋ New chat</button>
     </div>
   </header>
+  <aside id="ff-history-panel" class="ff-history-panel" hidden aria-label="Conversation history">
+    <div class="ff-history-heading"><strong>Recent conversations</strong><button type="button" id="ff-history-close" aria-label="Close history">×</button></div>
+    <div id="ff-history-list" class="ff-history-list"><p class="ff-history-empty">Loading conversations…</p></div>
+  </aside>
 
   <div class="ff-agent-workspace">
     <div class="ff-chat-topline"><span class="ff-status-dot"></span><span>FleetFlow Agent</span><span class="ff-chat-topline-muted">· Uses your permitted fleet records</span></div>
@@ -54,6 +58,21 @@
 .ff-safe-pill>span{font-size:.55rem}
 .ff-new-chat{border:1px solid var(--ff-line);background:#fff;color:inherit;border-radius:9px;padding:.55rem .8rem;font:inherit;font-size:.82rem;font-weight:600;cursor:pointer}
 .ff-new-chat:hover{background:#f7f8fc;border-color:#c9cdec}
+.ff-history-toggle{border:1px solid #d9defb;background:#f4f5ff;color:#394bb9;border-radius:9px;padding:.55rem .8rem;font:inherit;font-size:.82rem;font-weight:700;cursor:pointer}
+.ff-history-toggle:hover{background:#e9ebff}
+.ff-history-panel{border:1px solid var(--ff-line);border-radius:14px;background:#fff;box-shadow:0 10px 28px rgba(30,38,70,.08);padding:.85rem;max-height:280px;overflow:auto}
+.ff-history-panel[hidden]{display:none}
+.ff-history-heading{display:flex;align-items:center;justify-content:space-between;gap:1rem;padding:.1rem .2rem .65rem}
+.ff-history-heading strong{font-size:.88rem}
+.ff-history-heading button{border:0;background:transparent;font-size:1.35rem;cursor:pointer;color:var(--ff-muted)}
+.ff-history-list{display:grid;gap:.4rem}
+.ff-history-item{display:flex;align-items:center;justify-content:space-between;gap:.8rem;width:100%;text-align:left;border:1px solid #eceef5;border-radius:10px;background:#fff;padding:.7rem .8rem;cursor:pointer;color:inherit}
+.ff-history-item:hover,.ff-history-item[aria-current=true]{border-color:#c5ccfa;background:#f7f8ff}
+.ff-history-item span{min-width:0;overflow-wrap:anywhere}
+.ff-history-item strong,.ff-history-item small{display:block}
+.ff-history-item strong{font-size:.82rem;font-weight:700}
+.ff-history-item small{font-size:.7rem;color:var(--ff-muted);margin-top:.2rem}
+.ff-history-empty{margin:.35rem .2rem;color:var(--ff-muted);font-size:.82rem}
 .ff-agent-workspace{flex:1;display:flex;flex-direction:column;min-height:520px;border:1px solid var(--ff-line);border-radius:18px;background:#fff;box-shadow:0 10px 35px rgba(30,38,70,.055);overflow:hidden}
 .ff-chat-topline{display:flex;align-items:center;gap:.55rem;padding:.9rem 1.2rem;border-bottom:1px solid #eef0f5;font-size:.83rem;font-weight:700}
 .ff-status-dot{width:8px;height:8px;border-radius:50%;background:#31a56a;box-shadow:0 0 0 3px #e7f7ed}
@@ -118,6 +137,11 @@
   const historyUrl = {{ url_for("fleetflow_assistant.assistant_history")|tojson }};
   const newChatUrl = {{ url_for("fleetflow_assistant.assistant_new_chat")|tojson }};
   const saveHistoryUrl = {{ url_for("fleetflow_assistant.save_assistant_history_message")|tojson }};
+  const conversationsUrl = {{ url_for("fleetflow_assistant.assistant_conversations")|tojson }};
+  const historyPanel = document.getElementById('ff-history-panel');
+  const historyToggle = document.getElementById('ff-history-toggle');
+  const historyList = document.getElementById('ff-history-list');
+  const historyClose = document.getElementById('ff-history-close');
   let busy = false;
 
   function scrollToLatest() { messages.scrollTop = messages.scrollHeight; }
@@ -381,22 +405,96 @@
       });
     } catch (_) {}
     resetWelcome();
+    historyPanel.hidden = true;
+    historyToggle.setAttribute('aria-expanded', 'false');
     input.value = '';
     resizeInput();
     input.focus();
   });
+
+  function renderMessages(items) {
+    messages.innerHTML = '';
+    if (!Array.isArray(items) || !items.length) {
+      resetWelcome();
+      return;
+    }
+    items.forEach((message) => addMessage(message.role === 'user' ? 'user' : 'assistant', message.content || '', {skipSave:true}));
+    scrollToLatest();
+  }
 
   async function loadHistory() {
     try {
       const response = await fetch(historyUrl, {credentials: 'same-origin', headers: {'Accept':'application/json'}});
       if (!response.ok) return;
       const data = await response.json();
-      if (!Array.isArray(data.messages) || !data.messages.length) return;
-      const welcome = document.getElementById('ff-welcome');
-      if (welcome) welcome.remove();
-      data.messages.forEach((message) => addMessage(message.role === 'user' ? 'user' : 'assistant', message.content || '', {skipSave:true}));
+      if (Array.isArray(data.messages) && data.messages.length) renderMessages(data.messages);
     } catch (_) {}
   }
+
+  async function showConversationList() {
+    historyPanel.hidden = false;
+    historyToggle.setAttribute('aria-expanded', 'true');
+    historyList.innerHTML = '<p class="ff-history-empty">Loading conversations…</p>';
+    try {
+      const response = await fetch(conversationsUrl, {credentials:'same-origin', headers:{'Accept':'application/json'}});
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || 'Could not load history.');
+      historyList.innerHTML = '';
+      if (!Array.isArray(data.conversations) || !data.conversations.length) {
+        historyList.innerHTML = '<p class="ff-history-empty">No saved conversations yet. Start chatting and your conversations will appear here.</p>';
+        return;
+      }
+      data.conversations.forEach((conversation) => {
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'ff-history-item';
+        button.innerHTML = '<span><strong></strong><small></small></span><span aria-hidden="true">›</span>';
+        button.querySelector('strong').textContent = conversation.title || 'New chat';
+        const updated = conversation.updated_at ? new Date(conversation.updated_at.replace(' ', 'T') + (conversation.updated_at.includes('Z') ? '' : 'Z')) : null;
+        button.querySelector('small').textContent = (conversation.message_count || 0) + ' messages' + (updated && !Number.isNaN(updated.getTime()) ? ' · ' + updated.toLocaleString() : '');
+        button.addEventListener('click', async () => {
+          if (busy) return;
+          button.disabled = true;
+          try {
+            const result = await fetch(conversationsUrl + '/' + encodeURIComponent(conversation.conversation_id), {credentials:'same-origin', headers:{'Accept':'application/json'}});
+            const payload = await result.json();
+            if (!result.ok) throw new Error(payload.error || 'Could not open this conversation.');
+            renderMessages(payload.messages);
+            historyPanel.hidden = true;
+            historyToggle.setAttribute('aria-expanded', 'false');
+          } catch (error) {
+            historyList.innerHTML = '';
+            const notice = document.createElement('p');
+            notice.className = 'ff-history-empty';
+            notice.textContent = error.message || 'Could not open conversation.';
+            historyList.appendChild(notice);
+          } finally {
+            button.disabled = false;
+          }
+        });
+        historyList.appendChild(button);
+      });
+    } catch (error) {
+      historyList.innerHTML = '';
+      const notice = document.createElement('p');
+      notice.className = 'ff-history-empty';
+      notice.textContent = error.message || 'Could not load history.';
+      historyList.appendChild(notice);
+    }
+  }
+
+  historyToggle.addEventListener('click', () => {
+    if (historyPanel.hidden) showConversationList();
+    else {
+      historyPanel.hidden = true;
+      historyToggle.setAttribute('aria-expanded', 'false');
+    }
+  });
+  historyClose.addEventListener('click', () => {
+    historyPanel.hidden = true;
+    historyToggle.setAttribute('aria-expanded', 'false');
+  });
+
   bindStarters();
   loadHistory();
 })();
