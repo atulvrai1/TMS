@@ -8,6 +8,11 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <style>
+      .assistant-nav-item{position:relative;margin-bottom:.35rem!important;border:1px solid rgba(99,102,241,.22);background:linear-gradient(110deg,rgba(99,102,241,.10),rgba(59,130,246,.055));font-weight:600}
+      .assistant-nav-item:hover,.assistant-nav-item.active{border-color:rgba(99,102,241,.48);background:linear-gradient(110deg,rgba(99,102,241,.17),rgba(59,130,246,.10))}
+      .assistant-nav-icon{display:inline-grid!important;place-items:center;width:25px;height:25px;min-width:25px;border-radius:8px;background:linear-gradient(135deg,#635bff,#2785df);color:#fff!important;font-size:1rem;box-shadow:0 3px 10px rgba(75,91,230,.22)}
+    </style>
     {% block head %}{% endblock %}
 </head>
 <body class="{{ 'dashboard-body' if block_content == 'dashboard' else '' }}">
@@ -23,13 +28,13 @@
             <nav class="sidebar-nav" id="sidebar-navigation">
                 {% if session.get('is_admin') or session.get('role') == 'Admin' %}
                 <span class="nav-section-label">Administration</span>
+                <a href="{{ url_for('fleetflow_assistant.assistant_page') }}" class="nav-item assistant-nav-item{% if request.endpoint == 'fleetflow_assistant.assistant_page' %} active{% endif %}" aria-label="Open FleetFlow Assistant"><span class="assistant-nav-icon" aria-hidden="true">✦</span> Assistant</a>
                 <a href="{{ url_for('admin_dashboard') }}" class="nav-item{% if request.endpoint == 'admin_dashboard' %} active{% endif %}"><span>▦</span> Overview</a>
                 <a href="{{ url_for('trucks') }}" class="nav-item{% if request.endpoint in ('trucks', 'add_truck', 'edit_truck', 'delete_truck') %} active{% endif %}"><span>🚚</span> Trucks</a>
                 <a href="{{ url_for('drivers') }}" class="nav-item{% if request.endpoint in ('drivers', 'add_driver', 'edit_driver', 'upload_driver_document', 'download_driver_document') %} active{% endif %}"><span>♙</span> Driver Records</a>
                 <a href="{{ url_for('maintenance') }}" class="nav-item{% if request.endpoint == 'maintenance' %} active{% endif %}"><span>🛠</span> Maintenance</a>
                 <a href="{{ url_for('challans') }}" class="nav-item{% if request.endpoint in ('challans', 'challan_add', 'challan_edit', 'challan_delete') %} active{% endif %}"><span>🚨</span> Traffic Challans</a>
                 <a href="{{ url_for('trips') }}" class="nav-item{% if request.endpoint in ('trips', 'create_trip', 'update_trip_status', 'update_trip_freight', 'record_trip_payment') %} active{% endif %}"><span>↗</span> Trips & Dispatch</a>
-                <a href="{{ url_for('fleetflow_assistant.assistant_page') }}" class="nav-item{% if request.endpoint == 'fleetflow_assistant.assistant_page' %} active{% endif %}" aria-label="Open FleetFlow Assistant"><span aria-hidden="true">✦</span> Assistant</a>
                 <a href="{{ url_for('admin_notifications') }}" class="nav-item{% if request.endpoint in ('admin_notifications', 'admin_notification_count') %} active{% endif %}">
                     <span>🔔</span> Notifications
                     <span class="notification-badge" id="notification-count"
@@ -44,8 +49,8 @@
                 <a href="{{ url_for('admin_audit') }}" class="nav-item{% if request.endpoint == 'admin_audit' %} active{% endif %}"><span>≡</span> Audit Log</a>
                 {% else %}
                 <span class="nav-section-label">Operations</span>
+                <a href="{{ url_for('fleetflow_assistant.assistant_page') }}" class="nav-item assistant-nav-item{% if request.endpoint == 'fleetflow_assistant.assistant_page' %} active{% endif %}" aria-label="Open FleetFlow Assistant"><span class="assistant-nav-icon" aria-hidden="true">✦</span> Assistant</a>
                 <a href="{{ url_for('trips') }}" class="nav-item{% if request.endpoint == 'trips' %} active{% endif %}"><span>↗</span> Trips</a>
-                <a href="{{ url_for('fleetflow_assistant.assistant_page') }}" class="nav-item{% if request.endpoint == 'fleetflow_assistant.assistant_page' %} active{% endif %}" aria-label="Open FleetFlow Assistant"><span aria-hidden="true">✦</span> Assistant</a>
                 <a href="{{ url_for('expenses') }}" class="nav-item{% if request.endpoint in ('expenses', 'review_expense', 'correct_expense_amount') %} active{% endif %}"><span>₹</span> Expenses</a>
                 {% endif %}
             </nav>
@@ -133,7 +138,6 @@
         </div>
     </footer>
     {% endif %}
-
 
     <script src="{{ url_for('static', filename='js/main.js', v='notifications-1') }}"></script>
     {% block scripts %}{% endblock %}
