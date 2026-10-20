@@ -400,6 +400,13 @@
 
   async function submitQuestion(question) {
     if (busy || !question.trim()) return;
+    if (pendingTruckCreation && /\\b(cancel|stop|chhodo|rehne do)\\b/i.test(question)) {
+      addMessage('user', question.trim());
+      pendingTruckCreation = false;
+      sessionStorage.removeItem('ffPendingTruckCreation');
+      addMessage('assistant', 'Okay, I stopped adding that truck. Nothing was saved.');
+      return;
+    }
     busy = true;
     send.disabled = true;
     input.disabled = true;
@@ -439,6 +446,10 @@
       } else if (isPaymentRecord && data.draft) {
         showPaymentPreview(data.draft);
       } else if ((isTripCreate || isTruckCreate || isPaymentRecord) && data.error) {
+        if (isTruckCreate) {
+          pendingTruckCreation = false;
+          sessionStorage.removeItem('ffPendingTruckCreation');
+        }
         addMessage('assistant', data.error, {error:true});
       } else if (typeof data.answer !== 'string' || !data.answer.trim()) {
         addMessage('assistant', data.error || 'The request completed, but no answer was returned. Please try another question.', {error:true});
