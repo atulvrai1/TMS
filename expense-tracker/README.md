@@ -198,3 +198,13 @@ Once Docker and the environment file are configured:
     hostname -I
 
 Then open http://<UBUNTU-LAN-IP>:5001 on a phone connected to the same Wi-Fi.
+
+## FleetFlow LangGraph assistant
+
+The dashboard includes a read-only assistant for summaries of trips, expenses, recorded payments, and maintenance. It uses a LangGraph workflow and parameterized, fixed SQL queries; it does not accept SQL from users or perform writes.
+
+- Install dependencies with `pip install -r requirements.txt`.
+- Optional: set `GEMINI_API_KEY` (or `GOOGLE_API_KEY`) and optionally `FLEETFLOW_AI_MODEL=gemini-2.5-flash` to enable Gemini-based intent classification. Keep the key in your local `.env` or deployment secret store; never commit it.
+- Without a key, deterministic intent routing still works.
+- Access is limited to an authenticated, approved FleetFlow session. Results are scoped to the signed-in user's permitted records.
+- Assistant questions are limited to 500 characters. It is intentionally read-only; use the existing FleetFlow screens for all changes and approvals.
