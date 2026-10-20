@@ -187,9 +187,9 @@ def _detect_intent(question: str) -> str:
     text = " ".join((question or "").lower().split())
     if re.search(r"\b(challan|challans|chalan|e-?challan|traffic fine)\b", text):
         return "challans"
-    if re.search(r"\b(driver|drivers|chalak|license number|licence number)\b", text) and not re.search(r"\btrip\s*#?\s*\d+\b", text):
+    if re.search(r"\b(driver|drivers|chalak|license number|licence number)\b", text) and not re.search(r"\btrips?\b", text):
         return "drivers"
-    if re.search(r"\b(truck|trucks|vehicle|vehicles|lorry|gaadi|gadi|number plate|registration number)\b", text) and not re.search(r"\btrip\s*#?\s*\d+\b", text):
+    if re.search(r"\b(truck|trucks|vehicle|vehicles|lorry|gaadi|gadi|number plate|registration number)\b", text) and not re.search(r"\btrips?\b", text):
         return "trucks"
     if re.search(r"\b(got|received|collected|mila|mili|mile|jama kiya|jama hua|paise aaye|payment aaya)\b", text) and re.search(r"\btrip\s*#?\s*\d+\b|\b(it|that|this|uske liye|is trip par|us trip)\b", text):
         return "payments"
@@ -449,6 +449,7 @@ def _query_records(state: AssistantState) -> AssistantState:
                     f"{rows['count']} recorded payments totalling ₹{rows['total']:,.2f}."
                 )
         elif intent in {"trucks", "drivers", "challans"}:
+            question = state.get("routing_question", state.get("question", ""))
             if intent == "trucks":
                 question = state.get("routing_question", state.get("question", ""))
                 reg_match = re.search(r"\b([A-Z]{2}\s*[- ]?\s*\d{1,2}\s*[- ]?\s*[A-Z]{1,3}\s*[- ]?\s*\d{1,4})\b", question, re.I)
