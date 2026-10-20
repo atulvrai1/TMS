@@ -2925,6 +2925,10 @@ register_maintenance_module(app, globals())
 from controller.challan_enhancements import register_challan_module
 register_challan_module(app, globals())
 
+# Register roadside compliance documents and inspection workflows.
+from controller.roadside_compliance import register_compliance_module
+register_compliance_module(app, globals())
+
 
 from controller.ai_assistant import assistant_bp
 app.register_blueprint(assistant_bp)
