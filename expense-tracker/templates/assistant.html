@@ -1,199 +1,226 @@
 {% extends "base.html" %}
 
 {% block title %}FleetFlow Assistant | FleetFlow{% endblock %}
-{% block breadcrumb %}FleetFlow Assistant{% endblock %}
+{% block breadcrumb %}Assistant{% endblock %}
 
 {% block content_dashboard %}
-<section class="ff-assistant-page" aria-labelledby="assistant-title">
-    <header class="ff-assistant-header">
-        <div>
-            <p class="ff-assistant-eyebrow">FLEETFLOW INTELLIGENCE</p>
-            <h1 id="assistant-title">FleetFlow Assistant</h1>
-            <p class="ff-assistant-subtitle">Ask a question and get a clear, formatted summary from records your account is allowed to access.</p>
-        </div>
-        <span class="ff-readonly-badge"><span aria-hidden="true">🔒</span> Read-only access</span>
-    </header>
-
-    <div class="ff-assistant-grid">
-        <section class="ff-assistant-chat-panel" aria-label="Ask the assistant">
-            <div class="ff-assistant-panel-heading">
-                <div class="ff-assistant-avatar" aria-hidden="true">✦</div>
-                <div>
-                    <h2>How can I help?</h2>
-                    <p>Trips, expenses, payments and maintenance</p>
-                </div>
-            </div>
-
-            <div class="ff-prompt-list" aria-label="Suggested questions">
-                <button type="button" class="ff-prompt" data-question="Show my latest trips"><span aria-hidden="true">↗</span> Show my latest trips</button>
-                <button type="button" class="ff-prompt" data-question="Summarize expenses"><span aria-hidden="true">₹</span> Summarize expenses</button>
-                <button type="button" class="ff-prompt" data-question="How much payment has been recorded?"><span aria-hidden="true">▤</span> Payment summary</button>
-                <button type="button" class="ff-prompt" data-question="Summarize maintenance costs"><span aria-hidden="true">🛠</span> Maintenance summary</button>
-            </div>
-
-            <form id="fleetflow-ai-form" class="ff-assistant-form">
-                <label for="fleetflow-ai-question">Your question</label>
-                <div class="ff-assistant-input-row">
-                    <input id="fleetflow-ai-question" name="question" type="text" maxlength="500" required autocomplete="off"
-                           placeholder="e.g. Show my latest trips" aria-describedby="ff-question-hint">
-                    <button id="fleetflow-ai-submit" type="submit"><span aria-hidden="true">➤</span> Ask</button>
-                </div>
-                <p id="ff-question-hint" class="ff-assistant-hint">Keep it specific. The assistant only reads records and never changes them.</p>
-            </form>
-        </section>
-
-        <section class="ff-assistant-results" aria-labelledby="ff-results-title">
-            <div class="ff-results-heading">
-                <div>
-                    <p class="ff-assistant-eyebrow">RESPONSE</p>
-                    <h2 id="ff-results-title">Your results</h2>
-                </div>
-                <button type="button" id="ff-clear-result" class="ff-clear-button" hidden>Clear</button>
-            </div>
-            <div id="fleetflow-ai-answer" class="ff-answer-content" role="status" aria-live="polite" aria-atomic="true">
-                <div class="ff-empty-state">
-                    <span aria-hidden="true">✧</span>
-                    <h3>Ready when you are</h3>
-                    <p>Choose a suggested question or enter your own. Your answer will appear here in a readable, structured format.</p>
-                </div>
-            </div>
-            <p class="ff-result-footnote"><span aria-hidden="true">ⓘ</span> Results are limited to the records available to your account.</p>
-        </section>
+<section class="ff-agent" aria-labelledby="ff-agent-title">
+  <header class="ff-agent-header">
+    <div class="ff-agent-brand">
+      <div class="ff-agent-mark" aria-hidden="true">✦</div>
+      <div><p class="ff-agent-kicker">FLEETFLOW INTELLIGENCE</p><h1 id="ff-agent-title">FleetFlow Assistant</h1></div>
     </div>
+    <div class="ff-agent-actions">
+      <span class="ff-safe-pill"><span aria-hidden="true">●</span> Read-only workspace</span>
+      <button type="button" id="ff-new-chat" class="ff-new-chat">＋ New chat</button>
+    </div>
+  </header>
+
+  <div class="ff-agent-workspace">
+    <div class="ff-chat-topline"><span class="ff-status-dot"></span><span>FleetFlow Agent</span><span class="ff-chat-topline-muted">· Uses your permitted fleet records</span></div>
+    <div id="ff-chat-messages" class="ff-chat-messages" role="log" aria-live="polite" aria-relevant="additions text">
+      <div class="ff-welcome" id="ff-welcome">
+        <div class="ff-welcome-mark" aria-hidden="true">✦</div>
+        <h2>What can I help you with?</h2>
+        <p>Ask about your fleet operations. I’ll turn the available records into clear summaries.</p>
+        <div class="ff-starters" aria-label="Suggested prompts">
+          <button type="button" class="ff-starter" data-question="Show my latest trips"><span aria-hidden="true">↗</span><span><strong>Latest trips</strong><small>Routes, drivers and trip status</small></span><span class="ff-starter-arrow">↗</span></button>
+          <button type="button" class="ff-starter" data-question="Summarize expenses"><span aria-hidden="true">₹</span><span><strong>Expense summary</strong><small>Totals and pending reviews</small></span><span class="ff-starter-arrow">↗</span></button>
+          <button type="button" class="ff-starter" data-question="How much payment has been recorded?"><span aria-hidden="true">▤</span><span><strong>Recorded payments</strong><small>Payment count and total</small></span><span class="ff-starter-arrow">↗</span></button>
+          <button type="button" class="ff-starter" data-question="Summarize maintenance costs"><span aria-hidden="true">⚙</span><span><strong>Maintenance</strong><small>Service records and costs</small></span><span class="ff-starter-arrow">↗</span></button>
+        </div>
+      </div>
+    </div>
+
+    <form id="ff-chat-form" class="ff-composer">
+      <label class="ff-sr-only" for="ff-chat-input">Ask FleetFlow Assistant</label>
+      <textarea id="ff-chat-input" name="question" rows="1" maxlength="500" placeholder="Message FleetFlow Assistant…" required></textarea>
+      <button type="submit" id="ff-chat-send" aria-label="Send message"><span aria-hidden="true">↑</span></button>
+      <div class="ff-composer-note"><span>↵ Enter to send · Shift + Enter for a new line</span><span>Assistant can only read records, not modify them.</span></div>
+    </form>
+  </div>
 </section>
 
 <style>
-.ff-assistant-page{max-width:1280px;margin:0 auto;color:var(--ink,#172033)}
-.ff-assistant-header{display:flex;align-items:flex-start;justify-content:space-between;gap:1rem;margin-bottom:1.5rem}
-.ff-assistant-eyebrow{font-size:.72rem;letter-spacing:.12em;font-weight:700;color:var(--industry-blue,#2b6cb0);margin:0 0 .45rem}
-.ff-assistant-header h1{font-size:clamp(1.7rem,3vw,2.35rem);line-height:1.2;margin:0}
-.ff-assistant-subtitle{max-width:720px;color:var(--ink-muted,#667085);margin:.6rem 0 0;line-height:1.6}
-.ff-readonly-badge{display:inline-flex;align-items:center;gap:.4rem;white-space:nowrap;padding:.5rem .75rem;border:1px solid #dbe7f4;border-radius:999px;background:#f3f8fd;color:#245b8f;font-size:.8rem;font-weight:600}
-.ff-assistant-grid{display:grid;grid-template-columns:minmax(0,.9fr) minmax(0,1.1fr);gap:1.1rem;align-items:stretch}
-.ff-assistant-chat-panel,.ff-assistant-results{background:var(--paper-card,#fff);border:1px solid var(--border-ui,#e2e8f0);border-radius:16px;padding:clamp(1rem,2vw,1.5rem);min-width:0;box-shadow:0 6px 22px rgba(15,23,42,.035)}
-.ff-assistant-panel-heading{display:flex;align-items:center;gap:.8rem;padding-bottom:1.1rem;border-bottom:1px solid var(--border-soft,#eeebe4)}
-.ff-assistant-avatar{display:grid;place-items:center;flex:0 0 44px;width:44px;height:44px;border-radius:13px;background:#eaf2fb;color:#245b8f;font-size:1.4rem}
-.ff-assistant-panel-heading h2,.ff-results-heading h2{font-size:1.15rem;margin:0}
-.ff-assistant-panel-heading p{margin:.25rem 0 0;color:var(--ink-muted,#667085);font-size:.85rem}
-.ff-prompt-list{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.65rem;padding:1.2rem 0 1.4rem}
-.ff-prompt{display:flex;align-items:center;gap:.5rem;text-align:left;min-height:52px;padding:.75rem;border:1px solid var(--border-ui,#e2e8f0);border-radius:10px;background:#fff;color:var(--ink,#172033);font:inherit;font-size:.86rem;cursor:pointer;transition:border-color .15s,background .15s}
-.ff-prompt span{color:var(--industry-blue,#2b6cb0);font-size:1rem}
-.ff-prompt:hover,.ff-prompt:focus-visible{border-color:var(--industry-blue,#2b6cb0);background:#f6faff;outline:none}
-.ff-assistant-form label{display:block;font-size:.85rem;font-weight:600;margin-bottom:.5rem}
-.ff-assistant-input-row{display:flex;gap:.55rem}
-.ff-assistant-input-row input{flex:1;min-width:0;padding:.8rem .9rem;border:1px solid #cbd5e1;border-radius:9px;font:inherit;font-size:.92rem;background:#fff;color:inherit}
-.ff-assistant-input-row input:focus{outline:2px solid #93c5fd;outline-offset:1px;border-color:#4d87c5}
-.ff-assistant-input-row button{border:0;border-radius:9px;padding:.75rem 1rem;background:var(--industry-dark,#1a202c);color:#fff;font:inherit;font-weight:600;cursor:pointer;white-space:nowrap}
-.ff-assistant-input-row button:disabled{opacity:.6;cursor:wait}
-.ff-assistant-hint{font-size:.78rem;color:var(--ink-muted,#667085);line-height:1.5;margin:.6rem 0 0}
-.ff-results-heading{display:flex;justify-content:space-between;align-items:center;gap:1rem;padding-bottom:1rem;border-bottom:1px solid var(--border-soft,#eeebe4)}
-.ff-clear-button{border:1px solid var(--border-ui,#e2e8f0);background:#fff;border-radius:7px;padding:.4rem .65rem;cursor:pointer;color:var(--ink-muted,#667085)}
-.ff-answer-content{padding:1rem 0;min-height:260px}
-.ff-empty-state{text-align:center;padding:2rem 1rem;color:var(--ink-muted,#667085)}
-.ff-empty-state>span{display:inline-grid;place-items:center;width:48px;height:48px;border-radius:50%;background:#f1f5f9;color:#4775a5;font-size:1.5rem}
-.ff-empty-state h3{color:var(--ink,#172033);font-size:1rem;margin:.9rem 0 .4rem}
-.ff-empty-state p{font-size:.88rem;line-height:1.6;max-width:340px;margin:0 auto}
-.ff-answer-title{font-size:.95rem;font-weight:700;color:var(--ink,#172033);margin:0 0 .75rem}
-.ff-answer-list{display:grid;gap:.55rem;list-style:none;padding:0;margin:0}
-.ff-answer-list li{padding:.75rem .85rem;border:1px solid var(--border-ui,#e2e8f0);border-radius:9px;background:#fbfdff;font-size:.88rem;line-height:1.55;overflow-wrap:anywhere}
-.ff-answer-summary{padding:.85rem 1rem;border-left:3px solid var(--industry-blue,#2b6cb0);background:#f3f8fd;border-radius:0 9px 9px 0;line-height:1.6;font-size:.91rem;margin-bottom:.8rem;overflow-wrap:anywhere}
-.ff-answer-error{padding:.85rem 1rem;border:1px solid #fecaca;background:#fff7f7;color:#991b1b;border-radius:9px;line-height:1.5}
-.ff-result-footnote{font-size:.76rem;color:var(--ink-muted,#667085);border-top:1px solid var(--border-soft,#eeebe4);padding-top:.8rem;margin:0}
-@media(max-width:900px){.ff-assistant-grid{grid-template-columns:minmax(0,1fr)}.ff-answer-content{min-height:180px}}
-@media(max-width:560px){.ff-assistant-header{display:block}.ff-readonly-badge{margin-top:.9rem}.ff-prompt-list{grid-template-columns:minmax(0,1fr)}.ff-assistant-input-row{flex-direction:column}.ff-assistant-input-row button{min-height:44px}.ff-assistant-chat-panel,.ff-assistant-results{padding:1rem}}
+.ff-agent{--ff-blue:#4f63d9;--ff-blue-deep:#3547b8;--ff-line:#e6e8ef;--ff-muted:#747b8d;max-width:1100px;margin:0 auto;color:var(--ink,#202437);min-height:calc(100vh - 150px);display:flex;flex-direction:column;gap:1rem}
+.ff-agent-header{display:flex;align-items:center;justify-content:space-between;gap:1rem;flex-wrap:wrap}
+.ff-agent-brand{display:flex;align-items:center;gap:.85rem}
+.ff-agent-mark,.ff-welcome-mark{display:grid;place-items:center;background:linear-gradient(140deg,#6b63f6,#2787dc);color:white;box-shadow:0 7px 18px rgba(79,99,217,.23)}
+.ff-agent-mark{width:48px;height:48px;border-radius:15px;font-size:1.55rem}
+.ff-agent-kicker{font-size:.68rem;font-weight:800;letter-spacing:.14em;color:var(--ff-blue);margin:0 0 .25rem}
+.ff-agent h1{font-size:clamp(1.45rem,2.5vw,1.9rem);line-height:1.2;margin:0;letter-spacing:-.035em}
+.ff-agent-actions{display:flex;align-items:center;gap:.65rem;flex-wrap:wrap}
+.ff-safe-pill{display:inline-flex;align-items:center;gap:.4rem;border:1px solid #d8e8de;border-radius:999px;background:#f2faf5;color:#27714a;padding:.45rem .7rem;font-size:.76rem;font-weight:600}
+.ff-safe-pill>span{font-size:.55rem}
+.ff-new-chat{border:1px solid var(--ff-line);background:#fff;color:inherit;border-radius:9px;padding:.55rem .8rem;font:inherit;font-size:.82rem;font-weight:600;cursor:pointer}
+.ff-new-chat:hover{background:#f7f8fc;border-color:#c9cdec}
+.ff-agent-workspace{flex:1;display:flex;flex-direction:column;min-height:520px;border:1px solid var(--ff-line);border-radius:18px;background:#fff;box-shadow:0 10px 35px rgba(30,38,70,.055);overflow:hidden}
+.ff-chat-topline{display:flex;align-items:center;gap:.55rem;padding:.9rem 1.2rem;border-bottom:1px solid #eef0f5;font-size:.83rem;font-weight:700}
+.ff-status-dot{width:8px;height:8px;border-radius:50%;background:#31a56a;box-shadow:0 0 0 3px #e7f7ed}
+.ff-chat-topline-muted{font-weight:400;color:var(--ff-muted)}
+.ff-chat-messages{flex:1;overflow-y:auto;min-height:300px;max-height:calc(100vh - 330px);padding:clamp(1rem,3vw,2rem)}
+.ff-welcome{max-width:780px;margin:1.5rem auto 2rem;text-align:center}
+.ff-welcome-mark{width:55px;height:55px;border-radius:18px;font-size:1.7rem;margin:0 auto 1rem}
+.ff-welcome h2{font-size:clamp(1.4rem,3vw,2rem);letter-spacing:-.04em;margin:0 0 .5rem}
+.ff-welcome>p{margin:0 auto;color:var(--ff-muted);font-size:.93rem;line-height:1.6;max-width:540px}
+.ff-starters{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.7rem;margin:1.6rem auto 0;text-align:left}
+.ff-starter{display:flex;align-items:center;gap:.8rem;text-align:left;border:1px solid var(--ff-line);border-radius:12px;padding:.9rem;background:#fff;color:inherit;cursor:pointer;min-width:0;transition:transform .15s,border-color .15s,box-shadow .15s}
+.ff-starter:hover{transform:translateY(-1px);border-color:#c6cdf7;box-shadow:0 5px 15px rgba(60,70,140,.07)}
+.ff-starter>span:first-child{display:grid;place-items:center;width:36px;height:36px;flex:0 0 36px;border-radius:10px;background:#f0f1ff;color:var(--ff-blue);font-size:1.05rem}
+.ff-starter strong,.ff-starter small{display:block}
+.ff-starter strong{font-size:.85rem}
+.ff-starter small{font-size:.75rem;color:var(--ff-muted);margin-top:.2rem;line-height:1.4}
+.ff-starter-arrow{margin-left:auto;color:#a0a5b4}
+.ff-message{display:flex;gap:.8rem;align-items:flex-start;max-width:850px;margin:0 auto 1.35rem;animation:ff-fade-in .18s ease-out}
+.ff-message.user{justify-content:flex-end}
+.ff-message-avatar{display:grid;place-items:center;flex:0 0 34px;width:34px;height:34px;border-radius:11px;background:#eff0ff;color:var(--ff-blue);font-weight:800}
+.ff-message.user .ff-message-avatar{order:2;background:#e8edf5;color:#38445b}
+.ff-message-body{max-width:min(80%,720px);min-width:0}
+.ff-message-label{font-size:.72rem;font-weight:700;color:var(--ff-muted);margin:0 0 .35rem}
+.ff-message-bubble{padding:.9rem 1rem;border:1px solid #e9ebf2;border-radius:4px 14px 14px 14px;background:#fafbfe;line-height:1.7;font-size:.9rem;white-space:pre-wrap;overflow-wrap:anywhere}
+.ff-message.user .ff-message-bubble{background:#eef1ff;border-color:#e0e5ff;border-radius:14px 4px 14px 14px}
+.ff-message.error .ff-message-bubble{background:#fff6f6;border-color:#f4d3d3;color:#8f2727}
+.ff-message-bubble p{margin:0 0 .65rem}.ff-message-bubble p:last-child{margin-bottom:0}
+.ff-message-bubble ul{margin:.4rem 0 .2rem;padding-left:1.25rem}.ff-message-bubble li{margin:.3rem 0}
+.ff-typing{display:inline-flex;gap:4px;align-items:center;padding:.35rem 0}
+.ff-typing i{width:6px;height:6px;border-radius:50%;background:#8790b9;animation:ff-pulse .9s infinite alternate}
+.ff-typing i:nth-child(2){animation-delay:.15s}.ff-typing i:nth-child(3){animation-delay:.3s}
+.ff-composer{position:relative;margin:.2rem auto 1rem;width:calc(100% - 2rem);max-width:850px;border:1px solid #dfe2ed;border-radius:16px;padding:.6rem .65rem .45rem;background:#fff;box-shadow:0 5px 20px rgba(34,45,90,.06)}
+.ff-composer:focus-within{border-color:#a8b2f1;box-shadow:0 0 0 3px rgba(99,102,241,.09)}
+.ff-composer textarea{display:block;width:100%;resize:none;min-height:43px;max-height:160px;padding:.55rem 3.2rem .45rem .55rem;border:0;outline:none;background:transparent;color:inherit;font:inherit;font-size:.93rem;line-height:1.5}
+.ff-composer textarea::placeholder{color:#9a9fb0}
+.ff-composer button{position:absolute;right:.7rem;top:.62rem;width:36px;height:36px;border:0;border-radius:11px;background:linear-gradient(140deg,#655cf3,#347cda);color:#fff;font-size:1.45rem;cursor:pointer;box-shadow:0 3px 9px rgba(79,99,217,.2)}
+.ff-composer button:disabled{opacity:.45;cursor:wait}
+.ff-composer-note{display:flex;justify-content:space-between;gap:.7rem;padding:.35rem .45rem 0;color:#9297a7;font-size:.68rem;line-height:1.4}
+.ff-sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+@keyframes ff-fade-in{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:translateY(0)}}
+@keyframes ff-pulse{from{opacity:.35;transform:translateY(0)}to{opacity:1;transform:translateY(-3px)}}
+@media(max-width:700px){.ff-agent{min-height:calc(100vh - 115px)}.ff-agent-workspace{min-height:500px}.ff-chat-messages{max-height:none;padding:1rem}.ff-starters{grid-template-columns:1fr}.ff-message-body{max-width:88%}.ff-composer{width:calc(100% - 1rem)}.ff-composer-note{display:block}.ff-composer-note span{display:block}.ff-agent-actions{width:100%;justify-content:space-between}}
+@media(prefers-reduced-motion:reduce){.ff-message,.ff-typing i{animation:none}.ff-starter{transition:none}}
 </style>
 {% endblock %}
 
 {% block scripts %}
 <script>
 (() => {
-    const form = document.getElementById('fleetflow-ai-form');
-    if (!form) return;
-    const input = document.getElementById('fleetflow-ai-question');
-    const button = document.getElementById('fleetflow-ai-submit');
-    const output = document.getElementById('fleetflow-ai-answer');
-    const clearButton = document.getElementById('ff-clear-result');
-    const csrfToken = {{ session.get('csrf_token', '')|tojson }};
+  const form = document.getElementById('ff-chat-form');
+  if (!form) return;
+  const input = document.getElementById('ff-chat-input');
+  const send = document.getElementById('ff-chat-send');
+  const messages = document.getElementById('ff-chat-messages');
+  const newChat = document.getElementById('ff-new-chat');
+  const csrfToken = {{ session.get('csrf_token', '')|tojson }};
+  const askUrl = {{ url_for("fleetflow_assistant.ask_fleetflow_assistant")|tojson }};
+  let busy = false;
 
-    function showMessage(message, isError = false) {
-        output.replaceChildren();
-        const box = document.createElement('div');
-        box.className = isError ? 'ff-answer-error' : 'ff-answer-summary';
-        box.textContent = message;
-        output.appendChild(box);
-        clearButton.hidden = false;
+  function scrollToLatest() { messages.scrollTop = messages.scrollHeight; }
+
+  function addMessage(kind, text, options = {}) {
+    const welcome = document.getElementById('ff-welcome');
+    if (welcome) welcome.remove();
+    const row = document.createElement('article');
+    row.className = 'ff-message ' + kind + (options.error ? ' error' : '');
+    const avatar = document.createElement('div');
+    avatar.className = 'ff-message-avatar';
+    avatar.setAttribute('aria-hidden', 'true');
+    avatar.textContent = kind === 'user' ? 'You' : '✦';
+    const body = document.createElement('div');
+    body.className = 'ff-message-body';
+    const label = document.createElement('div');
+    label.className = 'ff-message-label';
+    label.textContent = kind === 'user' ? 'You' : 'FleetFlow Assistant';
+    const bubble = document.createElement('div');
+    bubble.className = 'ff-message-bubble';
+    bubble.textContent = text;
+    body.append(label, bubble);
+    row.append(avatar, body);
+    messages.appendChild(row);
+    scrollToLatest();
+    return {row, bubble};
+  }
+
+  function addTyping() {
+    const item = addMessage('assistant', '');
+    item.row.classList.add('ff-typing-row');
+    item.bubble.setAttribute('aria-label', 'Assistant is thinking');
+    item.bubble.innerHTML = '<span class="ff-typing" aria-hidden="true"><i></i><i></i><i></i></span>';
+    return item.row;
+  }
+
+  function resetWelcome() {
+    messages.innerHTML = '<div class="ff-welcome" id="ff-welcome"><div class="ff-welcome-mark" aria-hidden="true">✦</div><h2>What can I help you with?</h2><p>Ask about your fleet operations. I’ll turn the available records into clear summaries.</p><div class="ff-starters" aria-label="Suggested prompts"><button type="button" class="ff-starter" data-question="Show my latest trips"><span aria-hidden="true">↗</span><span><strong>Latest trips</strong><small>Routes, drivers and trip status</small></span><span class="ff-starter-arrow">↗</span></button><button type="button" class="ff-starter" data-question="Summarize expenses"><span aria-hidden="true">₹</span><span><strong>Expense summary</strong><small>Totals and pending reviews</small></span><span class="ff-starter-arrow">↗</span></button><button type="button" class="ff-starter" data-question="How much payment has been recorded?"><span aria-hidden="true">▤</span><span><strong>Recorded payments</strong><small>Payment count and total</small></span><span class="ff-starter-arrow">↗</span></button><button type="button" class="ff-starter" data-question="Summarize maintenance costs"><span aria-hidden="true">⚙</span><span><strong>Maintenance</strong><small>Service records and costs</small></span><span class="ff-starter-arrow">↗</span></button></div></div>';
+    bindStarters();
+  }
+
+  async function submitQuestion(question) {
+    if (busy || !question.trim()) return;
+    busy = true;
+    send.disabled = true;
+    input.disabled = true;
+    addMessage('user', question.trim());
+    const typing = addTyping();
+    input.value = '';
+    resizeInput();
+    try {
+      const response = await fetch(askUrl, {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: {'Content-Type': 'application/json', 'Accept': 'application/json', 'X-CSRFToken': csrfToken},
+        body: JSON.stringify({question: question.trim()})
+      });
+      let data;
+      try { data = await response.json(); }
+      catch (_) { throw new Error('The server returned an unreadable response. Refresh the page and try again.'); }
+      typing.remove();
+      if (!response.ok) {
+        addMessage('assistant', data.error || ('Request failed (HTTP ' + response.status + '). Please try again.'), {error:true});
+      } else if (typeof data.answer !== 'string' || !data.answer.trim()) {
+        addMessage('assistant', data.error || 'The request completed, but no answer was returned. Please try another question.', {error:true});
+      } else {
+        addMessage('assistant', data.answer.trim());
+      }
+    } catch (error) {
+      typing.remove();
+      addMessage('assistant', error.message || 'Could not connect to FleetFlow. Check your connection and try again.', {error:true});
+    } finally {
+      busy = false;
+      send.disabled = false;
+      input.disabled = false;
+      input.focus();
+      scrollToLatest();
     }
+  }
 
-    function renderAnswer(answer) {
-        output.replaceChildren();
-        const lines = String(answer || '').split(/\r?\n/).map(line => line.trim()).filter(Boolean);
-        if (!lines.length) {
-            showMessage('No formatted result was returned. Try asking in a different way.', true);
-            return;
-        }
-        const firstLine = lines[0].replace(/^[•\\-*]\\s*/, '');
-        const hasRecordList = lines.length > 1 && /:\\s*$/.test(firstLine);
-        if (hasRecordList) {
-            const title = document.createElement('h3');
-            title.className = 'ff-answer-title';
-            title.textContent = firstLine;
-            output.appendChild(title);
-        } else {
-            const summary = document.createElement('div');
-            summary.className = 'ff-answer-summary';
-            summary.textContent = firstLine;
-            output.appendChild(summary);
-        }
+  function resizeInput() {
+    input.style.height = 'auto';
+    input.style.height = Math.min(input.scrollHeight, 160) + 'px';
+  }
 
-        if (lines.length > 1) {
-            const list = document.createElement('ul');
-            list.className = 'ff-answer-list';
-            lines.slice(1).forEach((line) => {
-                const item = document.createElement('li');
-                item.textContent = line.replace(/^[•\\-*]\\s*/, '');
-                list.appendChild(item);
-            });
-            output.appendChild(list);
-        }
-        clearButton.hidden = false;
+  function bindStarters() {
+    messages.querySelectorAll('.ff-starter').forEach((starter) => {
+      starter.addEventListener('click', () => submitQuestion(starter.dataset.question || ''));
+    });
+  }
+
+  form.addEventListener('submit', (event) => {
+    event.preventDefault();
+    submitQuestion(input.value);
+  });
+  input.addEventListener('input', resizeInput);
+  input.addEventListener('keydown', (event) => {
+    if (event.key === 'Enter' && !event.shiftKey) {
+      event.preventDefault();
+      form.requestSubmit();
     }
-
-    form.addEventListener('submit', async (event) => {
-        event.preventDefault();
-        const question = input.value.trim();
-        if (!question) return;
-        button.disabled = true;
-        button.textContent = 'Thinking…';
-        showMessage('Checking the records available to your account…');
-        try {
-            const response = await fetch('{{ url_for("fleetflow_assistant.ask_fleetflow_assistant") }}', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json', 'X-CSRFToken': csrfToken},
-                body: JSON.stringify({question})
-            });
-            const data = await response.json();
-            if (!response.ok) showMessage(data.error || 'The request failed. Please try again.', true);
-            else renderAnswer(data.answer);
-        } catch (_) {
-            showMessage('Unable to reach the assistant. Check your connection and try again.', true);
-        } finally {
-            button.disabled = false;
-            button.innerHTML = '<span aria-hidden="true">➤</span> Ask';
-        }
-    });
-
-    document.querySelectorAll('.ff-prompt').forEach((prompt) => {
-        prompt.addEventListener('click', () => {
-            input.value = prompt.dataset.question || '';
-            input.focus();
-        });
-    });
-
-    clearButton.addEventListener('click', () => {
-        output.innerHTML = '<div class="ff-empty-state"><span aria-hidden="true">✧</span><h3>Ready when you are</h3><p>Choose a suggested question or enter your own. Your answer will appear here in a readable, structured format.</p></div>';
-        clearButton.hidden = true;
-        input.focus();
-    });
+  });
+  newChat.addEventListener('click', () => {
+    if (busy) return;
+    resetWelcome();
+    input.value = '';
+    resizeInput();
+    input.focus();
+  });
+  bindStarters();
 })();
 </script>
 {% endblock %}
