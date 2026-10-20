@@ -958,6 +958,8 @@ def assistant_new_chat():
     session.pop("assistant_trip_draft_at", None)
     session.pop("assistant_payment_draft", None)
     session.pop("assistant_payment_draft_at", None)
+    session.pop("assistant_complete_trip_draft", None)
+    session.pop("assistant_complete_trip_draft_at", None)
     return jsonify(ok=True), 200
 
 
