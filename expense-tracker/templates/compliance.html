@@ -32,10 +32,11 @@
       <p class="compliance-muted">Record expiry dates for alerts. Do not store passwords or unnecessary personal data here.</p>
       <form class="compliance-form" action="{{ url_for('compliance_document_add') }}" method="post">
         <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-        <div><label for="doc-subject">Record belongs to *</label><select id="doc-subject" name="subject_type" required><option value="truck">Truck / vehicle</option><option value="driver">Driver</option></select></div>
+        <div><label for="doc-subject">Record belongs to *</label><select id="doc-subject" name="subject_type" required><option value="truck">Truck / vehicle</option><option value="driver">Driver</option><option value="trip">Trip / cargo documents</option></select></div>
         <div><label for="doc-type">Document type *</label><select id="doc-type" name="document_type" required>{% for item in document_types %}<option value="{{ item }}">{{ item }}</option>{% endfor %}</select></div>
         <div id="doc-truck-group"><label for="doc-truck">Truck *</label><select id="doc-truck" name="truck_id"><option value="">Select truck</option>{% for t in trucks %}<option value="{{ t.truck_id }}">{{ t.registration_number }} — {{ t.model or 'Model not set' }}</option>{% endfor %}</select></div>
         <div id="doc-driver-group" hidden><label for="doc-driver">Driver *</label><select id="doc-driver" name="driver_id"><option value="">Select driver</option>{% for d in drivers %}<option value="{{ d.driver_id }}">{{ d.name }} — {{ d.license_number }}</option>{% endfor %}</select></div>
+        <div id="doc-trip-group" hidden><label for="doc-trip">Trip *</label><select id="doc-trip" name="trip_id"><option value="">Select trip</option>{% for t in trips %}<option value="{{ t.trip_id }}">#{{ t.trip_id }} {{ t.route_from }} → {{ t.route_to }} ({{ t.status }})</option>{% endfor %}</select></div>
         <div><label for="doc-number">Document number / reference</label><input id="doc-number" name="document_number" maxlength="120"></div>
         <div><label for="doc-method">Verification method *</label><select id="doc-method" name="verification_method"><option>Physical original</option><option>DigiLocker</option><option>mParivahan</option><option>Other verified digital copy</option><option>Not verified</option></select></div>
         <div><label for="doc-issue">Issue date</label><input id="doc-issue" type="date" name="issue_date"></div>
@@ -73,7 +74,7 @@
   <section class="compliance-panel">
     <h2>Document register and expiry alerts</h2>
     <div class="compliance-table-wrap"><table class="compliance-table"><thead><tr><th>Document</th><th>Vehicle / driver</th><th>Reference</th><th>Validity</th><th>Verification</th><th>Notes</th></tr></thead><tbody>
-    {% for d in documents %}<tr><td><strong>{{ d.document_type }}</strong><div class="compliance-muted">{{ d.subject_type|title }}</div></td><td>{{ d.registration_number or d.driver_name or '—' }}</td><td>{{ d.document_number or '—' }}</td><td>{% if d.expiry_date %}{% if d.expiry_date < today %}<span class="compliance-pill bad">Expired</span>{% elif d.expiry_date <= (today|string) %}<span class="compliance-pill warn">Expiry today</span>{% else %}{{ d.expiry_date }}{% endif %}{% else %}<span class="compliance-pill warn">Expiry not recorded</span>{% endif %}{% if d.issue_date %}<div class="compliance-muted">Issued {{ d.issue_date }}</div>{% endif %}</td><td>{% if d.verified %}<span class="compliance-pill good">Verified</span>{% else %}<span class="compliance-pill warn">Unverified</span>{% endif %}<div class="compliance-muted">{{ d.verification_method }}</div></td><td>{{ d.notes or '—' }}</td></tr>
+    {% for d in documents %}<tr><td><strong>{{ d.document_type }}</strong><div class="compliance-muted">{{ d.subject_type|title }}</div></td><td>{{ d.registration_number or d.driver_name or (('#' ~ d.related_trip_id ~ ' ' ~ d.route_from ~ ' → ' ~ d.route_to) if d.related_trip_id else '—') }}</td><td>{{ d.document_number or '—' }}</td><td>{% if d.expiry_date %}{% if d.expiry_date < today %}<span class="compliance-pill bad">Expired</span>{% elif d.expiry_date <= (today|string) %}<span class="compliance-pill warn">Expiry today</span>{% else %}{{ d.expiry_date }}{% endif %}{% else %}<span class="compliance-pill warn">Expiry not recorded</span>{% endif %}{% if d.issue_date %}<div class="compliance-muted">Issued {{ d.issue_date }}</div>{% endif %}</td><td>{% if d.verified %}<span class="compliance-pill good">Verified</span>{% else %}<span class="compliance-pill warn">Unverified</span>{% endif %}<div class="compliance-muted">{{ d.verification_method }}</div></td><td>{{ d.notes or '—' }}</td></tr>
     {% else %}<tr><td colspan="6">No compliance documents recorded yet.</td></tr>{% endfor %}
     </tbody></table></div>
   </section>
@@ -89,12 +90,12 @@
 <script>
 (function(){
  const subject=document.getElementById('doc-subject'), type=document.getElementById('doc-type');
- const truckGroup=document.getElementById('doc-truck-group'), driverGroup=document.getElementById('doc-driver-group');
- const truck=document.getElementById('doc-truck'), driver=document.getElementById('doc-driver');
- function syncSubject(){const isDriver=subject.value==='driver';truckGroup.hidden=isDriver;driverGroup.hidden=!isDriver;truck.required=!isDriver;driver.required=isDriver;
-   if(isDriver) type.value='Driving Licence (HMV)'; else if(type.value==='Driving Licence (HMV)') type.value='Registration Certificate (RC)';}
+ const truckGroup=document.getElementById('doc-truck-group'), driverGroup=document.getElementById('doc-driver-group'), tripGroup=document.getElementById('doc-trip-group');
+ const truck=document.getElementById('doc-truck'), driver=document.getElementById('doc-driver'), trip=document.getElementById('doc-trip');
+ function syncSubject(){const isDriver=subject.value==='driver', isTrip=subject.value==='trip';truckGroup.hidden=isDriver||isTrip;driverGroup.hidden=!isDriver;tripGroup.hidden=!isTrip;truck.required=!isDriver&&!isTrip;driver.required=isDriver;trip.required=isTrip;
+   if(isDriver) type.value='Driving Licence (HMV)'; else if(isTrip) type.value='Trip Sheet / E-Way Bill / Cargo Manifest'; else if(type.value==='Driving Licence (HMV)'||type.value==='Trip Sheet / E-Way Bill / Cargo Manifest') type.value='Registration Certificate (RC)';}
  subject.addEventListener('change',syncSubject);syncSubject();
- type.addEventListener('change',()=>{if(type.value==='Driving Licence (HMV)'){subject.value='driver';syncSubject();}else if(subject.value==='driver'){subject.value='truck';syncSubject();}});
+ type.addEventListener('change',()=>{if(type.value==='Driving Licence (HMV)'){subject.value='driver';syncSubject();}else if(type.value==='Trip Sheet / E-Way Bill / Cargo Manifest'){subject.value='trip';syncSubject();}else if(subject.value!=='truck'){subject.value='truck';syncSubject();}});
  const kind=document.getElementById('insp-type'), groups=document.querySelectorAll('.finding-group');
  function syncFindings(){groups.forEach(g=>{const show=g.dataset.kind===kind.value;g.hidden=!show;if(!show)g.querySelectorAll('input').forEach(c=>c.checked=false);});}
  kind.addEventListener('change',syncFindings);syncFindings();
