@@ -31,6 +31,8 @@ class AssistantState(TypedDict, total=False):
     role: str
     driver_id: int | None
     answer: str
+    routing_question: str
+    conversation_history: list
 
 
 def _ensure_history_tables(conn):
@@ -95,6 +97,79 @@ def _save_conversation_message(role, content):
             (conversation_id, user_id)
         )
         conn.commit()
+    finally:
+        conn.close()
+
+
+
+def _resolve_contextual_question(question: str, history: list) -> str:
+    """Resolve short references from recent turns without guessing across unrelated chats."""
+    text = " ".join((question or "").split())
+    if not history or not text:
+        return text
+    if re.search(r"\\btrip\\s*#?\\s*\\d+\\b", text, re.I):
+        return text
+    if re.search(r"\\b[A-Z]{1,3}\\s*[- ]?\\d{1,2}\\s*[- ]?[A-Z]{0,3}\\s*[- ]?\\d{1,4}\\b", text, re.I):
+        return text
+    if re.search(r"\\b(?:truck|vehicle|registration)\\s+(?!number\\b|details?\\b|status\\b)[\\w-]+", text, re.I):
+        return text
+
+    follow_up = bool(re.search(
+        r"\\b(it|that|those|this|there|same|them|he|she|that one|that truck|that driver)\\b",
+        text, re.I
+    )) or bool(re.match(r"^(and|also|what about|how about|for|then)\\b", text, re.I))
+    if not follow_up:
+        return text
+
+    trip_id = truck = driver = None
+    for item in reversed(history[-12:]):
+        content = str(item.get("content", ""))
+        trip_match = re.search(r"\\btrip\\s*#?\\s*(\\d+)\\b", content, re.I)
+        if trip_id is None and trip_match:
+            trip_id = trip_match.group(1)
+        reg_match = re.search(
+            r"\\b([A-Z]{1,3}\\s*[- ]?\\d{1,2}\\s*[- ]?[A-Z]{0,3}\\s*[- ]?\\d{1,4})\\b",
+            content, re.I
+        )
+        if truck is None and reg_match:
+            truck = re.sub(r"\\s+", "", reg_match.group(1)).upper()
+        truck_match = re.search(
+            r"\\b(?:truck|vehicle|registration(?: number)?)\\s+(?:number\\s+)?([A-Z0-9][A-Z0-9 -]{2,20})",
+            content, re.I
+        )
+        if truck is None and truck_match:
+            candidate = re.split(r"\\b(?:trip|driver|status|from|to|with|for|and|on)\\b", truck_match.group(1), maxsplit=1, flags=re.I)[0].strip(" .,:;")
+            if candidate and candidate.lower() not in {"details", "records", "trips", "number"}:
+                truck = candidate
+        driver_match = re.search(r"\\bdriver\\s+(?:named\\s+)?([A-Za-z][A-Za-z .'-]{1,40})", content, re.I)
+        if driver is None and driver_match:
+            candidate = re.split(r"\\b(?:for|on|trip|truck|status|from|to|and)\\b", driver_match.group(1), maxsplit=1, flags=re.I)[0].strip(" .,:;")
+            if candidate:
+                driver = candidate
+
+    if trip_id and re.search(r"\\b(it|that|this|there|same|them|that one)\\b", text, re.I):
+        return text + f" (context: Trip #{trip_id})"
+    if truck and re.search(r"\\b(that truck|this truck|it|that one|same truck)\\b", text, re.I):
+        return text + f" (context: truck {truck})"
+    if driver and re.search(r"\\b(that driver|this driver|he|she|them|that one)\\b", text, re.I):
+        return text + f" (context: driver {driver})"
+    return text
+
+
+def _load_recent_assistant_history(limit=12):
+    """Load recent turns for the active conversation owned by the signed-in user."""
+    user_id = session.get("user_id")
+    if not user_id:
+        return []
+    conn = get_db()
+    try:
+        _ensure_history_tables(conn)
+        rows = conn.execute(
+            "SELECT role, content FROM assistant_messages WHERE user_id = ? AND conversation_id = ? "
+            "ORDER BY message_id DESC LIMIT ?",
+            (user_id, _conversation_id(), int(limit))
+        ).fetchall()
+        return [{"role": row["role"], "content": row["content"]} for row in reversed(rows)]
     finally:
         conn.close()
 
@@ -370,25 +445,12 @@ def ask_fleetflow_assistant():
             state["conversation_history"] = [
                 {"role": row["role"], "content": row["content"]} for row in reversed(history)
             ]
-            routing_question = question.strip()
-            if history:
-                previous_user = next(
-                    (row["content"] for row in reversed(history)
-                     if row["role"] == "user" and row["content"].strip() != question.strip()),
-                    ""
-                )
-                is_follow_up = bool(re.match(
-                    r"^(and\b|also\b|what about\b|how about\b|what about it\b|"
-                    r"how much for it\b|for that\b|that one\b|it\??$)",
-                    routing_question, re.IGNORECASE
-                ))
-                has_entity = bool(re.search(
-                    r"\btrip\s*#?\s*\d+\b|\btruck\s+\S+",
-                    routing_question, re.IGNORECASE
-                ))
-                if is_follow_up and previous_user and not has_entity:
-                    routing_question = previous_user + " Follow-up question: " + routing_question
-            state["routing_question"] = routing_question
+            usable_history = [
+                row for row in state["conversation_history"]
+                if not (row["role"] == "user" and row["content"].strip() == question.strip())
+            ]
+            state["conversation_history"] = usable_history
+            state["routing_question"] = _resolve_contextual_question(question.strip(), usable_history)
         finally:
             conn.close()
         result = assistant_graph.invoke(state)
@@ -609,8 +671,19 @@ def draft_payment_from_assistant():
     if not isinstance(question, str) or not question.strip() or len(question) > MAX_QUESTION_LENGTH:
         return jsonify(error="Enter a payment note of 1–500 characters."), 400
     draft, missing = _parse_payment_prompt(question)
+    if not draft.get("trip_id"):
+        history = _load_recent_assistant_history()
+        usable_history = [
+            item for item in history
+            if not (item["role"] == "user" and item["content"].strip() == question.strip())
+        ]
+        contextual_question = _resolve_contextual_question(question, usable_history)
+        contextual_trip = re.search(r"\\bTrip\\s*#?\\s*(\\d+)\\b", contextual_question, re.I)
+        if contextual_trip:
+            question = question.rstrip(" .?!") + f" for Trip #{contextual_trip.group(1)}"
+            draft, missing = _parse_payment_prompt(question)
     if missing:
-        return jsonify(missing=missing, prompt_hint="Example: I received 10000 for Trip 3."), 200
+        return jsonify(missing=missing, prompt_hint="Example: I received 10000 for Trip 3. If you mean a previous trip, say “I received 10000 for it” after discussing that trip."), 200
     conn = get_db()
     try:
         scope, params = _owner_scope("trips", "owner_user_id", {
