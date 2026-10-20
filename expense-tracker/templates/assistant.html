@@ -125,7 +125,9 @@
 .ff-payment-table .ff-payment-trip strong,.ff-payment-table .ff-payment-trip small{display:block}
 .ff-payment-table .ff-payment-trip small{margin-top:.18rem;color:#747b8d;font-size:.74rem;white-space:normal;min-width:100px}
 .ff-payment-table .ff-payment-amount{font-weight:800;text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}
-.ff-payment-table th.ff-payment-amount{text-align:right}
+.ff-payment-table th.ff-payment-amount{text-align:right;white-space:normal}
+.ff-payment-table tfoot .ff-payment-total-label{max-width:190px;overflow-wrap:anywhere}
+.ff-payment-table tfoot .ff-payment-total-amount{font-variant-numeric:tabular-nums}
 .ff-payment-table .ff-payment-date{white-space:nowrap}
 .ff-payment-table .ff-payment-reference{min-width:140px;max-width:260px;overflow-wrap:anywhere;color:#687086;font-size:.76rem}
 .ff-payment-table tfoot td{background:#f7f8ff;border:0;font-weight:800;color:#252b45}
@@ -205,16 +207,18 @@
         const tableWrap = document.createElement('div'); tableWrap.className = 'ff-payment-table-wrap';
         const detailTable = document.createElement('table'); detailTable.className = 'ff-payment-table';
         const head = document.createElement('thead'), hr = document.createElement('tr');
-        headers.forEach(label => { const th=document.createElement('th'); th.scope='col'; th.textContent=label; hr.appendChild(th); });
+        headers.forEach(label => { const th=document.createElement('th'); th.scope='col'; th.textContent=label; if (/amount|freight|received|due|expenses|total/i.test(label)) th.className='ff-payment-amount'; hr.appendChild(th); });
         head.appendChild(hr); detailTable.appendChild(head);
         const body = document.createElement('tbody');
         dataRows.forEach(values => { const tr=document.createElement('tr'); values.forEach((value,index) => { const td=document.createElement('td'); td.textContent=value; if (headers[index] && /amount|freight|received|due|expenses|total/i.test(headers[index])) td.className='ff-payment-amount'; tr.appendChild(td); }); body.appendChild(tr); });
         detailTable.appendChild(body);
         if (totalLabel) {
           const foot=document.createElement('tfoot'), tr=document.createElement('tr'), label=document.createElement('td'), value=document.createElement('td');
-          label.colSpan=Math.max(1, headers.length-1); label.className='ff-payment-total-label'; label.textContent=totalLabel;
+          label.colSpan=1; label.className='ff-payment-total-label'; label.textContent=totalLabel;
           value.colSpan=1; value.className='ff-payment-total-amount'; value.textContent=totalValue;
-          tr.append(label,value); foot.appendChild(tr); detailTable.appendChild(foot);
+          tr.append(label,value);
+          for (let i=2; i<headers.length; i++) { const blank=document.createElement('td'); blank.setAttribute('aria-hidden','true'); tr.appendChild(blank); }
+          foot.appendChild(tr); detailTable.appendChild(foot);
         }
         tableWrap.appendChild(detailTable); section.appendChild(tableWrap); result.appendChild(section);
       };
