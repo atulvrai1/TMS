@@ -4,7 +4,9 @@ from pathlib import Path
 # The project root for this application is expense-tracker/, not the repository root.
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from controller.ai_assistant import _detect_intent, assistant_graph
+from flask import Flask, session
+
+from controller.ai_assistant import _detect_intent, _parse_trip_prompt, assistant_graph
 
 
 def test_intent_router_recognizes_trip_questions():
@@ -32,3 +34,22 @@ def test_graph_returns_safe_help_for_unsupported_questions(monkeypatch):
     })
     assert result["intent"] == "help"
     assert "read-only" in result["answer"].lower()
+
+
+
+def test_trip_prompt_parser_extracts_required_details():
+    app = Flask(__name__)
+    with app.test_request_context("/assistant"):
+        session["email"] = "admin@example.com"
+        draft, missing = _parse_trip_prompt(
+            "Create a trip from Bhopal to Indore tomorrow using truck MP04AB1234, "
+            "driver Rajesh Kumar, freight 25000."
+        )
+    assert missing == []
+    assert draft["route_from"] == "Bhopal"
+    assert draft["route_to"] == "Indore"
+    assert draft["start_date"]
+    assert draft["truck_label"] == "MP04AB1234"
+    assert draft["driver_label"] == "Rajesh Kumar"
+    assert draft["freight_amount"] == "25000.00"
+    assert draft["owner_email"] == "admin@example.com"
