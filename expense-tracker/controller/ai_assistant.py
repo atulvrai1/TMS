@@ -238,7 +238,7 @@ def _classify(state: AssistantState) -> AssistantState:
     force_deterministic_intent = bool(re.search(
         r"\b(?:due|balance|remaining|outstanding|baaki|baki|kitna dena|kitna lena|"
         r"payment|payments|received|receiving|paid|freight|collection|mila|mili|mile|jama|bhugtan|"
-        r"expense|expenses|kharcha|kharch|diesel|toll|maintenance|servicing|service|repair|mechanic|truck|trucks|vehicle|vehicles|lorry|gaadi|gadi|driver|drivers|challan|challans|chalan|traffic fine)\b",
+        r"expense|expenses|kharcha|kharch|diesel|toll|maintenance|servicing|service|repair|mechanic|truck|trucks|vehicle|vehicles|lorry|gaadi|gadi|driver|drivers|challan|challans|chalan|traffic fine|users?|accounts?|staff|members|admins?|administrators?)\b",
         routed_question, re.I
     ))
     api_key = os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")
@@ -534,7 +534,7 @@ def _query_records(state: AssistantState) -> AssistantState:
                 if state.get("role") != "Admin" and state.get("email", "").lower() != SUPER_ADMIN_EMAIL.lower():
                     driver_id = state.get("driver_id")
                     if not driver_id:
-                        return {"answer": "Driver records dekhne ke liye apne administrator se access maangein."}
+                        return {"answer": "Driver records dekhne ke liye administrator access chahiye. Please ask your administrator."}
                     rows = conn.execute("SELECT driver_id, name, status, license_number, contact_info FROM drivers WHERE driver_id = ?", (driver_id,)).fetchall()
                 else:
                     question = state.get("routing_question", state.get("question", ""))
