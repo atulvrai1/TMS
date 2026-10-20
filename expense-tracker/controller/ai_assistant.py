@@ -335,7 +335,8 @@ def _query_records(state: AssistantState) -> AssistantState:
                 "SELECT trips.trip_id, trips.route_from, trips.route_to, trips.start_date, "
                 "trips.end_date, trips.status, trucks.registration_number, trucks.model, "
                 "drivers.name AS driver, trips.freight_amount, "
-                "COALESCE((SELECT SUM(tp.amount) FROM trip_payments tp WHERE tp.trip_id = trips.trip_id), 0) AS amount_received "
+                "COALESCE((SELECT SUM(tp.amount) FROM trip_payments tp WHERE tp.trip_id = trips.trip_id), 0) AS amount_received, "
+                "COALESCE((SELECT SUM(e.amount) FROM expenses e WHERE e.trip_id = trips.trip_id AND lower(COALESCE(e.status, '')) != 'rejected'), 0) AS amount_expenses "
                 "FROM trips JOIN trucks ON trucks.truck_id = trips.truck_id "
                 "JOIN drivers ON drivers.driver_id = trips.driver_id "
                 f"WHERE {scope}"
@@ -366,6 +367,47 @@ def _query_records(state: AssistantState) -> AssistantState:
                     answer = "Outstanding amount:\n" + "\n".join(lines)
                 elif trip_id_match:
                     answer = "Trip details:\n" + "\n".join(lines)
+                    if len(rows) == 1:
+                        trip = rows[0]
+                        requested_trip_id = int(trip["trip_id"])
+                        freight = float(trip["freight_amount"] or 0)
+                        received = float(trip["amount_received"] or 0)
+                        expenses_total = float(trip["amount_expenses"] or 0)
+                        answer += (
+                            f"\n\nFinancial summary: Freight ₹{freight:,.2f} | "
+                            f"Received ₹{received:,.2f} | "
+                            f"Remaining due ₹{max(0, freight - received):,.2f} | "
+                            f"Expenses (excluding rejected) ₹{expenses_total:,.2f}"
+                        )
+                        payment_rows = conn.execute(
+                            "SELECT payment_id, amount, payment_date, reference FROM trip_payments "
+                            "WHERE trip_id = ? ORDER BY payment_date DESC, payment_id DESC LIMIT 30",
+                            (requested_trip_id,),
+                        ).fetchall()
+                        if payment_rows:
+                            payment_lines = [
+                                f"Payment #{p['payment_id']} | ₹{float(p['amount'] or 0):,.2f} | "
+                                f"{p['payment_date']}" + (f" | {p['reference']}" if p["reference"] else "")
+                                for p in payment_rows
+                            ]
+                            answer += "\n\nReceived payments:\n" + "\n".join(payment_lines)
+                        else:
+                            answer += f"\n\nReceived payments: No payments recorded for Trip #{requested_trip_id}."
+                        expense_rows = conn.execute(
+                            "SELECT expense_id, category, amount, date, status, description FROM expenses "
+                            "WHERE trip_id = ? ORDER BY date DESC, expense_id DESC LIMIT 50",
+                            (requested_trip_id,),
+                        ).fetchall()
+                        if expense_rows:
+                            expense_lines = [
+                                f"Expense #{e['expense_id']} | {e['category']} | "
+                                f"₹{float(e['amount'] or 0):,.2f} | {e['date']} | {e['status']} | "
+                                f"{(e['description'] or '—').replace('|', '/')}"
+                                for e in expense_rows
+                            ]
+                            answer += "\n\nExpenses:\n" + "\n".join(expense_lines)
+                        else:
+                            answer += f"\n\nExpenses: No expenses recorded for Trip #{requested_trip_id}."
                 elif truck_match:
                     answer = "Trips matching that truck:\n" + "\n".join(lines)
                 elif status_match:
