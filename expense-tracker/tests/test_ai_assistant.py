@@ -8,7 +8,7 @@ from flask import Flask, session
 
 from controller.ai_assistant import (
     _detect_intent, _format_answer_for_user, _parse_payment_prompt,
-    _parse_trip_prompt, _validate_graph_answer, assistant_graph,
+    _parse_trip_prompt, _resolve_contextual_question, _validate_graph_answer, assistant_graph,
 )
 
 
@@ -18,6 +18,14 @@ def test_intent_router_recognizes_trip_questions():
 
 def test_intent_router_recognizes_pending_trip_count_in_hinglish():
     assert _detect_intent("Abhi kitne trips pending hain?") == "trips"
+
+
+def test_vague_details_follow_up_uses_single_trip_from_previous_result():
+    history = [
+        {"role": "user", "content": "Abhi kitne trips pending hain?"},
+        {"role": "assistant", "content": "| Trip ID | Route | Date | Status |\\n| --- | --- | --- | --- |\\n| #7 | Bhopal → Indore | 2026-10-21 | Scheduled |\\nAbhi 1 trip pending hai."},
+    ]
+    assert _resolve_contextual_question("give me all details", history) == "Trip #7 details"
 
 
 def test_intent_router_recognizes_expense_questions():
