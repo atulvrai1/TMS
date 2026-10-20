@@ -334,7 +334,7 @@
     resizeInput();
     try {
       const isTripCreate = /\b(create|make|plan|schedule|book|dispatch)\b/i.test(question) && /\btrip\b/i.test(question);
-      const isPaymentRecord = /\b(got|received|collected|record|add|log)\b/i.test(question) && /\b(payment|amount|rupees|rs\.?|inr|trip\s*#?\s*\d+)\b/i.test(question) && /\btrip\s*#?\s*\d+\b/i.test(question) && !/\b(show|list|how much|summary|total)\b/i.test(question);
+      const isPaymentRecord = /\b(got|received|collected|record|add|log)\b/i.test(question) && (/(?:₹\s*\d[\d,]*(?:\.\d{1,2})?|\b\d[\d,]*(?:\.\d{1,2})?\b|\b(payment|amount|rupees|rs\.?|inr)\b)/i.test(question)) && !/\b(show|list|how much|summary|total)\b/i.test(question);
       const targetUrl = isTripCreate ? tripDraftUrl : (isPaymentRecord ? paymentDraftUrl : askUrl);
       const response = await fetch(targetUrl, {
         method: 'POST',
