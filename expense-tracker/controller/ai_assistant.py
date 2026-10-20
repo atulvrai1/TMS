@@ -194,7 +194,7 @@ def _detect_intent(question: str) -> str:
     )):
         return "maintenance"
     # Route balance/due/payment questions before the generic trip intent.
-    if re.search(r"\\b(?:due|balance|remaining|outstanding|baaki|baki|kitna dena|kitna lena|payment|paid|received|receiving|mila|mili|mile|jama|bhugtan)\\b", text):
+    if re.search(r"\b(?:due|balance|remaining|outstanding|baaki|baki|kitna dena|kitna lena|payment|paid|received|receiving|mila|mili|mile|jama|bhugtan)\b", text):
         return "payments"
     if any(word in text for word in (
         "payment", "paid", "received", "freight", "collection", "mila", "mili",
@@ -312,7 +312,7 @@ def _query_records(state: AssistantState) -> AssistantState:
                 answer = "I couldn't find any trips in the records available to your account."
             else:
                 due_question = bool(re.search(
-                    r"\\b(?:due|balance|remaining|outstanding|baaki|baki|kitna dena|kitna lena)\\b",
+                    r"\b(?:due|balance|remaining|outstanding|baaki|baki|kitna dena|kitna lena)\b",
                     question, re.I
                 ))
                 lines = []
@@ -327,13 +327,13 @@ def _query_records(state: AssistantState) -> AssistantState:
                         line += f" | Freight ₹{freight:,.2f} | Received ₹{received:,.2f} | Due ₹{max(0, freight - received):,.2f}"
                     lines.append(line)
                 if due_question:
-                    answer = "Outstanding amount:\\n" + "\\n".join(lines)
+                    answer = "Outstanding amount:\n" + "\n".join(lines)
                 elif trip_id_match:
-                    answer = "Trip details:\\n" + "\\n".join(lines)
+                    answer = "Trip details:\n" + "\n".join(lines)
                 elif truck_match:
-                    answer = "Trips matching that truck:\\n" + "\\n".join(lines)
+                    answer = "Trips matching that truck:\n" + "\n".join(lines)
                 else:
-                    answer = "Here are the latest trips you can access:\\n" + "\\n".join(lines)
+                    answer = "Here are the latest trips you can access:\n" + "\n".join(lines)
         elif intent == "expenses":
             scope, params = _owner_scope("trips", "owner_user_id", state)
             question = state.get("routing_question", state.get("question", ""))
@@ -380,11 +380,11 @@ def _query_records(state: AssistantState) -> AssistantState:
                 filters.append("(upper(trucks.registration_number) = upper(?) OR lower(trucks.model) = lower(?) OR lower(trucks.registration_number) LIKE lower(?))")
                 filter_params.extend([label, label, "%" + label + "%"])
             due_question = bool(re.search(
-                r"\\b(?:due|balance|remaining|outstanding|baaki|baki|kitna dena|kitna lena)\\b",
+                r"\b(?:due|balance|remaining|outstanding|baaki|baki|kitna dena|kitna lena)\b",
                 question, re.I
             ))
             detail_question = bool(re.search(
-                r"\\b(?:show|list|details?|history|records?|entries|received payments?|payment details?)\\b",
+                r"\b(?:show|list|details?|history|records?|entries|received payments?|payment details?)\b",
                 question, re.I
             ))
             if due_question:
@@ -411,7 +411,7 @@ def _query_records(state: AssistantState) -> AssistantState:
                             f"Trip #{row['trip_id']} ({row['route_from']} → {row['route_to']}): "
                             f"freight ₹{freight:,.2f}, received ₹{received:,.2f}, outstanding ₹{max(0, freight - received):,.2f}."
                         )
-                    answer = "Outstanding amount:\\n" + "\\n".join(lines)
+                    answer = "Outstanding amount:\n" + "\n".join(lines)
             elif detail_question:
                 query = (
                     "SELECT trip_payments.payment_id, trip_payments.trip_id, trip_payments.amount, "
@@ -435,8 +435,8 @@ def _query_records(state: AssistantState) -> AssistantState:
                     ]
                     total = sum(float(row["amount"] or 0) for row in rows)
                     answer = (
-                        "Received payments:\\n" + "\\n".join(lines)
-                        + f"\\nTotal shown: ₹{total:,.2f} across {len(rows)} payment record(s)."
+                        "Received payments:\n" + "\n".join(lines)
+                        + f"\nTotal shown: ₹{total:,.2f} across {len(rows)} payment record(s)."
                     )
             else:
                 query = (
