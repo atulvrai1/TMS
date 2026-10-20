@@ -2408,7 +2408,7 @@ def admin_notifications():
         notifications=notifications,
         sms_settings=sms_settings,
         sms_provider_configured=all(os.environ.get(name, "").strip() for name in (
-            "FAST2SMS_API_KEY", "FAST2SMS_SENDER_ID", "FAST2SMS_ENTITY_ID", "FAST2SMS_TEMPLATE_ID"
+            "MSG07_API_URL", "MSG07_API_KEY"
         )),
         csrf_token=session["csrf_token"],
         block_content="dashboard"
