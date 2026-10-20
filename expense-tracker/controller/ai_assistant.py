@@ -382,7 +382,7 @@ def _query_records(state: AssistantState) -> AssistantState:
                 filters.append("trips.trip_id = ?")
                 filter_params.append(int(trip_id_match.group(1)))
             if truck_match:
-                label = truck_match.group(1).strip(" '\\"")
+                label = truck_match.group(1).strip().strip("'").strip(chr(34))
                 filters.append("(upper(trucks.registration_number) = upper(?) OR lower(trucks.model) = lower(?) OR lower(trucks.registration_number) LIKE lower(?))")
                 filter_params.extend([label, label, "%" + label + "%"])
             query = (
@@ -429,7 +429,7 @@ def _query_records(state: AssistantState) -> AssistantState:
                 filters.append("trips.trip_id = ?")
                 filter_params.append(int(trip_id_match.group(1)))
             if truck_match:
-                label = truck_match.group(1).strip(" '\"")
+                label = truck_match.group(1).strip().strip("'").strip(chr(34))
                 filters.append("(upper(trucks.registration_number) = upper(?) OR lower(trucks.model) = lower(?) OR lower(trucks.registration_number) LIKE lower(?))")
                 filter_params.extend([label, label, "%" + label + "%"])
             due_question = bool(re.search(
