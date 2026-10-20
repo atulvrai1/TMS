@@ -1,0 +1,103 @@
+{% extends "base.html" %}
+{% block title %}Roadside Compliance — FleetFlow{% endblock %}
+{% block breadcrumb %}Safety / Roadside Compliance{% endblock %}
+{% block head %}
+<style>
+.compliance-page{display:grid;gap:1.25rem}.compliance-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,280px),1fr));gap:1rem}
+.compliance-panel{background:var(--panel-bg, #fff);border:1px solid var(--border-color, #e5e7eb);border-radius:14px;padding:1.1rem;min-width:0}
+.compliance-panel h2{margin:.1rem 0 .8rem;font-size:1.05rem}.compliance-form{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.8rem}
+.compliance-form .wide{grid-column:1/-1}.compliance-form label,.finding-list legend{display:block;font-size:.82rem;font-weight:600;margin-bottom:.25rem}
+.compliance-form input,.compliance-form select,.compliance-form textarea{width:100%;min-width:0}.finding-list{grid-column:1/-1;border:1px solid var(--border-color,#e5e7eb);border-radius:10px;padding:.7rem;display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,220px),1fr));gap:.45rem}
+.finding-option{display:flex;align-items:flex-start;gap:.45rem;font-size:.85rem}.finding-option input{width:auto;margin-top:.2rem}
+.compliance-table-wrap{overflow-x:auto}.compliance-table{width:100%;border-collapse:collapse;min-width:700px}.compliance-table th,.compliance-table td{padding:.65rem;border-bottom:1px solid var(--border-color,#e5e7eb);text-align:left;vertical-align:top;font-size:.84rem}
+.compliance-pill{display:inline-block;border-radius:999px;padding:.2rem .55rem;font-size:.75rem;font-weight:700;background:#e5e7eb;color:#374151}.compliance-pill.bad{background:#fee2e2;color:#991b1b}.compliance-pill.warn{background:#fef3c7;color:#92400e}.compliance-pill.good{background:#dcfce7;color:#166534}
+.compliance-muted{font-size:.82rem;color:var(--text-muted,#64748b)}.compliance-note{border-left:3px solid #d97706;padding:.65rem .8rem;background:rgba(245,158,11,.08);font-size:.85rem}
+@media(max-width:640px){.compliance-form{grid-template-columns:1fr}.compliance-form .wide,.finding-list{grid-column:auto}}
+</style>
+{% endblock %}
+{% block content_dashboard %}
+<div class="dashboard-page compliance-page">
+  <header class="panel-header">
+    <div><h1 class="dashboard-title">Roadside Compliance</h1><p class="dashboard-subtitle">Document validity, truck safety checks, cargo concerns, and inspection follow-up in one register.</p></div>
+  </header>
+  <div class="compliance-note"><strong>Important:</strong> This register records operational findings and reminders; it does not determine whether an offence occurred or calculate statutory penalties. Confirm applicable requirements and fine amounts with current law and the issuing authority.</div>
+  <section class="stats-grid" aria-label="Compliance summary">
+    <div class="stat-tile"><span class="stat-label">Expired documents</span><span class="stat-value">{{ expired_count }}</span></div>
+    <div class="stat-tile"><span class="stat-label">Expiring within 30 days</span><span class="stat-value">{{ expiring_count }}</span></div>
+    <div class="stat-tile"><span class="stat-label">Open inspection findings</span><span class="stat-value">{{ open_findings }}</span></div>
+  </section>
+  <div class="compliance-grid">
+    <section class="compliance-panel">
+      <h2>＋ Register a compliance document</h2>
+      <p class="compliance-muted">Record expiry dates for alerts. Do not store passwords or unnecessary personal data here.</p>
+      <form class="compliance-form" action="{{ url_for('compliance_document_add') }}" method="post">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <div><label for="doc-subject">Record belongs to *</label><select id="doc-subject" name="subject_type" required><option value="truck">Truck / vehicle</option><option value="driver">Driver</option></select></div>
+        <div><label for="doc-type">Document type *</label><select id="doc-type" name="document_type" required>{% for item in document_types %}<option value="{{ item }}">{{ item }}</option>{% endfor %}</select></div>
+        <div id="doc-truck-group"><label for="doc-truck">Truck *</label><select id="doc-truck" name="truck_id"><option value="">Select truck</option>{% for t in trucks %}<option value="{{ t.truck_id }}">{{ t.registration_number }} — {{ t.model or 'Model not set' }}</option>{% endfor %}</select></div>
+        <div id="doc-driver-group" hidden><label for="doc-driver">Driver *</label><select id="doc-driver" name="driver_id"><option value="">Select driver</option>{% for d in drivers %}<option value="{{ d.driver_id }}">{{ d.name }} — {{ d.license_number }}</option>{% endfor %}</select></div>
+        <div><label for="doc-number">Document number / reference</label><input id="doc-number" name="document_number" maxlength="120"></div>
+        <div><label for="doc-method">Verification method *</label><select id="doc-method" name="verification_method"><option>Physical original</option><option>DigiLocker</option><option>mParivahan</option><option>Other verified digital copy</option><option>Not verified</option></select></div>
+        <div><label for="doc-issue">Issue date</label><input id="doc-issue" type="date" name="issue_date"></div>
+        <div><label for="doc-expiry">Expiry date</label><input id="doc-expiry" type="date" name="expiry_date"></div>
+        <div><label for="doc-verified">Verification status</label><select id="doc-verified" name="verified"><option value="0">Not verified</option><option value="1">Verified by authorized staff</option></select></div>
+        <div class="wide"><label for="doc-notes">Notes</label><textarea id="doc-notes" name="notes" rows="2" maxlength="500"></textarea></div>
+        <div class="wide"><button class="btn-primary" type="submit">Save document record</button></div>
+      </form>
+    </section>
+    <section class="compliance-panel">
+      <h2>＋ Record roadside inspection</h2>
+      <p class="compliance-muted">Select only observed concerns. Record facts and evidence; link a challan only if an official notice exists.</p>
+      <form class="compliance-form" action="{{ url_for('compliance_inspection_add') }}" method="post">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <div><label for="insp-truck">Truck *</label><select id="insp-truck" name="truck_id" required><option value="">Select truck</option>{% for t in trucks %}<option value="{{ t.truck_id }}">{{ t.registration_number }} — {{ t.model or 'Model not set' }}</option>{% endfor %}</select></div>
+        <div><label for="insp-driver">Driver</label><select id="insp-driver" name="driver_id"><option value="">Not recorded</option>{% for d in drivers %}<option value="{{ d.driver_id }}">{{ d.name }}</option>{% endfor %}</select></div>
+        <div><label for="insp-trip">Related trip</label><select id="insp-trip" name="trip_id"><option value="">Not linked</option>{% for t in trips %}<option value="{{ t.trip_id }}">#{{ t.trip_id }} {{ t.route_from }} → {{ t.route_to }} ({{ t.status }})</option>{% endfor %}</select></div>
+        <div><label for="insp-date">Inspection date *</label><input id="insp-date" type="date" name="inspection_date" value="{{ today }}" required></div>
+        <div><label for="insp-type">Inspection category *</label><select id="insp-type" name="inspection_type" required>{% for kind in inspection_types %}<option value="{{ kind }}">{{ kind }}</option>{% endfor %}</select></div>
+        <div><label for="insp-severity">Severity *</label><select id="insp-severity" name="severity">{% for s in severities %}<option>{{ s }}</option>{% endfor %}</select></div>
+        <div><label for="insp-officer">Officer / inspector name</label><input id="insp-officer" name="officer_name" maxlength="120"></div>
+        <div><label for="insp-rank">Officer rank / designation</label><input id="insp-rank" name="officer_rank" maxlength="120" placeholder="Record as stated / shown"></div>
+        <div class="wide"><label for="insp-location">Inspection location</label><input id="insp-location" name="location" maxlength="160"></div>
+        <fieldset class="finding-list"><legend>Observed concerns (optional)</legend>
+          {% for kind, findings in finding_groups.items() %}<div class="wide finding-group" data-kind="{{ kind }}"><strong>{{ kind }}</strong>{% for finding in findings %}<label class="finding-option"><input type="checkbox" name="findings" value="{{ finding }}"> <span>{{ finding }}</span></label>{% endfor %}</div>{% endfor %}
+        </fieldset>
+        <div><label for="insp-challan">Official challan (if issued)</label><select id="insp-challan" name="challan_id"><option value="">No linked challan</option>{% for c in challans %}<option value="{{ c.challan_id }}">#{{ c.challan_id }} {{ c.challan_number }} — {{ c.violation }}</option>{% endfor %}</select></div>
+        <div><label for="insp-status">Follow-up status</label><select id="insp-status" name="status">{% for s in statuses %}<option>{{ s }}</option>{% endfor %}</select></div>
+        <div class="wide"><label for="insp-action">Corrective action / follow-up</label><textarea id="insp-action" name="corrective_action" rows="2" maxlength="1000" placeholder="What needs to be fixed, by whom, and by when"></textarea></div>
+        <div class="wide"><label for="insp-notes">Evidence / factual notes</label><textarea id="insp-notes" name="notes" rows="2" maxlength="1000" placeholder="Observed facts, document checked, weighbridge reference, notice reference"></textarea></div>
+        <div class="wide"><button class="btn-primary" type="submit">Save inspection</button></div>
+      </form>
+    </section>
+  </div>
+  <section class="compliance-panel">
+    <h2>Document register and expiry alerts</h2>
+    <div class="compliance-table-wrap"><table class="compliance-table"><thead><tr><th>Document</th><th>Vehicle / driver</th><th>Reference</th><th>Validity</th><th>Verification</th><th>Notes</th></tr></thead><tbody>
+    {% for d in documents %}<tr><td><strong>{{ d.document_type }}</strong><div class="compliance-muted">{{ d.subject_type|title }}</div></td><td>{{ d.registration_number or d.driver_name or '—' }}</td><td>{{ d.document_number or '—' }}</td><td>{% if d.expiry_date %}{% if d.expiry_date < today %}<span class="compliance-pill bad">Expired</span>{% elif d.expiry_date <= (today|string) %}<span class="compliance-pill warn">Expiry today</span>{% else %}{{ d.expiry_date }}{% endif %}{% else %}<span class="compliance-pill warn">Expiry not recorded</span>{% endif %}{% if d.issue_date %}<div class="compliance-muted">Issued {{ d.issue_date }}</div>{% endif %}</td><td>{% if d.verified %}<span class="compliance-pill good">Verified</span>{% else %}<span class="compliance-pill warn">Unverified</span>{% endif %}<div class="compliance-muted">{{ d.verification_method }}</div></td><td>{{ d.notes or '—' }}</td></tr>
+    {% else %}<tr><td colspan="6">No compliance documents recorded yet.</td></tr>{% endfor %}
+    </tbody></table></div>
+  </section>
+  <section class="compliance-panel">
+    <h2>Roadside inspection history</h2>
+    <div class="compliance-table-wrap"><table class="compliance-table"><thead><tr><th>Inspection</th><th>Vehicle / driver</th><th>Category and findings</th><th>Severity</th><th>Linked challan</th><th>Follow-up</th></tr></thead><tbody>
+    {% for i in inspections %}<tr><td><strong>#{{ i.inspection_id }}</strong><div>{{ i.inspection_date }}</div><div class="compliance-muted">{{ i.location or 'Location not recorded' }}</div></td><td>{{ i.registration_number }}<div class="compliance-muted">{{ i.driver_name or 'Driver not recorded' }}</div></td><td>{{ i.inspection_type }}{% for f in (i.findings_json|from_json if false else []) %}{% endfor %}<div class="compliance-muted">{{ i.officer_name or 'Inspector not recorded' }}{% if i.officer_rank %} · {{ i.officer_rank }}{% endif %}</div><div class="compliance-muted">{{ i.notes or 'No notes' }}</div></td><td><span class="compliance-pill {{ 'bad' if i.severity in ['High','Critical'] else 'warn' if i.severity == 'Medium' else '' }}">{{ i.severity }}</span></td><td>{% if i.challan_id %}Challan #{{ i.challan_id }}{% else %}Not linked{% endif %}</td><td>
+      <form action="{{ url_for('compliance_inspection_update', inspection_id=i.inspection_id) }}" method="post" style="display:grid;gap:.4rem;min-width:180px"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><select name="status" aria-label="Inspection follow-up status">{% for s in statuses %}<option {% if i.status == s %}selected{% endif %}>{{ s }}</option>{% endfor %}</select><input name="corrective_action" maxlength="1000" value="{{ i.corrective_action or '' }}" aria-label="Corrective action" placeholder="Corrective action"><button class="btn-ghost" type="submit">Update follow-up</button></form><div class="compliance-muted">Status: {{ i.status }}</div></td></tr>
+    {% else %}<tr><td colspan="6">No roadside inspections recorded yet.</td></tr>{% endfor %}
+    </tbody></table></div>
+  </section>
+</div>
+<script>
+(function(){
+ const subject=document.getElementById('doc-subject'), type=document.getElementById('doc-type');
+ const truckGroup=document.getElementById('doc-truck-group'), driverGroup=document.getElementById('doc-driver-group');
+ const truck=document.getElementById('doc-truck'), driver=document.getElementById('doc-driver');
+ function syncSubject(){const isDriver=subject.value==='driver';truckGroup.hidden=isDriver;driverGroup.hidden=!isDriver;truck.required=!isDriver;driver.required=isDriver;
+   if(isDriver) type.value='Driving Licence (HMV)'; else if(type.value==='Driving Licence (HMV)') type.value='Registration Certificate (RC)';}
+ subject.addEventListener('change',syncSubject);syncSubject();
+ type.addEventListener('change',()=>{if(type.value==='Driving Licence (HMV)'){subject.value='driver';syncSubject();}else if(subject.value==='driver'){subject.value='truck';syncSubject();}});
+ const kind=document.getElementById('insp-type'), groups=document.querySelectorAll('.finding-group');
+ function syncFindings(){groups.forEach(g=>{const show=g.dataset.kind===kind.value;g.hidden=!show;if(!show)g.querySelectorAll('input').forEach(c=>c.checked=false);});}
+ kind.addEventListener('change',syncFindings);syncFindings();
+})();
+</script>
+{% endblock %}
