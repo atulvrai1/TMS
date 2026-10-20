@@ -400,7 +400,7 @@
 
   async function submitQuestion(question) {
     if (busy || !question.trim()) return;
-    if (pendingTruckCreation && /\\b(cancel|stop|chhodo|rehne do)\\b/i.test(question)) {
+    if (pendingTruckCreation && /\b(cancel|stop|chhodo|rehne do)\b/i.test(question)) {
       addMessage('user', question.trim());
       pendingTruckCreation = false;
       sessionStorage.removeItem('ffPendingTruckCreation');
