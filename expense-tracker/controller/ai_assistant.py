@@ -220,6 +220,14 @@ def _classify(state: AssistantState) -> AssistantState:
     """Use Gemini for intent routing when configured; otherwise use deterministic routing."""
     routed_question = state.get("routing_question", state["question"])
     intent = _detect_intent(routed_question)
+    # Financial/maintenance words are strong routing signals. Do not let an LLM
+    # override a specific balance/payment/expense question as a generic trip query.
+    force_deterministic_intent = bool(re.search(
+        r"\b(?:due|balance|remaining|outstanding|baaki|baki|kitna dena|kitna lena|"
+        r"payment|payments|received|receiving|paid|freight|collection|mila|mili|mile|jama|bhugtan|"
+        r"expense|expenses|kharcha|kharch|diesel|toll|maintenance|servicing|service|repair|mechanic)\b",
+        routed_question, re.I
+    ))
     api_key = os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")
     if api_key:
         try:
@@ -252,7 +260,7 @@ def _classify(state: AssistantState) -> AssistantState:
             candidate = model.invoke(prompt).content
             candidate = candidate.strip().lower() if isinstance(candidate, str) else ""
             candidate = re.sub(r"[^a-z]", "", candidate)
-            if candidate in INTENTS:
+            if candidate in INTENTS and not force_deterministic_intent:
                 intent = candidate
         except Exception:
             current_app.logger.exception("FleetFlow assistant intent classification failed; using fallback intent")
