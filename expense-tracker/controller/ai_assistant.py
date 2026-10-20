@@ -447,7 +447,7 @@ def _query_records(state: AssistantState) -> AssistantState:
                             f"freight ₹{freight:,.2f}, received ₹{received:,.2f}, outstanding ₹{max(0, freight - received):,.2f}."
                         )
                     answer = "Outstanding amount:\n" + "\n".join(lines)
-            elif detail_question:
+            else:
                 query = (
                     "SELECT trip_payments.payment_id, trip_payments.trip_id, trip_payments.amount, "
                     "trip_payments.payment_date, trip_payments.reference, trips.route_from, trips.route_to "
@@ -473,20 +473,6 @@ def _query_records(state: AssistantState) -> AssistantState:
                         "Received payments:\n" + "\n".join(lines)
                         + f"\nTotal shown: ₹{total:,.2f} across {len(rows)} payment record(s)."
                     )
-            else:
-                query = (
-                    "SELECT COUNT(trip_payments.payment_id) AS count, "
-                    "COALESCE(SUM(trip_payments.amount), 0) AS total "
-                    "FROM trip_payments JOIN trips ON trips.trip_id = trip_payments.trip_id "
-                    "JOIN trucks ON trucks.truck_id = trips.truck_id WHERE " + scope
-                )
-                if filters:
-                    query += " AND " + " AND ".join(filters)
-                rows = conn.execute(query, params + filter_params).fetchone()
-                answer = (
-                    f"Payment summary for records available to your account: "
-                    f"{rows['count']} recorded payments totalling ₹{rows['total']:,.2f}."
-                )
         elif intent in {"trucks", "drivers", "challans"}:
             question = state.get("routing_question", state.get("question", ""))
             if intent == "trucks":
