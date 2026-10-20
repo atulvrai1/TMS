@@ -281,7 +281,7 @@ def _query_records(state: AssistantState) -> AssistantState:
             scope, params = _owner_scope("trips", "owner_user_id", state)
             question = state.get("routing_question", state.get("question", ""))
             trip_id_match = re.search(r"\btrip\s*#?\s*(\d+)\b", question, re.IGNORECASE)
-            truck_match = re.search(r"\b(?:truck\s+number|registration(?:\s+number)?|vehicle|truck|gaadi|gadi|lorry)\s+(.+?)(?=\s+(?:trip|driver|status|from|to|with|on|for|and|follow-up)\b|[?.!,]|$)", question, re.IGNORECASE)
+            truck_match = re.search(r"\b(?:truck\s+number|registration(?:\s+number)?|vehicle|truck|gaadi|gadi|lorry)\s+(.+?)(?=\s+(?:trip|trips|driver|status|from|to|with|on|for|and|follow-up|ka|ki|ke|wali|wala|wale|kitna|kitne|kitni)\b|[?.!,]|$)", question, re.IGNORECASE)
             if not truck_match:
                 known_models = conn.execute("SELECT model FROM trucks").fetchall()
                 model_label = next((row["model"] for row in known_models if row["model"].lower() in question.lower()), None)
@@ -339,7 +339,7 @@ def _query_records(state: AssistantState) -> AssistantState:
             scope, params = _owner_scope("trips", "owner_user_id", state)
             question = state.get("routing_question", state.get("question", ""))
             trip_id_match = re.search(r"\btrip\s*#?\s*(\d+)\b", question, re.IGNORECASE)
-            truck_match = re.search(r"\b(?:truck\s+number|registration(?:\s+number)?|vehicle|truck|gaadi|gadi|lorry)\s+(.+?)(?=\s+(?:trip|driver|status|from|to|with|on|for|and|follow-up)\b|[?.!,]|$)", question, re.IGNORECASE)
+            truck_match = re.search(r"\b(?:truck\s+number|registration(?:\s+number)?|vehicle|truck|gaadi|gadi|lorry)\s+(.+?)(?=\s+(?:trip|trips|driver|status|from|to|with|on|for|and|follow-up|ka|ki|ke|wali|wala|wale|kitna|kitne|kitni)\b|[?.!,]|$)", question, re.IGNORECASE)
             if not truck_match:
                 known_models = conn.execute("SELECT model FROM trucks").fetchall()
                 model_label = next((row["model"] for row in known_models if row["model"].lower() in question.lower()), None)
@@ -375,7 +375,7 @@ def _query_records(state: AssistantState) -> AssistantState:
             scope, params = _owner_scope("trips", "owner_user_id", state)
             question = state.get("routing_question", state.get("question", ""))
             trip_id_match = re.search(r"\btrip\s*#?\s*(\d+)\b", question, re.IGNORECASE)
-            truck_match = re.search(r"\b(?:truck\s+number|registration(?:\s+number)?|vehicle|truck|gaadi|gadi|lorry)\s+(.+?)(?=\s+(?:trip|driver|status|from|to|with|on|for|and|follow-up)\b|[?.!,]|$)", question, re.IGNORECASE)
+            truck_match = re.search(r"\b(?:truck\s+number|registration(?:\s+number)?|vehicle|truck|gaadi|gadi|lorry)\s+(.+?)(?=\s+(?:trip|trips|driver|status|from|to|with|on|for|and|follow-up|ka|ki|ke|wali|wala|wale|kitna|kitne|kitni)\b|[?.!,]|$)", question, re.IGNORECASE)
             if not truck_match:
                 known_models = conn.execute("SELECT model FROM trucks").fetchall()
                 model_label = next((row["model"] for row in known_models if row["model"].lower() in question.lower()), None)
