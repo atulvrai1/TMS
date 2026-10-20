@@ -648,7 +648,7 @@
     input.value = '';
     resizeInput();
     try {
-      const isTripComplete = /\b(complete|completed|finish|finished|close|khatam|poora|pura|mukammal)\b/i.test(question) && /\btrip\b/i.test(question);
+      const isTripComplete = /\b(complete|completed|finish|finished|close|khatam|poora|pura|mukammal)\b/i.test(question) && /\btrip(?:\s*#?\s*\d+)?\b/i.test(question);
       const isTripCreate = /\b(create|make|plan|schedule|book|dispatch|banao|bnao|lagao)\b/i.test(question) && /\btrip\b/i.test(question);
       const isTruckCreate = pendingTruckCreation || (/\b(add|create|register|new|naya|nayi|jodo|jodna)\b/i.test(question) && /\b(truck|lorry|gaadi|gadi|vehicle)\b/i.test(question));
       const isPaymentRecord = /\b(got|received|collected|mila|mili|mile|jama|payment|record|add|log)\b/i.test(question) && (/(?:₹\s*\d[\d,]*(?:\.\d{1,2})?|\b\d[\d,]*(?:\.\d{1,2})?\b|\b(payment|amount|rupees|rs\.?|inr|paise|paisa)\b)/i.test(question)) && !/\b(show|list|how much|summary|total|kitna mila|kitna received)\b/i.test(question);
