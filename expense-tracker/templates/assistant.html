@@ -154,6 +154,8 @@
   const askUrl = {{ url_for("fleetflow_assistant.ask_fleetflow_assistant")|tojson }};
   const tripDraftUrl = {{ url_for("fleetflow_assistant.draft_trip_from_assistant")|tojson }};
   const tripConfirmUrl = {{ url_for("fleetflow_assistant.confirm_assistant_trip")|tojson }};
+  const tripCompleteDraftUrl = {{ url_for("fleetflow_assistant.draft_trip_completion_from_assistant")|tojson }};
+  const tripCompleteConfirmUrl = {{ url_for("fleetflow_assistant.confirm_trip_completion_from_assistant")|tojson }};
   const paymentDraftUrl = {{ url_for("fleetflow_assistant.draft_payment_from_assistant")|tojson }};
   const paymentConfirmUrl = {{ url_for("fleetflow_assistant.confirm_assistant_payment")|tojson }};
   const truckDraftUrl = {{ url_for("fleetflow_assistant.draft_truck_from_assistant")|tojson }};
@@ -364,6 +366,38 @@
     scrollToLatest();
   }
 
+  function showTripCompletionPreview(draft) {
+    const item = addMessage('assistant', 'Trip mil gayi. Status update karne se pehle details confirm karein:');
+    const card = document.createElement('div'); card.className = 'ff-trip-preview';
+    const title = document.createElement('strong'); title.textContent = 'Complete trip · confirmation required'; card.appendChild(title);
+    const list = document.createElement('dl');
+    [['Trip', '#' + draft.trip_id], ['Route', draft.route_from + ' → ' + draft.route_to],
+     ['Date', draft.start_date || 'Not recorded'], ['Truck', draft.truck + (draft.truck_model ? ' · ' + draft.truck_model : '')],
+     ['Driver', draft.driver], ['Current status', draft.status], ['New status', 'Completed']].forEach(([label,value]) => {
+      const dt=document.createElement('dt'); dt.textContent=label; const dd=document.createElement('dd'); dd.textContent=value; list.append(dt,dd);
+    });
+    const confirm=document.createElement('button'); confirm.type='button'; confirm.className='ff-trip-confirm';
+    confirm.textContent='Confirm trip completion'; confirm.addEventListener('click',()=>confirmTripCompletion(confirm));
+    const note=document.createElement('p'); note.className='ff-trip-note';
+    note.textContent='This updates the trip status. The truck becomes Available only if it has no other active trip.';
+    card.append(list,confirm,note); item.bubble.appendChild(card); scrollToLatest();
+  }
+
+  async function confirmTripCompletion(button) {
+    if (busy) return; busy=true; button.disabled=true; button.textContent='Updating trip…';
+    try {
+      const response=await fetch(tripCompleteConfirmUrl,{method:'POST',credentials:'same-origin',
+        headers:{'Content-Type':'application/json','Accept':'application/json','X-CSRFToken':csrfToken},body:JSON.stringify({})});
+      const data=await response.json();
+      if(!response.ok){addMessage('assistant',data.error||'Trip completion failed. Please try again.',{error:true});button.textContent='Confirmation failed';}
+      else {button.textContent='Trip completed ✓';const item=addMessage('assistant',data.message||'Trip marked completed.');
+        const link=document.createElement('a');link.href={{ url_for('trips')|tojson }};link.className='ff-trip-open-link';
+        link.textContent='Open trips to verify status';item.bubble.append(document.createElement('br'),link);}
+    } catch (_) {addMessage('assistant','Connection problem while completing the trip. Check the Trips page before retrying.',{error:true});button.disabled=false;button.textContent='Try confirmation again';}
+    finally {busy=false;scrollToLatest();}
+  }
+
+
   function showPaymentPreview(draft) {
     const item = addMessage('assistant', 'I found the trip. Please review the payment details before saving:');
     const card = document.createElement('div');
@@ -556,10 +590,11 @@
     input.value = '';
     resizeInput();
     try {
+      const isTripComplete = /\b(complete|completed|finish|finished|close|khatam|poora|pura|mukammal)\b/i.test(question) && /\btrip\b/i.test(question);
       const isTripCreate = /\b(create|make|plan|schedule|book|dispatch|banao|bnao|lagao)\b/i.test(question) && /\btrip\b/i.test(question);
       const isTruckCreate = pendingTruckCreation || (/\b(add|create|register|new|naya|nayi|jodo|jodna)\b/i.test(question) && /\b(truck|lorry|gaadi|gadi|vehicle)\b/i.test(question));
       const isPaymentRecord = /\b(got|received|collected|mila|mili|mile|jama|payment|record|add|log)\b/i.test(question) && (/(?:₹\s*\d[\d,]*(?:\.\d{1,2})?|\b\d[\d,]*(?:\.\d{1,2})?\b|\b(payment|amount|rupees|rs\.?|inr|paise|paisa)\b)/i.test(question)) && !/\b(show|list|how much|summary|total|kitna mila|kitna received)\b/i.test(question);
-      const targetUrl = isTripCreate ? tripDraftUrl : (isTruckCreate ? truckDraftUrl : (isPaymentRecord ? paymentDraftUrl : askUrl));
+      const targetUrl = isTripComplete ? tripCompleteDraftUrl : (isTripCreate ? tripDraftUrl : (isTruckCreate ? truckDraftUrl : (isPaymentRecord ? paymentDraftUrl : askUrl)));
       const response = await fetch(targetUrl, {
         method: 'POST',
         credentials: 'same-origin',
@@ -572,12 +607,14 @@
       typing.remove();
       if (!response.ok) {
         addMessage('assistant', data.error || ('Request failed (HTTP ' + response.status + '). Please try again.'), {error:true});
-      } else if ((isTripCreate || isTruckCreate || isPaymentRecord) && Array.isArray(data.missing)) {
+      } else if ((isTripComplete || isTripCreate || isTruckCreate || isPaymentRecord) && Array.isArray(data.missing)) {
         if (isTruckCreate) {
           pendingTruckCreation = true;
           sessionStorage.setItem('ffPendingTruckCreation', 'true');
         }
         addMessage('assistant', 'I need a few more details first. Missing: ' + data.missing.join(', ') + '.\n\n' + (data.prompt_hint || 'You can send the details in any order.'));
+      } else if (isTripComplete && data.draft) {
+        showTripCompletionPreview(data.draft);
       } else if (isTripCreate && data.draft) {
         showTripPreview(data.draft);
       } else if (isTruckCreate && data.draft) {
@@ -586,7 +623,7 @@
         showTruckPreview(data.draft);
       } else if (isPaymentRecord && data.draft) {
         showPaymentPreview(data.draft);
-      } else if ((isTripCreate || isTruckCreate || isPaymentRecord) && data.error) {
+      } else if ((isTripComplete || isTripCreate || isTruckCreate || isPaymentRecord) && data.error) {
         if (isTruckCreate) {
           pendingTruckCreation = false;
           sessionStorage.removeItem('ffPendingTruckCreation');
