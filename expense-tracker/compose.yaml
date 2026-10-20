@@ -15,6 +15,10 @@ services:
       DATABASE_PATH: /data/tms.db
       FLASK_HOST: 0.0.0.0
       PORT: 5001
+      # Optional Gemini credentials/model for natural-language LLM responses.
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      GOOGLE_API_KEY: ${GOOGLE_API_KEY:-}
+      FLEETFLOW_AI_MODEL: ${FLEETFLOW_AI_MODEL:-gemini-2.5-flash}
       # Configure SMTP only when you want password-reset emails.
       SMTP_HOST: ${SMTP_HOST:-}
       SMTP_PORT: ${SMTP_PORT:-587}
