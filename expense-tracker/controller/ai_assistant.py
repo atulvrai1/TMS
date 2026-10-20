@@ -238,7 +238,7 @@ def _classify(state: AssistantState) -> AssistantState:
     force_deterministic_intent = bool(re.search(
         r"\b(?:due|balance|remaining|outstanding|baaki|baki|kitna dena|kitna lena|"
         r"payment|payments|received|receiving|paid|freight|collection|mila|mili|mile|jama|bhugtan|"
-        r"expense|expenses|kharcha|kharch|diesel|toll|maintenance|servicing|service|repair|mechanic|truck|trucks|vehicle|vehicles|lorry|gaadi|gadi|driver|drivers|challan|challans|chalan|traffic fine|users?|accounts?|staff|members|admins?|administrators?)\b",
+        r"expense|expenses|kharcha|kharch|diesel|toll|maintenance|servicing|service|repair|mechanic|truck|trucks|vehicle|vehicles|lorry|gaadi|gadi|driver|drivers|challan|challans|chalan|traffic fine|users?|accounts?|staff|members|admins?|administrators?|scheduled|in progress|completed|cancelled|canceled)\b",
         routed_question, re.I
     ))
     api_key = os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")
