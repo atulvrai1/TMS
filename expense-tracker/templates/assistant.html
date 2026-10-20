@@ -129,8 +129,12 @@
 .ff-payment-table .ff-payment-date{white-space:nowrap}
 .ff-payment-table .ff-payment-reference{min-width:140px;max-width:260px;overflow-wrap:anywhere;color:#687086;font-size:.76rem}
 .ff-payment-table tfoot td{background:#f7f8ff;border:0;font-weight:800;color:#252b45}
-.ff-payment-table tfoot .ff-payment-total-label{text-align:right}
-.ff-payment-table tfoot .ff-payment-total-amount{text-align:right;color:#24734c;white-space:nowrap;font-size:.9rem}
+.ff-payment-table tfoot .ff-payment-total-label{text-align:left;white-space:normal}
+.ff-payment-table tfoot .ff-payment-total-amount{text-align:right;color:#24734c;white-space:nowrap;font-size:.9rem;font-variant-numeric:tabular-nums}
+.ff-payment-table tfoot td{vertical-align:middle}
+.ff-trip-preview .ff-payment-table{min-width:0}
+.ff-trip-preview .ff-payment-table th,.ff-trip-preview .ff-payment-table td{white-space:normal}
+.ff-trip-preview .ff-payment-table .ff-payment-amount{white-space:nowrap}
 .ff-payment-footnote{margin:.55rem .1rem 0;color:#747b8d;font-size:.72rem}
 @media(max-width:700px){.ff-payment-table{min-width:540px}.ff-payment-table th,.ff-payment-table td{padding:.7rem .65rem}.ff-payment-title{font-size:.95rem}}
 
@@ -388,11 +392,11 @@
     const tfoot = document.createElement('tfoot');
     const totalRow = document.createElement('tr');
     const labelCell = document.createElement('td');
-    labelCell.colSpan = 2;
+    labelCell.colSpan = 3;
     labelCell.className = 'ff-payment-total-label';
     labelCell.textContent = 'Total received · ' + recordCount + ' record' + (recordCount === 1 ? '' : 's');
     const amountCell = document.createElement('td');
-    amountCell.colSpan = 3;
+    amountCell.colSpan = 2;
     amountCell.className = 'ff-payment-total-amount';
     amountCell.textContent = totalAmount;
     totalRow.append(labelCell, amountCell);
