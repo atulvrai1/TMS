@@ -212,13 +212,28 @@ def _query_records(state: AssistantState) -> AssistantState:
                     answer = "Here are the latest trips you can access:\n" + "\n".join(lines)
         elif intent == "expenses":
             scope, params = _owner_scope("trips", "owner_user_id", state)
-            rows = conn.execute(
+            question = state.get("routing_question", state.get("question", ""))
+            trip_id_match = re.search(r"\btrip\s*#?\s*(\d+)\b", question, re.IGNORECASE)
+            truck_match = re.search(r"\btruck\s+(.+?)(?=\s+(?:trip|driver|status|from|to|with)\b|[?.!,]|$)", question, re.IGNORECASE)
+            filters = []
+            filter_params = []
+            if trip_id_match:
+                filters.append("trips.trip_id = ?")
+                filter_params.append(int(trip_id_match.group(1)))
+            if truck_match:
+                label = truck_match.group(1).strip(" '\"")
+                filters.append("(upper(trucks.registration_number) = upper(?) OR lower(trucks.model) = lower(?) OR lower(trucks.registration_number) LIKE lower(?))")
+                filter_params.extend([label, label, "%" + label + "%"])
+            query = (
                 "SELECT COUNT(*) AS count, COALESCE(SUM(CASE WHEN expenses.status != 'Rejected' "
                 "THEN expenses.amount ELSE 0 END), 0) AS total, "
                 "COALESCE(SUM(CASE WHEN expenses.status = 'Pending' THEN 1 ELSE 0 END), 0) AS pending "
-                "FROM expenses JOIN trips ON trips.trip_id = expenses.trip_id WHERE " + scope,
-                params,
-            ).fetchone()
+                "FROM expenses JOIN trips ON trips.trip_id = expenses.trip_id "
+                "JOIN trucks ON trucks.truck_id = trips.truck_id WHERE " + scope
+            )
+            if filters:
+                query += " AND " + " AND ".join(filters)
+            rows = conn.execute(query, params + filter_params).fetchone()
             answer = (
                 f"Expense summary for records available to your account: "
                 f"{rows['count']} expense entries, ₹{rows['total']:,.2f} total excluding rejected "
@@ -228,13 +243,27 @@ def _query_records(state: AssistantState) -> AssistantState:
                 answer += " This is an expense summary, not a full profit-and-loss calculation."
         elif intent == "payments":
             scope, params = _owner_scope("trips", "owner_user_id", state)
-            rows = conn.execute(
+            question = state.get("routing_question", state.get("question", ""))
+            trip_id_match = re.search(r"\btrip\s*#?\s*(\d+)\b", question, re.IGNORECASE)
+            truck_match = re.search(r"\btruck\s+(.+?)(?=\s+(?:trip|driver|status|from|to|with)\b|[?.!,]|$)", question, re.IGNORECASE)
+            filters = []
+            filter_params = []
+            if trip_id_match:
+                filters.append("trips.trip_id = ?")
+                filter_params.append(int(trip_id_match.group(1)))
+            if truck_match:
+                label = truck_match.group(1).strip(" '\"")
+                filters.append("(upper(trucks.registration_number) = upper(?) OR lower(trucks.model) = lower(?) OR lower(trucks.registration_number) LIKE lower(?))")
+                filter_params.extend([label, label, "%" + label + "%"])
+            query = (
                 "SELECT COUNT(trip_payments.payment_id) AS count, "
                 "COALESCE(SUM(trip_payments.amount), 0) AS total "
                 "FROM trip_payments JOIN trips ON trips.trip_id = trip_payments.trip_id "
-                "WHERE " + scope,
-                params,
-            ).fetchone()
+                "JOIN trucks ON trucks.truck_id = trips.truck_id WHERE " + scope
+            )
+            if filters:
+                query += " AND " + " AND ".join(filters)
+            rows = conn.execute(query, params + filter_params).fetchone()
             answer = (
                 f"Payment summary for records available to your account: "
                 f"{rows['count']} recorded payments totalling ₹{rows['total']:,.2f}."
@@ -342,7 +371,8 @@ def ask_fleetflow_assistant():
             routing_question = question.strip()
             if history:
                 previous_user = next(
-                    (row["content"] for row in reversed(history) if row["role"] == "user"),
+                    (row["content"] for row in reversed(history)
+                     if row["role"] == "user" and row["content"].strip() != question.strip()),
                     ""
                 )
                 is_follow_up = bool(re.match(
