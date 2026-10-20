@@ -1,0 +1,190 @@
+{% extends "base.html" %}
+
+{% block title %}FleetFlow Assistant | FleetFlow{% endblock %}
+{% block breadcrumb %}FleetFlow Assistant{% endblock %}
+
+{% block content_dashboard %}
+<section class="ff-assistant-page" aria-labelledby="assistant-title">
+    <header class="ff-assistant-header">
+        <div>
+            <p class="ff-assistant-eyebrow">FLEETFLOW INTELLIGENCE</p>
+            <h1 id="assistant-title">FleetFlow Assistant</h1>
+            <p class="ff-assistant-subtitle">Ask a question and get a clear, formatted summary from records your account is allowed to access.</p>
+        </div>
+        <span class="ff-readonly-badge"><span aria-hidden="true">🔒</span> Read-only access</span>
+    </header>
+
+    <div class="ff-assistant-grid">
+        <section class="ff-assistant-chat-panel" aria-label="Ask the assistant">
+            <div class="ff-assistant-panel-heading">
+                <div class="ff-assistant-avatar" aria-hidden="true">✦</div>
+                <div>
+                    <h2>How can I help?</h2>
+                    <p>Trips, expenses, payments and maintenance</p>
+                </div>
+            </div>
+
+            <div class="ff-prompt-list" aria-label="Suggested questions">
+                <button type="button" class="ff-prompt" data-question="Show my latest trips"><span aria-hidden="true">↗</span> Show my latest trips</button>
+                <button type="button" class="ff-prompt" data-question="Summarize expenses"><span aria-hidden="true">₹</span> Summarize expenses</button>
+                <button type="button" class="ff-prompt" data-question="How much payment has been recorded?"><span aria-hidden="true">▤</span> Payment summary</button>
+                <button type="button" class="ff-prompt" data-question="Summarize maintenance costs"><span aria-hidden="true">🛠</span> Maintenance summary</button>
+            </div>
+
+            <form id="fleetflow-ai-form" class="ff-assistant-form">
+                <label for="fleetflow-ai-question">Your question</label>
+                <div class="ff-assistant-input-row">
+                    <input id="fleetflow-ai-question" name="question" type="text" maxlength="500" required autocomplete="off"
+                           placeholder="e.g. Show my latest trips" aria-describedby="ff-question-hint">
+                    <button id="fleetflow-ai-submit" type="submit"><span aria-hidden="true">➤</span> Ask</button>
+                </div>
+                <p id="ff-question-hint" class="ff-assistant-hint">Keep it specific. The assistant only reads records and never changes them.</p>
+            </form>
+        </section>
+
+        <section class="ff-assistant-results" aria-labelledby="ff-results-title">
+            <div class="ff-results-heading">
+                <div>
+                    <p class="ff-assistant-eyebrow">RESPONSE</p>
+                    <h2 id="ff-results-title">Your results</h2>
+                </div>
+                <button type="button" id="ff-clear-result" class="ff-clear-button" hidden>Clear</button>
+            </div>
+            <div id="fleetflow-ai-answer" class="ff-answer-content" role="status" aria-live="polite" aria-atomic="true">
+                <div class="ff-empty-state">
+                    <span aria-hidden="true">✧</span>
+                    <h3>Ready when you are</h3>
+                    <p>Choose a suggested question or enter your own. Your answer will appear here in a readable, structured format.</p>
+                </div>
+            </div>
+            <p class="ff-result-footnote"><span aria-hidden="true">ⓘ</span> Results are limited to the records available to your account.</p>
+        </section>
+    </div>
+</section>
+
+<style>
+.ff-assistant-page{max-width:1280px;margin:0 auto;color:var(--ink,#172033)}
+.ff-assistant-header{display:flex;align-items:flex-start;justify-content:space-between;gap:1rem;margin-bottom:1.5rem}
+.ff-assistant-eyebrow{font-size:.72rem;letter-spacing:.12em;font-weight:700;color:var(--industry-blue,#2b6cb0);margin:0 0 .45rem}
+.ff-assistant-header h1{font-size:clamp(1.7rem,3vw,2.35rem);line-height:1.2;margin:0}
+.ff-assistant-subtitle{max-width:720px;color:var(--ink-muted,#667085);margin:.6rem 0 0;line-height:1.6}
+.ff-readonly-badge{display:inline-flex;align-items:center;gap:.4rem;white-space:nowrap;padding:.5rem .75rem;border:1px solid #dbe7f4;border-radius:999px;background:#f3f8fd;color:#245b8f;font-size:.8rem;font-weight:600}
+.ff-assistant-grid{display:grid;grid-template-columns:minmax(0,.9fr) minmax(0,1.1fr);gap:1.1rem;align-items:stretch}
+.ff-assistant-chat-panel,.ff-assistant-results{background:var(--paper-card,#fff);border:1px solid var(--border-ui,#e2e8f0);border-radius:16px;padding:clamp(1rem,2vw,1.5rem);min-width:0;box-shadow:0 6px 22px rgba(15,23,42,.035)}
+.ff-assistant-panel-heading{display:flex;align-items:center;gap:.8rem;padding-bottom:1.1rem;border-bottom:1px solid var(--border-soft,#eeebe4)}
+.ff-assistant-avatar{display:grid;place-items:center;flex:0 0 44px;width:44px;height:44px;border-radius:13px;background:#eaf2fb;color:#245b8f;font-size:1.4rem}
+.ff-assistant-panel-heading h2,.ff-results-heading h2{font-size:1.15rem;margin:0}
+.ff-assistant-panel-heading p{margin:.25rem 0 0;color:var(--ink-muted,#667085);font-size:.85rem}
+.ff-prompt-list{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.65rem;padding:1.2rem 0 1.4rem}
+.ff-prompt{display:flex;align-items:center;gap:.5rem;text-align:left;min-height:52px;padding:.75rem;border:1px solid var(--border-ui,#e2e8f0);border-radius:10px;background:#fff;color:var(--ink,#172033);font:inherit;font-size:.86rem;cursor:pointer;transition:border-color .15s,background .15s}
+.ff-prompt span{color:var(--industry-blue,#2b6cb0);font-size:1rem}
+.ff-prompt:hover,.ff-prompt:focus-visible{border-color:var(--industry-blue,#2b6cb0);background:#f6faff;outline:none}
+.ff-assistant-form label{display:block;font-size:.85rem;font-weight:600;margin-bottom:.5rem}
+.ff-assistant-input-row{display:flex;gap:.55rem}
+.ff-assistant-input-row input{flex:1;min-width:0;padding:.8rem .9rem;border:1px solid #cbd5e1;border-radius:9px;font:inherit;font-size:.92rem;background:#fff;color:inherit}
+.ff-assistant-input-row input:focus{outline:2px solid #93c5fd;outline-offset:1px;border-color:#4d87c5}
+.ff-assistant-input-row button{border:0;border-radius:9px;padding:.75rem 1rem;background:var(--industry-dark,#1a202c);color:#fff;font:inherit;font-weight:600;cursor:pointer;white-space:nowrap}
+.ff-assistant-input-row button:disabled{opacity:.6;cursor:wait}
+.ff-assistant-hint{font-size:.78rem;color:var(--ink-muted,#667085);line-height:1.5;margin:.6rem 0 0}
+.ff-results-heading{display:flex;justify-content:space-between;align-items:center;gap:1rem;padding-bottom:1rem;border-bottom:1px solid var(--border-soft,#eeebe4)}
+.ff-clear-button{border:1px solid var(--border-ui,#e2e8f0);background:#fff;border-radius:7px;padding:.4rem .65rem;cursor:pointer;color:var(--ink-muted,#667085)}
+.ff-answer-content{padding:1rem 0;min-height:260px}
+.ff-empty-state{text-align:center;padding:2rem 1rem;color:var(--ink-muted,#667085)}
+.ff-empty-state>span{display:inline-grid;place-items:center;width:48px;height:48px;border-radius:50%;background:#f1f5f9;color:#4775a5;font-size:1.5rem}
+.ff-empty-state h3{color:var(--ink,#172033);font-size:1rem;margin:.9rem 0 .4rem}
+.ff-empty-state p{font-size:.88rem;line-height:1.6;max-width:340px;margin:0 auto}
+.ff-answer-title{font-size:.95rem;font-weight:700;color:var(--ink,#172033);margin:0 0 .75rem}
+.ff-answer-list{display:grid;gap:.55rem;list-style:none;padding:0;margin:0}
+.ff-answer-list li{padding:.75rem .85rem;border:1px solid var(--border-ui,#e2e8f0);border-radius:9px;background:#fbfdff;font-size:.88rem;line-height:1.55;overflow-wrap:anywhere}
+.ff-answer-summary{padding:.85rem 1rem;border-left:3px solid var(--industry-blue,#2b6cb0);background:#f3f8fd;border-radius:0 9px 9px 0;line-height:1.6;font-size:.91rem;margin-bottom:.8rem;overflow-wrap:anywhere}
+.ff-answer-error{padding:.85rem 1rem;border:1px solid #fecaca;background:#fff7f7;color:#991b1b;border-radius:9px;line-height:1.5}
+.ff-result-footnote{font-size:.76rem;color:var(--ink-muted,#667085);border-top:1px solid var(--border-soft,#eeebe4);padding-top:.8rem;margin:0}
+@media(max-width:900px){.ff-assistant-grid{grid-template-columns:minmax(0,1fr)}.ff-answer-content{min-height:180px}}
+@media(max-width:560px){.ff-assistant-header{display:block}.ff-readonly-badge{margin-top:.9rem}.ff-prompt-list{grid-template-columns:minmax(0,1fr)}.ff-assistant-input-row{flex-direction:column}.ff-assistant-input-row button{min-height:44px}.ff-assistant-chat-panel,.ff-assistant-results{padding:1rem}}
+</style>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(() => {
+    const form = document.getElementById('fleetflow-ai-form');
+    if (!form) return;
+    const input = document.getElementById('fleetflow-ai-question');
+    const button = document.getElementById('fleetflow-ai-submit');
+    const output = document.getElementById('fleetflow-ai-answer');
+    const clearButton = document.getElementById('ff-clear-result');
+    const csrfToken = {{ session.get('csrf_token', '')|tojson }};
+
+    function showMessage(message, isError = false) {
+        output.replaceChildren();
+        const box = document.createElement('div');
+        box.className = isError ? 'ff-answer-error' : 'ff-answer-summary';
+        box.textContent = message;
+        output.appendChild(box);
+        clearButton.hidden = false;
+    }
+
+    function renderAnswer(answer) {
+        output.replaceChildren();
+        const lines = String(answer || '').split(/\r?\n/).map(line => line.trim()).filter(Boolean);
+        if (!lines.length) {
+            showMessage('No formatted result was returned. Try asking in a different way.', true);
+            return;
+        }
+        const title = document.createElement('h3');
+        title.className = 'ff-answer-title';
+        title.textContent = lines[0].replace(/^[•\-*]\s*/, '');
+        output.appendChild(title);
+
+        if (lines.length > 1) {
+            const list = document.createElement('ul');
+            list.className = 'ff-answer-list';
+            lines.slice(1).forEach((line) => {
+                const item = document.createElement('li');
+                item.textContent = line.replace(/^[•\-*]\s*/, '');
+                list.appendChild(item);
+            });
+            output.appendChild(list);
+        }
+        clearButton.hidden = false;
+    }
+
+    form.addEventListener('submit', async (event) => {
+        event.preventDefault();
+        const question = input.value.trim();
+        if (!question) return;
+        button.disabled = true;
+        button.textContent = 'Thinking…';
+        showMessage('Checking the records available to your account…');
+        try {
+            const response = await fetch('{{ url_for("fleetflow_assistant.ask_fleetflow_assistant") }}', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json', 'X-CSRFToken': csrfToken},
+                body: JSON.stringify({question})
+            });
+            const data = await response.json();
+            if (!response.ok) showMessage(data.error || 'The request failed. Please try again.', true);
+            else renderAnswer(data.answer);
+        } catch (_) {
+            showMessage('Unable to reach the assistant. Check your connection and try again.', true);
+        } finally {
+            button.disabled = false;
+            button.innerHTML = '<span aria-hidden="true">➤</span> Ask';
+        }
+    });
+
+    document.querySelectorAll('.ff-prompt').forEach((prompt) => {
+        prompt.addEventListener('click', () => {
+            input.value = prompt.dataset.question || '';
+            input.focus();
+        });
+    });
+
+    clearButton.addEventListener('click', () => {
+        output.innerHTML = '<div class="ff-empty-state"><span aria-hidden="true">✧</span><h3>Ready when you are</h3><p>Choose a suggested question or enter your own. Your answer will appear here in a readable, structured format.</p></div>';
+        clearButton.hidden = true;
+        input.focus();
+    });
+})();
+</script>
+{% endblock %}
