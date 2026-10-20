@@ -131,17 +131,26 @@
             showMessage('No formatted result was returned. Try asking in a different way.', true);
             return;
         }
-        const title = document.createElement('h3');
-        title.className = 'ff-answer-title';
-        title.textContent = lines[0].replace(/^[•\-*]\s*/, '');
-        output.appendChild(title);
+        const firstLine = lines[0].replace(/^[•\\-*]\\s*/, '');
+        const hasRecordList = lines.length > 1 && /:\\s*$/.test(firstLine);
+        if (hasRecordList) {
+            const title = document.createElement('h3');
+            title.className = 'ff-answer-title';
+            title.textContent = firstLine;
+            output.appendChild(title);
+        } else {
+            const summary = document.createElement('div');
+            summary.className = 'ff-answer-summary';
+            summary.textContent = firstLine;
+            output.appendChild(summary);
+        }
 
         if (lines.length > 1) {
             const list = document.createElement('ul');
             list.className = 'ff-answer-list';
             lines.slice(1).forEach((line) => {
                 const item = document.createElement('li');
-                item.textContent = line.replace(/^[•\-*]\s*/, '');
+                item.textContent = line.replace(/^[•\\-*]\\s*/, '');
                 list.appendChild(item);
             });
             output.appendChild(list);
