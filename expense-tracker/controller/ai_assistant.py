@@ -535,7 +535,7 @@ def _query_records(state: AssistantState) -> AssistantState:
 def _help(state: AssistantState) -> AssistantState:
     return {
         "answer": (
-            "I can summarize trips, expenses, payments, and maintenance records that your account "
+            "I can provide read-only summaries of trips, trucks, drivers, challans, expenses, payments, and maintenance records that your account "
             "is allowed to see. Try: “Show my latest trips” or “Summarize expenses”. "
             "You can also ask me to add a truck, create a trip, or record a payment. I collect missing details and require an administrator to confirm before saving."
         )
