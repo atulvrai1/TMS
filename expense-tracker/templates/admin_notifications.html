@@ -14,9 +14,9 @@
         <h2 id="sms-settings-heading">Mobile SMS alerts</h2>
         <p style="color: var(--ink-muted);">Configure the administrator number that receives document-expiry reminders. The checker runs automatically once per day in a separate Docker worker. SMS is sent only for the latest record for each asset/document type.</p>
         {% if sms_provider_configured %}
-        <p>Fast2SMS credentials are present in the server environment.</p>
+        <p>Msg07 API URL and key are configured in the server environment.</p>
         {% else %}
-        <p><strong>Provider setup is incomplete.</strong> Add your Fast2SMS API key, approved DLT sender ID, entity ID, and content-template ID to the private <code>.env.docker</code> file, then rebuild/restart Docker.</p>
+        <p><strong>Provider setup is incomplete.</strong> Add the Msg07 API URL and API key from your Msg07 account to the private <code>.env.docker</code> file, then rebuild/restart Docker. Check the API docs for the required authentication header and JSON payload.</p>
         {% endif %}
         <form method="POST" action="{{ url_for('compliance_sms_settings_save') }}" style="display:grid; gap: .75rem; max-width: 34rem;">
             <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
@@ -34,7 +34,7 @@
             <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
             <button class="btn-secondary" type="submit">Send test SMS</button>
         </form>
-        <p style="font-size:.875rem; color:var(--ink-muted);">A test succeeds only when the configured DLT template matches the submitted message. Provider acceptance does not guarantee handset delivery. Reminder history is stored to prevent duplicate submissions.</p>
+        <p style="font-size:.875rem; color:var(--ink-muted);">The Msg07 endpoint and JSON payload must match your account's API documentation. Provider acceptance does not guarantee handset delivery. Reminder history is stored to prevent duplicate submissions. Reminder history is stored to prevent duplicate submissions.</p>
     </section>
 
     <section class="table-container" style="padding: 1.5rem; margin-bottom: 1.5rem;" aria-labelledby="compliance-expiry-heading">
