@@ -450,7 +450,23 @@ def _query_records(state: AssistantState) -> AssistantState:
                 )
         elif intent in {"trucks", "drivers", "challans"}:
             if intent == "trucks":
-                rows = conn.execute("SELECT truck_id, registration_number, model, year, capacity_tons, status, last_service_date FROM trucks ORDER BY registration_number COLLATE NOCASE LIMIT 30").fetchall()
+                question = state.get("routing_question", state.get("question", ""))
+                reg_match = re.search(r"\b([A-Z]{2}\s*[- ]?\s*\d{1,2}\s*[- ]?\s*[A-Z]{1,3}\s*[- ]?\s*\d{1,4})\b", question, re.I)
+                status_match = re.search(r"\b(available|maintenance|in trip|busy|free)\b", question, re.I)
+                conditions, values = [], []
+                if reg_match:
+                    reg = re.sub(r"[^A-Z0-9]", "", reg_match.group(1).upper())
+                    conditions.append("upper(replace(replace(registration_number, '-', ''), ' ', '')) = ?")
+                    values.append(reg)
+                if status_match:
+                    status = {"busy": "In Trip", "free": "Available"}.get(status_match.group(1).lower(), status_match.group(1).title())
+                    conditions.append("status = ?")
+                    values.append(status)
+                query = "SELECT truck_id, registration_number, model, year, capacity_tons, status, last_service_date FROM trucks"
+                if conditions:
+                    query += " WHERE " + " AND ".join(conditions)
+                query += " ORDER BY registration_number COLLATE NOCASE LIMIT 30"
+                rows = conn.execute(query, values).fetchall()
                 answer = "Gaadi / Truck records:\n" + "\n".join(
                     "Truck #" + str(r["truck_id"]) + " | " + str(r["registration_number"]) + " | " + str(r["model"]) + " | Year " + str(r["year"]) + " | Capacity " + str(r["capacity_tons"] or "not listed") + " tons | Status " + str(r["status"]) + " | Last service " + str(r["last_service_date"] or "not recorded")
                     for r in rows
@@ -462,7 +478,13 @@ def _query_records(state: AssistantState) -> AssistantState:
                         return {"answer": "Driver records dekhne ke liye apne administrator se access maangein."}
                     rows = conn.execute("SELECT driver_id, name, status, license_number, contact_info FROM drivers WHERE driver_id = ?", (driver_id,)).fetchall()
                 else:
-                    rows = conn.execute("SELECT driver_id, name, status, license_number, contact_info FROM drivers ORDER BY name COLLATE NOCASE LIMIT 30").fetchall()
+                    question = state.get("routing_question", state.get("question", ""))
+                    name_match = re.search(r"\b(?:driver\s+(?:named\s+)?)?([A-Z][A-Za-z'-]+(?:\s+[A-Z][A-Za-z'-]+){0,2})\s+driver\b|\bdriver\s+(?:named\s+)?([A-Z][A-Za-z .'-]{1,40})", question, re.I)
+                    label = next((group.strip() for group in name_match.groups() if group), "") if name_match else ""
+                    if label:
+                        rows = conn.execute("SELECT driver_id, name, status, license_number, contact_info FROM drivers WHERE lower(name) LIKE lower(?) ORDER BY name COLLATE NOCASE LIMIT 30", ("%" + label + "%",)).fetchall()
+                    else:
+                        rows = conn.execute("SELECT driver_id, name, status, license_number, contact_info FROM drivers ORDER BY name COLLATE NOCASE LIMIT 30").fetchall()
                 answer = "Driver records:\n" + "\n".join(
                     "Driver #" + str(r["driver_id"]) + " | " + str(r["name"]) + " | Status " + str(r["status"]) + " | License " + str(r["license_number"]) + " | Contact " + str(r["contact_info"] or "not recorded")
                     for r in rows
@@ -472,7 +494,15 @@ def _query_records(state: AssistantState) -> AssistantState:
                     return {"answer": "Challan records dekhne ke liye administrator access chahiye."}
                 conn.execute("CREATE TABLE IF NOT EXISTS challans (challan_id INTEGER PRIMARY KEY AUTOINCREMENT, truck_id INTEGER NOT NULL, challan_number TEXT NOT NULL, violation TEXT NOT NULL, issue_date DATE NOT NULL, due_date DATE, amount REAL NOT NULL DEFAULT 0, status TEXT NOT NULL DEFAULT 'Pending', issuing_authority TEXT, location TEXT, payment_date DATE, notes TEXT, owner_user_id INTEGER, created_by INTEGER, created_at DATETIME DEFAULT CURRENT_TIMESTAMP, updated_at DATETIME, FOREIGN KEY (truck_id) REFERENCES trucks(truck_id))")
                 scope, params = _owner_scope("challans", "owner_user_id", state)
-                rows = conn.execute("SELECT challans.challan_id, challans.challan_number, challans.violation, challans.issue_date, challans.due_date, challans.amount, challans.status, trucks.registration_number FROM challans JOIN trucks ON trucks.truck_id = challans.truck_id WHERE " + scope + " ORDER BY challans.issue_date DESC LIMIT 30", params).fetchall()
+                query = "SELECT challans.challan_id, challans.challan_number, challans.violation, challans.issue_date, challans.due_date, challans.amount, challans.status, trucks.registration_number FROM challans JOIN trucks ON trucks.truck_id = challans.truck_id WHERE " + scope
+                if re.search(r"\b(overdue|late|past due|overdue challan)\b", question, re.I):
+                    query += " AND challans.status = 'Pending' AND challans.due_date < date('now')"
+                elif re.search(r"\b(pending|unpaid|baaki|baki)\b", question, re.I):
+                    query += " AND challans.status = 'Pending'"
+                elif re.search(r"\b(paid|jama)\b", question, re.I):
+                    query += " AND challans.status = 'Paid'"
+                query += " ORDER BY challans.issue_date DESC LIMIT 30"
+                rows = conn.execute(query, params).fetchall()
                 answer = "Challan / Traffic fine records:\n" + "\n".join(
                     "Challan #" + str(r["challan_id"]) + " | No. " + str(r["challan_number"]) + " | " + str(r["registration_number"]) + " | " + str(r["violation"]) + " | Fine ₹" + format(float(r["amount"] or 0), ",.2f") + " | Status " + str(r["status"]) + " | Due " + str(r["due_date"] or "not set")
                     for r in rows
