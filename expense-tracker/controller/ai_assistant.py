@@ -833,11 +833,14 @@ def _validate_graph_answer(state: AssistantState) -> AssistantState:
     """Final answer-quality gate: never return an empty or malformed model result."""
     answer = state.get("answer")
     if not isinstance(answer, str) or not answer.strip():
-        current_app.logger.warning(
-            "assistant_answer_quality_gate_failed",
-            extra={"assistant_request_id": state.get("request_id", "unknown"),
-                   "assistant_intent": state.get("intent", "unknown")},
-        )
+        try:
+            current_app.logger.warning(
+                "assistant_answer_quality_gate_failed",
+                extra={"assistant_request_id": state.get("request_id", "unknown"),
+                       "assistant_intent": state.get("intent", "unknown")},
+            )
+        except RuntimeError:
+            pass
         return {"answer": (
             "I couldn't verify a complete answer from the records available to your account. "
             "Try including a trip number, truck registration, driver name, or date."
