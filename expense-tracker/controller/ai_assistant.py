@@ -6,6 +6,7 @@ The assistant never accepts SQL or executes model-generated code.
 """
 import os
 import re
+import time
 import uuid
 from datetime import date, datetime, timedelta
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
@@ -54,6 +55,8 @@ class AssistantState(TypedDict, total=False):
     answer: str
     routing_question: str
     conversation_history: list
+    long_term_memories: list
+    request_id: str
 
 
 def _ensure_history_tables(conn):
@@ -727,21 +730,94 @@ def _format_answer_for_user(question: str, answer: str) -> str:
         answer = answer.replace(old, new)
     return answer
 
+def _normalize_graph_input(state: AssistantState) -> AssistantState:
+    """Normalize user text before classification; preserve original question for display."""
+    question = " ".join(str(state.get("routing_question") or state.get("question") or "").split())
+    return {"routing_question": question}
+
+
+def _validate_graph_answer(state: AssistantState) -> AssistantState:
+    """Final answer-quality gate: never return an empty or malformed model result."""
+    answer = state.get("answer")
+    if not isinstance(answer, str) or not answer.strip():
+        current_app.logger.warning(
+            "assistant_answer_quality_gate_failed",
+            extra={"assistant_request_id": state.get("request_id", "unknown"),
+                   "assistant_intent": state.get("intent", "unknown")},
+        )
+        return {"answer": (
+            "I couldn't verify a complete answer from the records available to your account. "
+            "Try including a trip number, truck registration, driver name, or date."
+        )}
+    answer = answer.strip()
+    if len(answer) > 7000:
+        answer = answer[:7000].rstrip() + "\n\n(Answer shortened.)"
+    return {"answer": answer}
+
+
+def _observed_node(node_name, node_fn):
+    """Add structured node-level timing without logging user prompts or business data."""
+    def run(state):
+        started = time.perf_counter()
+        status = "ok"
+        try:
+            return node_fn(state)
+        except Exception:
+            status = "error"
+            raise
+        finally:
+            elapsed_ms = round((time.perf_counter() - started) * 1000, 2)
+            try:
+                current_app.logger.info(
+                    "assistant_graph_node",
+                    extra={
+                        "assistant_node": node_name,
+                        "assistant_duration_ms": elapsed_ms,
+                        "assistant_status": status,
+                        "assistant_request_id": state.get("request_id", "unknown"),
+                        "assistant_intent": state.get("intent", "unclassified"),
+                    },
+                )
+            except RuntimeError:
+                # Graph unit tests may run without a Flask application context.
+                pass
+    return run
+
+
 def _build_graph():
+    """Build a routed graph with reusable understanding and record-query subgraphs."""
+    understanding = StateGraph(AssistantState)
+    understanding.add_node("normalize_input", _observed_node("normalize_input", _normalize_graph_input))
+    understanding.add_node("classify_intent", _observed_node("classify_intent", _classify))
+    understanding.add_edge(START, "normalize_input")
+    understanding.add_edge("normalize_input", "classify_intent")
+    understanding.add_edge("classify_intent", END)
+    understanding_subgraph = understanding.compile()
+
+    record_query = StateGraph(AssistantState)
+    record_query.add_node("query_records", _observed_node("query_records", _query_records))
+    record_query.add_node("answer_quality_gate", _observed_node("answer_quality_gate", _validate_graph_answer))
+    record_query.add_edge(START, "query_records")
+    record_query.add_edge("query_records", "answer_quality_gate")
+    record_query.add_edge("answer_quality_gate", END)
+    record_query_subgraph = record_query.compile()
+
     graph = StateGraph(AssistantState)
-    graph.add_node("classify", _classify)
-    graph.add_node("query_records", _query_records)
-    graph.add_node("help", _help)
-    graph.add_edge(START, "classify")
+    graph.add_node("understanding", understanding_subgraph)
+    graph.add_node("record_query", record_query_subgraph)
+    graph.add_node("help", _observed_node("help", _help))
+    graph.add_node("help_quality_gate", _observed_node("help_quality_gate", _validate_graph_answer))
+    graph.add_edge(START, "understanding")
     graph.add_conditional_edges(
-        "classify",
+        "understanding",
         lambda state: state["intent"] if state["intent"] in INTENTS - {"help"} else "help",
-        {"trips": "query_records", "expenses": "query_records", "payments": "query_records",
-         "maintenance": "query_records", "trucks": "query_records", "drivers": "query_records",
-         "challans": "query_records", "users": "query_records", "admins": "query_records", "help": "help"},
+        {"trips": "record_query", "expenses": "record_query", "payments": "record_query",
+         "maintenance": "record_query", "trucks": "record_query", "drivers": "record_query",
+         "challans": "record_query", "users": "record_query", "admins": "record_query", "help": "help"},
     )
-    graph.add_edge("query_records", END)
-    graph.add_edge("help", END)
+    graph.add_edge("record_query", END)
+    graph.add_edge("help", "help_quality_gate")
+    graph.add_edge("help_quality_gate", END)
     return graph.compile()
 
 
@@ -812,7 +888,24 @@ def ask_fleetflow_assistant():
             state["routing_question"] = _resolve_contextual_question(question.strip(), usable_history)
         finally:
             conn.close()
-        result = assistant_graph.invoke(state)
+        # LangSmith tracing is activated by LANGSMITH_TRACING=true (or
+        # LANGCHAIN_TRACING_V2=true) plus LANGSMITH_API_KEY in the environment.
+        # The thread ID links traces to a conversation; durable chat messages remain
+        # in FleetFlow's own user-scoped SQLite tables.
+        request_id = str(uuid.uuid4())
+        state["request_id"] = request_id
+        result = assistant_graph.invoke(
+            state,
+            config={
+                "run_name": "FleetFlow Assistant",
+                "tags": ["fleetflow-assistant", "role-aware", "record-grounded"],
+                "metadata": {
+                    "assistant_request_id": request_id,
+                    "conversation_id": conversation_id,
+                    "role": str(session.get("role", "User")),
+                },
+            },
+        )
         answer = result.get("answer")
         if isinstance(answer, str) and answer.strip():
             answer = _format_answer_for_user(question.strip(), answer)
