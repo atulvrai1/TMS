@@ -132,6 +132,54 @@
     </footer>
     {% endif %}
 
+
+    {% if block_content == 'dashboard' and session.get('user_id') %}
+    <section id="fleetflow-ai-assistant" aria-label="FleetFlow AI assistant" style="margin-top:1.5rem;border:1px solid var(--border, #d9e0e7);border-radius:12px;padding:1rem;background:var(--surface, #fff);max-width:760px;">
+        <div style="display:flex;align-items:center;gap:.6rem;flex-wrap:wrap;">
+            <strong>FleetFlow Assistant</strong><span style="font-size:.78rem;color:var(--ink-muted,#667085)">Read-only help</span>
+        </div>
+        <p style="margin:.4rem 0 .8rem;color:var(--ink-muted,#667085);font-size:.9rem;">Ask about trips, expenses, payments, or maintenance.</p>
+        <form id="fleetflow-ai-form" style="display:flex;gap:.5rem;flex-wrap:wrap;">
+            <input id="fleetflow-ai-question" type="text" maxlength="500" required autocomplete="off" aria-label="Ask FleetFlow Assistant"
+                   placeholder="e.g. Summarize my expenses" style="flex:1;min-width:180px;padding:.7rem;border:1px solid #cbd5e1;border-radius:8px;">
+            <button id="fleetflow-ai-submit" type="submit" style="padding:.7rem 1rem;border:0;border-radius:8px;cursor:pointer;">Ask</button>
+        </form>
+        <div id="fleetflow-ai-answer" role="status" aria-live="polite" style="white-space:pre-wrap;margin-top:.8rem;font-size:.92rem;"></div>
+    </section>
+    <script>
+    (() => {
+        const form = document.getElementById('fleetflow-ai-form');
+        if (!form) return;
+        const input = document.getElementById('fleetflow-ai-question');
+        const button = document.getElementById('fleetflow-ai-submit');
+        const output = document.getElementById('fleetflow-ai-answer');
+        form.addEventListener('submit', async (event) => {
+            event.preventDefault();
+            const question = input.value.trim();
+            if (!question) return;
+            button.disabled = true;
+            output.textContent = 'Thinking…';
+            try {
+                const response = await fetch('{{ url_for("fleetflow_assistant.ask_fleetflow_assistant") }}', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': {{ session.get('csrf_token', '')|tojson }}
+                    },
+                    body: JSON.stringify({question})
+                });
+                const data = await response.json();
+                output.textContent = response.ok ? data.answer : (data.error || 'Request failed.');
+            } catch (_) {
+                output.textContent = 'Unable to reach the assistant. Please try again.';
+            } finally {
+                button.disabled = false;
+            }
+        });
+    })();
+    </script>
+    {% endif %}
+
     <script src="{{ url_for('static', filename='js/main.js', v='notifications-1') }}"></script>
     {% block scripts %}{% endblock %}
 </body>
