@@ -1,6 +1,8 @@
-"""Read-only, role-aware FleetFlow help assistant orchestrated with LangGraph.
+"""Role-aware FleetFlow assistant orchestrated with LangGraph.
 
-The assistant never accepts SQL, performs writes, or exposes unscoped records.
+Read queries are scoped to the signed-in user's permissions. Any supported write
+uses fixed, parameterized SQL, server-side validation, and explicit confirmation.
+The assistant never accepts SQL or executes model-generated code.
 """
 import os
 import re
