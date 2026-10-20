@@ -115,9 +115,9 @@ def _resolve_contextual_question(question: str, history: list) -> str:
         return text
 
     follow_up = bool(re.search(
-        r"\b(it|that|those|this|there|same|them|he|she|that one|that truck|that driver)\b",
+        r"\b(it|that|those|this|there|same|them|he|she|that one|that truck|that driver|us trip|is trip|us gaadi|us gadi|us truck|us driver|uske liye|iske liye|uska|uski|uske|iska|iski|is gaadi)\b",
         text, re.I
-    )) or bool(re.match(r"^(and|also|what about|how about|for|then)\b", text, re.I))
+    )) or bool(re.match(r"^(and|also|what about|how about|for|then|aur|uska|uski|uske|iske|iski)\b", text, re.I))
     if not follow_up:
         return text
 
@@ -659,7 +659,7 @@ def _parse_payment_prompt(question):
     text = " ".join(question.strip().split())
     trip_match = re.search(r"\btrip\s*#?\s*(\d+)\b", text, re.IGNORECASE)
     amount_match = re.search(
-        r"\b(?:got|received|collected|payment(?:\s+of)?|amount\s+of)\s+(?:₹|rs\.?|inr)?\s*([0-9][0-9,]*(?:\.\d{1,2})?)",
+        r"\b(?:got|received|collected|mila|mili|mile|jama(?:\s+kiya|\s+hua)?|payment(?:\s+of)?|amount\s+of|paisa(?:\s+of)?)\s+(?:₹|rs\.?|inr)?\s*([0-9][0-9,]*(?:\.\d{1,2})?)",
         text, re.IGNORECASE
     )
     if not amount_match:
