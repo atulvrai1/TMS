@@ -727,14 +727,18 @@
 
   form.addEventListener('submit', (event) => {
     event.preventDefault();
-    submitQuestion(input.value);
+    if (!busy) submitQuestion(input.value);
   });
   input.addEventListener('input', resizeInput);
   input.addEventListener('keydown', (event) => {
-    if (event.key === 'Enter' && !event.shiftKey) {
-      event.preventDefault();
-      form.requestSubmit();
-    }
+    // Enter sends directly instead of inserting a newline. Shift+Enter keeps
+    // the browser's normal multiline behavior.
+    if (event.key !== 'Enter' || event.shiftKey || event.isComposing) return;
+    event.preventDefault();
+    event.stopPropagation();
+    if (busy) return;
+    const question = input.value;
+    if (question.trim()) submitQuestion(question);
   });
   newChat.addEventListener('click', async () => {
     if (busy) return;
