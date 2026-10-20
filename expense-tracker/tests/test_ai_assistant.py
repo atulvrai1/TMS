@@ -6,7 +6,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from flask import Flask, session
 
-from controller.ai_assistant import _detect_intent, _parse_payment_prompt, _parse_trip_prompt, assistant_graph
+from controller.ai_assistant import (\n    _detect_intent, _format_answer_for_user, _parse_payment_prompt,\n    _parse_trip_prompt, _validate_graph_answer, assistant_graph,\n)
 
 
 def test_intent_router_recognizes_trip_questions():
@@ -42,6 +42,22 @@ def test_graph_returns_safe_help_for_unsupported_questions(monkeypatch):
     assert result["intent"] == "help"
     assert "read-only" in result["answer"].lower()
 
+
+
+def test_answer_quality_gate_replaces_empty_answers():
+    app = Flask(__name__)
+    with app.app_context():
+        result = _validate_graph_answer({"answer": "  ", "intent": "trips", "request_id": "test"})
+    assert "couldn't verify" in result["answer"].lower()
+
+
+def test_saved_hinglish_preference_applies_to_english_follow_up():
+    answer = _format_answer_for_user(
+        "show details",
+        "Trip details: #4 Fatuha to Patna",
+        ["I prefer Hinglish answers"],
+    )
+    assert answer.startswith("Trip ki details:")
 
 
 def test_trip_prompt_parser_extracts_required_details():
