@@ -41,7 +41,7 @@ def _load_prompt_section(section: str) -> str:
 
 
 MAX_QUESTION_LENGTH = 500
-INTENTS = {"trips", "expenses", "payments", "maintenance", "trucks", "drivers", "challans", "help"}
+INTENTS = {"trips", "expenses", "payments", "maintenance", "trucks", "drivers", "challans", "users", "admins", "help"}
 
 
 class AssistantState(TypedDict, total=False):
@@ -206,6 +206,10 @@ def _load_recent_assistant_history(limit=12):
 def _detect_intent(question: str) -> str:
     """Route everyday English, Hindi and Roman-Hindi requests."""
     text = " ".join((question or "").lower().split())
+    if re.search(r"\b(admin|admins|administrator|administrators)\b", text) and re.search(r"\b(show|list|all|total|count|who|users?|accounts?)\b", text):
+        return "admins"
+    if re.search(r"\b(users?|accounts?|staff|members)\b", text) and re.search(r"\b(show|list|all|total|count|who)\b", text):
+        return "users"
     if re.search(r"\b(challan|challans|chalan|e-?challan|traffic fine)\b", text):
         return "challans"
     if re.search(r"\b(driver|drivers|chalak|license number|licence number)\b", text) and not re.search(r"\btrips?\b", text):
@@ -548,6 +552,26 @@ def _query_records(state: AssistantState) -> AssistantState:
                     "Challan #" + str(r["challan_id"]) + " | No. " + str(r["challan_number"]) + " | " + str(r["registration_number"]) + " | " + str(r["violation"]) + " | Fine ₹" + format(float(r["amount"] or 0), ",.2f") + " | Status " + str(r["status"]) + " | Due " + str(r["due_date"] or "not set")
                     for r in rows
                 ) if rows else "Aapke access mein challan record nahi mila."
+        elif intent in {"users", "admins"}:
+            if state.get("role") != "Admin" and state.get("email", "").lower() != SUPER_ADMIN_EMAIL.lower():
+                return {"answer": "User/admin account lists are restricted to administrators. Please ask your administrator."}
+            role = "Admin" if intent == "admins" else None
+            conditions = ["is_approved = 1", "is_rejected = 0", "is_terminated = 0"]
+            values = []
+            if role:
+                conditions.append("role = ?")
+                values.append(role)
+            query = "SELECT user_id, full_name, role, is_approved, is_terminated FROM users WHERE " + " AND ".join(conditions)
+            query += " ORDER BY role, full_name COLLATE NOCASE LIMIT 100"
+            rows = conn.execute(query, values).fetchall()
+            if re.search(r"\b(total|count|kitne|kitna|number of|how many)\b", question, re.I):
+                answer = f"Total active approved {'administrators' if role else 'users'} available to your account: {len(rows)}."
+            else:
+                label = "Administrator records" if role else "User records"
+                answer = label + ":\n" + "\n".join(
+                    f"User #{row['user_id']} | {row['full_name'] or 'Name not set'} | {row['role']} | {'Active' if row['is_approved'] and not row['is_terminated'] else 'Inactive'}"
+                    for row in rows
+                ) if rows else f"No active approved {'administrator' if role else 'user'} records found."
         elif intent == "maintenance":
             scope, params = _owner_scope("maintenance", "owner_user_id", state)
             rows = conn.execute(
@@ -655,7 +679,7 @@ def _build_graph():
         lambda state: state["intent"] if state["intent"] in INTENTS - {"help"} else "help",
         {"trips": "query_records", "expenses": "query_records", "payments": "query_records",
          "maintenance": "query_records", "trucks": "query_records", "drivers": "query_records",
-         "challans": "query_records", "help": "help"},
+         "challans": "query_records", "users": "query_records", "admins": "query_records", "help": "help"},
     )
     graph.add_edge("query_records", END)
     graph.add_edge("help", END)
