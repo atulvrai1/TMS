@@ -2330,6 +2330,11 @@ def _load_admin_notifications(conn):
         "WHERE " + compliance_scope.replace("compliance_documents.", "d.") + " "
         "AND d.expiry_date IS NOT NULL "
         "AND d.expiry_date <= date('now', '+30 days') "
+        "AND d.document_id = (SELECT MAX(d2.document_id) FROM compliance_documents d2 "
+        "WHERE d2.subject_type = d.subject_type AND d2.document_type = d.document_type "
+        "AND IFNULL(d2.truck_id, 0) = IFNULL(d.truck_id, 0) "
+        "AND IFNULL(d2.driver_id, 0) = IFNULL(d.driver_id, 0) "
+        "AND IFNULL(d2.trip_id, 0) = IFNULL(d.trip_id, 0)) "
         "ORDER BY d.expiry_date ASC, d.document_id DESC LIMIT 100",
         compliance_scope_params
     ).fetchall()
@@ -2361,7 +2366,13 @@ def _count_admin_notifications(conn):
         "(SELECT COUNT(*) FROM compliance_documents "
         "WHERE " + compliance_scope + " "
         "AND expiry_date IS NOT NULL "
-        "AND expiry_date <= date('now', '+30 days')) AS compliance_expiry"
+        "AND expiry_date <= date('now', '+30 days') "
+        "AND document_id = (SELECT MAX(d2.document_id) FROM compliance_documents d2 "
+        "WHERE d2.subject_type = compliance_documents.subject_type "
+        "AND d2.document_type = compliance_documents.document_type "
+        "AND IFNULL(d2.truck_id, 0) = IFNULL(compliance_documents.truck_id, 0) "
+        "AND IFNULL(d2.driver_id, 0) = IFNULL(compliance_documents.driver_id, 0) "
+        "AND IFNULL(d2.trip_id, 0) = IFNULL(compliance_documents.trip_id, 0))) AS compliance_expiry"
         , [*expense_scope_params, *compliance_scope_params]
     ).fetchone()
     return {key: counts[key] for key in ("pending_users", "pending_expenses", "reset_links", "compliance_expiry")}
