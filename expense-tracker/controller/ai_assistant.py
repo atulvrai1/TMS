@@ -355,6 +355,11 @@ def _detect_intent(question: str) -> str:
     ):
         return "help"
 
+    if re.search(r"\b(got|received|collected|mila|mili|mile|jama kiya|jama hua|paise aaye|payment aaya)\b", text) and re.search(
+        r"\b\d[\d,]*(?:\.\d{1,2})?\b", text
+    ) and re.search(r"\btrip\s*#?\s*\d+\b|\b(it|that|this|uske liye|is trip par|us trip)\b", text):
+        return "payments"
+
     # Payments are checked before trips: a trip may be mentioned only as context
     # for an amount received, advance, balance, or outstanding freight.
     if re.search(
