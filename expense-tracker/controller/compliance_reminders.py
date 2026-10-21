@@ -37,6 +37,14 @@ def generate_expiry_notifications(conn, today=None):
         LEFT JOIN drivers dr ON dr.driver_id = d.driver_id
         LEFT JOIN trips tr ON tr.trip_id = d.trip_id
         WHERE d.expiry_date IS NOT NULL
+          AND d.document_id = (
+              SELECT MAX(d2.document_id) FROM compliance_documents d2
+              WHERE d2.document_type = d.document_type
+                AND IFNULL(d2.truck_id, 0) = IFNULL(d.truck_id, 0)
+                AND IFNULL(d2.driver_id, 0) = IFNULL(d.driver_id, 0)
+                AND IFNULL(d2.trip_id, 0) = IFNULL(d.trip_id, 0)
+                AND IFNULL(d2.owner_user_id, -1) = IFNULL(d.owner_user_id, -1)
+          )
     """).fetchall()
     created = 0
     for row in rows:
