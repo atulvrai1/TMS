@@ -158,9 +158,11 @@ def test_intent_router_covers_common_fleet_synonyms_and_spelling_variants():
         "truck breakdown at highway": "maintenance",
         "trip bnao Bhopal se Indore": "trips",
         "show completed shipments": "trips",
-        "PUC certificate expiry kab hai": "help",
-        "insurance expired": "help",
-        "Parivahan RC status": "help",
+        "PUC certificate expiry kab hai": "compliance",
+        "insurance expired": "compliance",
+        "Parivahan RC status": "compliance",
+        "show documents expiring soon": "compliance",
+        "KA-50-EU-1045 insurance expiry": "compliance",
     }
     for question, expected in cases.items():
         assert _detect_intent(question) == expected, question
