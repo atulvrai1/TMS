@@ -127,3 +127,32 @@ def test_roadside_compliance_catalog_covers_requested_inspection_areas():
     assert "Unauthorized passengers in goods vehicle" in FINDINGS
     assert {"Low", "Medium", "High", "Critical"} == SEVERITIES
     assert {"Open", "Corrected", "Referred", "Closed"} == STATUSES
+
+
+def test_intent_router_covers_common_fleet_synonyms_and_spelling_variants():
+    cases = {
+        "gaadi ka status batao": "trucks",
+        "show vehicle registration number": "trucks",
+        "Rakesh chalak ka record": "drivers",
+        "driver ka licence number": "drivers",
+        "show e challan and traffic fine": "challans",
+        "pending chalan kitna hai": "challans",
+        "diesel ka kharcha kitna laga": "expenses",
+        "truck repair cost": "expenses",
+        "trip 3 ka due amount": "payments",
+        "trip 4 ke paise mile": "payments",
+        "gaadi servicing kab hui": "maintenance",
+        "truck breakdown at highway": "maintenance",
+        "trip bnao Bhopal se Indore": "trips",
+        "show completed shipments": "trips",
+        "PUC certificate expiry kab hai": "help",
+        "insurance expired": "help",
+        "Parivahan RC status": "help",
+    }
+    for question, expected in cases.items():
+        assert _detect_intent(question) == expected, question
+
+
+def test_intent_router_does_not_confuse_spending_with_received_payments():
+    assert _detect_intent("kitna paisa laga diesel mein") == "expenses"
+    assert _detect_intent("trip 3 ke paise mile") == "payments"
