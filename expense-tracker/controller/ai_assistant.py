@@ -1253,7 +1253,7 @@ def _build_graph():
         lambda state: state["intent"] if state["intent"] in INTENTS - {"help"} else "help",
         {"trips": "record_query", "expenses": "record_query", "payments": "record_query",
          "maintenance": "record_query", "trucks": "record_query", "drivers": "record_query",
-         "challans": "record_query", "users": "record_query", "admins": "record_query", "help": "help"},
+         "challans": "record_query", "compliance": "record_query", "users": "record_query", "admins": "record_query", "help": "help"},
     )
     graph.add_edge("record_query", END)
     graph.add_edge("help", "help_quality_gate")
