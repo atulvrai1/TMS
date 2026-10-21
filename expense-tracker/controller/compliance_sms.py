@@ -1,6 +1,6 @@
-"""Msg07 REST API integration for scheduled FleetFlow compliance-expiry reminders.
+"""My SMS Gateway REST API integration for scheduled FleetFlow compliance-expiry reminders.
 
-Configure the endpoint, authentication, and JSON payload from your Msg07 workspace API docs.
+Configure the endpoint, authentication, and JSON payload from your My SMS Gateway workspace API docs.
 """
 import json
 import logging
@@ -14,88 +14,38 @@ from urllib.request import Request, urlopen
 from flask import abort, flash, redirect, request, url_for
 
 logger = logging.getLogger(__name__)
-MSG07_DEFAULT_PAYLOAD = '{"to":"{{mobile}}","message":"{{message}}"}'
+MY_SMS_GATEWAY_DEFAULT_API_URL = "https://api.mysmsgateway.com/v1/sms/send"
 
 
-def ensure_sms_schema(get_db):
-    conn = get_db()
-    try:
-        conn.execute("""
-            CREATE TABLE IF NOT EXISTS compliance_sms_settings (
-                setting_id INTEGER PRIMARY KEY CHECK (setting_id = 1),
-                recipient_mobile TEXT NOT NULL DEFAULT '',
-                enabled INTEGER NOT NULL DEFAULT 0,
-                updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                updated_by INTEGER
-            )
-        """)
-        conn.execute("""
-            INSERT OR IGNORE INTO compliance_sms_settings (setting_id, recipient_mobile, enabled)
-            VALUES (1, '', 0)
-        """)
-        conn.execute("""
-            CREATE TABLE IF NOT EXISTS compliance_sms_log (
-                sms_id INTEGER PRIMARY KEY AUTOINCREMENT,
-                document_id INTEGER NOT NULL,
-                recipient_mobile TEXT NOT NULL,
-                milestone TEXT NOT NULL,
-                status TEXT NOT NULL DEFAULT 'pending',
-                provider_request_id TEXT,
-                response_message TEXT,
-                attempts INTEGER NOT NULL DEFAULT 0,
-                last_attempt_at TEXT,
-                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                UNIQUE(document_id, recipient_mobile, milestone)
-            )
-        """)
-        conn.execute("CREATE INDEX IF NOT EXISTS idx_compliance_sms_log_status ON compliance_sms_log(status, last_attempt_at)")
-        conn.commit()
-    finally:
-        conn.close()
-
-
-def _normalise_mobile(raw):
-    digits = re.sub(r"\D", "", raw or "")
-    if digits.startswith("91") and len(digits) == 12:
-        digits = digits[2:]
-    if len(digits) != 10 or digits[0] not in "6789":
-        raise ValueError("Enter a valid Indian 10-digit mobile number.")
-    return digits
-
-
-def _replace_payload_placeholders(value, mobile, message):
-    if isinstance(value, dict):
-        return {key: _replace_payload_placeholders(item, mobile, message) for key, item in value.items()}
-    if isinstance(value, list):
-        return [_replace_payload_placeholders(item, mobile, message) for item in value]
-    if isinstance(value, str):
-        return value.replace("{{mobile}}", mobile).replace("{{message}}", message)
-    return value
-
-
-def _msg07_payload(mobile, message):
-    raw_template = os.environ.get("MSG07_PAYLOAD_TEMPLATE", "").strip() or MSG07_DEFAULT_PAYLOAD
-    try:
-        template = json.loads(raw_template)
-    except json.JSONDecodeError as exc:
-        raise RuntimeError("MSG07_PAYLOAD_TEMPLATE must be valid JSON.") from exc
-    if not isinstance(template, (dict, list)):
-        raise RuntimeError("MSG07_PAYLOAD_TEMPLATE must be a JSON object or array.")
-    return _replace_payload_placeholders(template, mobile, message)
-
-
-def _send_msg07(mobile, message):
-    api_url = os.environ.get("MSG07_API_URL", "").strip()
-    api_key = os.environ.get("MSG07_API_KEY", "").strip()
-    auth_header = os.environ.get("MSG07_AUTH_HEADER", "Authorization").strip() or "Authorization"
-    auth_scheme = os.environ.get("MSG07_AUTH_SCHEME", "Bearer").strip()
-    if not api_url or not api_key:
-        raise RuntimeError("Msg07 is not configured. Set MSG07_API_URL and MSG07_API_KEY.")
+def _send_my_sms_gateway(mobile, message):
+    """Submit an SMS job through My SMS Gateway's documented REST API."""
+    api_url = os.environ.get("MY_SMS_GATEWAY_API_URL", "").strip() or MY_SMS_GATEWAY_DEFAULT_API_URL
+    api_key = os.environ.get("MY_SMS_GATEWAY_API_KEY", "").strip()
+    device_id = os.environ.get("MY_SMS_GATEWAY_DEVICE_ID", "").strip()
+    if not api_key or not device_id:
+        raise RuntimeError(
+            "My SMS Gateway is not configured. Set MY_SMS_GATEWAY_API_KEY and MY_SMS_GATEWAY_DEVICE_ID."
+        )
     if not api_url.lower().startswith("https://"):
-        raise RuntimeError("MSG07_API_URL must use HTTPS.")
-    headers = {"Content-Type": "application/json", "Accept": "application/json"}
-    headers[auth_header] = f"{auth_scheme} {api_key}".strip()
-    payload = _msg07_payload(mobile, message)
+        raise RuntimeError("MY_SMS_GATEWAY_API_URL must use HTTPS.")
+    try:
+        sim = int(os.environ.get("MY_SMS_GATEWAY_SIM", "1").strip() or "1")
+    except ValueError as exc:
+        raise RuntimeError("MY_SMS_GATEWAY_SIM must be 1 or 2.") from exc
+    if sim not in (1, 2):
+        raise RuntimeError("MY_SMS_GATEWAY_SIM must be 1 or 2.")
+    payload = {
+        "device_id": device_id,
+        "to": f"+91{mobile}",
+        "message": message,
+        "sim": sim,
+        "message_type": os.environ.get("MY_SMS_GATEWAY_MESSAGE_TYPE", "transactional").strip() or "transactional",
+    }
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json",
+        "Accept": "application/json",
+    }
     req = Request(api_url, data=json.dumps(payload).encode("utf-8"), headers=headers, method="POST")
     try:
         with urlopen(req, timeout=20) as response:
@@ -103,27 +53,22 @@ def _send_msg07(mobile, message):
             status_code = getattr(response, "status", 200)
     except HTTPError as exc:
         detail = exc.read().decode("utf-8", errors="replace")[:500]
-        raise RuntimeError(f"Msg07 HTTP {exc.code}: {detail}") from exc
+        raise RuntimeError(f"My SMS Gateway HTTP {exc.code}: {detail}") from exc
     except (URLError, TimeoutError) as exc:
-        raise RuntimeError(f"Msg07 request failed: {exc}") from exc
+        raise RuntimeError(f"My SMS Gateway request failed: {exc}") from exc
     if not 200 <= int(status_code) < 300:
-        raise RuntimeError(f"Msg07 returned HTTP {status_code}: {raw[:300]}")
-    if raw.strip():
-        try:
-            result = json.loads(raw)
-        except json.JSONDecodeError:
-            result = {"message": raw.strip()}
-        if isinstance(result, dict):
-            if result.get("success") is False or str(result.get("status", "")).lower() in {"failed", "error", "rejected"}:
-                raise RuntimeError(str(result.get("message") or result.get("error") or result)[:500])
-            request_id = result.get("request_id") or result.get("message_id") or result.get("id") or ""
-            response_message = result.get("message") or result.get("status") or "Accepted"
-        else:
-            request_id, response_message = "", "Accepted"
-    else:
-        request_id, response_message = "", "Accepted"
+        raise RuntimeError(f"My SMS Gateway returned HTTP {status_code}: {raw[:300]}")
+    try:
+        result = json.loads(raw) if raw.strip() else {}
+    except json.JSONDecodeError as exc:
+        raise RuntimeError("My SMS Gateway returned an invalid JSON response.") from exc
+    if not isinstance(result, dict):
+        raise RuntimeError("My SMS Gateway returned an unexpected response.")
+    if result.get("success") is False or str(result.get("status", "")).lower() in {"failed", "error", "rejected"}:
+        raise RuntimeError(str(result.get("message") or result.get("error") or result)[:500])
+    request_id = result.get("job_id") or result.get("request_id") or result.get("message_id") or result.get("id") or ""
+    response_message = result.get("message") or result.get("status") or "Accepted"
     return str(request_id)[:200], str(response_message)[:500]
-
 
 def _document_label(row):
     if row["subject_type"] == "truck":
@@ -136,7 +81,7 @@ def _document_label(row):
 
 
 def _render_message(row, days_remaining):
-    template = os.environ.get("MSG07_MESSAGE_TEMPLATE", "").strip() or (
+    template = os.environ.get("MY_SMS_GATEWAY_MESSAGE_TEMPLATE", "").strip() or (
         "FleetFlow alert: {document} for {vehicle}. Please check and renew the compliance document."
     )
     document = row["document_type"]
@@ -153,7 +98,7 @@ def _render_message(row, days_remaining):
     try:
         message = template.format(document=document, vehicle=vehicle)
     except (KeyError, ValueError) as exc:
-        raise RuntimeError("MSG07_MESSAGE_TEMPLATE must use only {document} and {vehicle} placeholders.") from exc
+        raise RuntimeError("MY_SMS_GATEWAY_MESSAGE_TEMPLATE must use only {document} and {vehicle} placeholders.") from exc
     if len(message) > 500:
         raise RuntimeError("The configured SMS template expands beyond 500 characters.")
     return message
@@ -222,7 +167,7 @@ def send_due_compliance_sms(get_db):
             conn.commit()
             try:
                 message = _render_message(row, days)
-                request_id, response_message = _send_msg07(mobile, message)
+                request_id, response_message = _send_my_sms_gateway(mobile, message)
                 conn.execute(
                     "UPDATE compliance_sms_log SET status='submitted', provider_request_id=?, "
                     "response_message=? WHERE sms_id=?",
@@ -271,7 +216,7 @@ def register_compliance_sms_module(app, ns):
             conn.commit()
         finally:
             conn.close()
-        flash("SMS notification settings saved. A Msg07 API endpoint and API key must be configured before delivery.", "success")
+        flash("SMS notification settings saved. A My SMS Gateway API endpoint and API key must be configured before delivery.", "success")
         return redirect(url_for("admin_notifications"))
 
     @app.route("/admin/notifications/sms-test", methods=["POST"], endpoint="compliance_sms_test")
@@ -297,9 +242,9 @@ def register_compliance_sms_module(app, ns):
         try:
             sample_row = {"document_type": "TEST DOCUMENT", "subject_type": "truck", "registration_number": "TEST-TRUCK", "truck_id": 0, "driver_id": None, "trip_id": None, "driver_name": None, "expiry_date": date.today().isoformat()}
             sample = _render_message(sample_row, 7)
-            _send_msg07(mobile, sample)
-            flash("Msg07 accepted the test message. This confirms API submission, not handset delivery.", "success")
+            _send_my_sms_gateway(mobile, sample)
+            flash("My SMS Gateway accepted the test message. This confirms API submission, not handset delivery.", "success")
         except Exception as exc:
-            logger.exception("Msg07 test failed")
+            logger.exception("My SMS Gateway test failed")
             flash(f"Test SMS failed: {str(exc)[:220]}", "error")
         return redirect(url_for("admin_notifications"))
