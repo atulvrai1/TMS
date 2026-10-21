@@ -46,33 +46,9 @@ The page opens these links in a new tab (it does not embed them in a frame):
 
 Open the official service, complete any CAPTCHA/verification there, and manually update FleetFlow after checking the result. This release does **not** automatically query Parivahan, bypass CAPTCHA, or send data to a government service. Automatic verification requires an authorised API or approved provider.
 
-## Automatic sync: what is required
+## Parivahan verification
 
-FleetFlow now has an authorised-provider adapter, but it **does not automatically connect to the public Parivahan web pages**. Those pages can present CAPTCHA and citizen-verification steps. The official National Transport Repository data-sharing policy describes a formal API request/approval process; obtain written authorisation or use an approved provider before configuring a live endpoint.
-
-When an authorised provider is available, configure these variables in the application's runtime environment (do not commit tokens to Git):
-
-- `PARIVAHAN_API_BASE_URL`: HTTPS base URL for the authorised API adapter, not a public citizen-portal URL.
-- `PARIVAHAN_API_TOKEN`: bearer token supplied by that provider.
-
-FleetFlow expects a provider contract with `GET {base_url}/vehicles/{URL-encoded-registration-number}`, an `Authorization: Bearer ...` header, and JSON shaped like:
-
-```json
-{
-  "source": "parivahan",
-  "documents": [
-    {
-      "document_type": "PUC Certificate",
-      "document_number": "certificate-reference",
-      "issue_date": "2026-01-01",
-      "expiry_date": "2026-12-31",
-      "verified": true
-    }
-  ]
-}
-```
-
-Supported document types must match the FleetFlow register. Only a response explicitly identifying `source` as `parivahan` and setting `verified: true` is marked source-verified; other imports remain unverified. The API contract is an adapter contract for an authorised provider, **not a claim that Parivahan publishes this exact endpoint or JSON schema**. Sync is performed per truck from the Roadside Compliance page, and invalid/unsupported records are not imported.
+FleetFlow does **not** automatically sync with the public Parivahan portal. Use the official links on the compliance page to check vehicle and certificate details, then update the corresponding record and expiry date in FleetFlow. Do not enter API credentials for the public website or treat manual records as government-verified. An authorised data provider can be considered later only if one is actually available and approved.
 
 ## Scheduled expiry reminders
 
