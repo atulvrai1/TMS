@@ -26,6 +26,25 @@
     <div class="stat-tile"><span class="stat-label">Expiring within 30 days</span><span class="stat-value">{{ expiring_count }}</span></div>
     <div class="stat-tile"><span class="stat-label">Open inspection findings</span><span class="stat-value">{{ open_findings }}</span></div>
   </section>
+  <section class="compliance-panel">
+    <h2>Official vehicle services</h2>
+    <p class="compliance-muted">Open these government services in a new tab. Complete any CAPTCHA or verification on the official site, then update FleetFlow manually. FleetFlow does not fetch or verify government records automatically.</p>
+    <div class="compliance-grid">
+      <div><strong>Vehicle status, PUCC and insurance</strong><p><a href="https://analytics.parivahan.gov.in/analytics/vehiclestatusreport" target="_blank" rel="noopener noreferrer">Open Parivahan vehicle status ↗</a></p></div>
+      <div><strong>PUC services</strong><p><a href="https://vahan.parivahan.gov.in/puc/views/PucCertificate.xhtml" target="_blank" rel="noopener noreferrer">Open VAHAN PUC portal ↗</a></p></div>
+      <div><strong>Traffic challans</strong><p><a href="https://echallan.parivahan.gov.in/" target="_blank" rel="noopener noreferrer">Open official eChallan ↗</a></p></div>
+      <div><strong>Parivahan services</strong><p><a href="https://parivahan.gov.in/" target="_blank" rel="noopener noreferrer">Open Parivahan ↗</a></p></div>
+    </div>
+  </section>
+  <section class="compliance-panel">
+    <h2>Pre-trip document check (advisory)</h2>
+    <p class="compliance-muted">Checks the latest recorded PUC, insurance, fitness and permit expiry. Missing records are flagged for review; this is not a legal clearance or an automatic dispatch block.</p>
+    <div class="compliance-table-wrap"><table class="compliance-table"><thead><tr><th>Truck</th><th>PUC</th><th>Insurance</th><th>Fitness</th><th>Applicable permit</th><th>Records needing attention</th></tr></thead><tbody>
+    {% for row in dispatch_checks %}<tr><td><strong>{{ row.truck.registration_number }}</strong><div class="compliance-muted">{{ row.truck.model or '' }}</div></td>
+    {% for check in row.checks %}<td><span class="compliance-pill {{ 'good' if check.status == 'Valid' else 'bad' if check.status == 'Expired' else 'warn' }}">{{ check.status }}</span></td>{% endfor %}
+    <td>{{ row.attention_count }}</td></tr>{% else %}<tr><td colspan="6">Add trucks to see their pre-trip document checks.</td></tr>{% endfor %}
+    </tbody></table></div>
+  </section>
   <div class="compliance-grid">
     <section class="compliance-panel">
       <h2>＋ Register a compliance document</h2>
@@ -74,7 +93,7 @@
   <section class="compliance-panel">
     <h2>Document register and expiry alerts</h2>
     <div class="compliance-table-wrap"><table class="compliance-table"><thead><tr><th>Document</th><th>Vehicle / driver</th><th>Reference</th><th>Validity</th><th>Verification</th><th>Notes</th></tr></thead><tbody>
-    {% for d in documents %}<tr><td><strong>{{ d.document_type }}</strong><div class="compliance-muted">{{ d.subject_type|title }}</div></td><td>{{ d.registration_number or d.driver_name or (('#' ~ d.related_trip_id ~ ' ' ~ d.route_from ~ ' → ' ~ d.route_to) if d.related_trip_id else '—') }}</td><td>{{ d.document_number or '—' }}</td><td>{% if d.expiry_date %}{% if d.expiry_date < today %}<span class="compliance-pill bad">Expired</span>{% elif d.expiry_date <= (today|string) %}<span class="compliance-pill warn">Expiry today</span>{% else %}{{ d.expiry_date }}{% endif %}{% else %}<span class="compliance-pill warn">Expiry not recorded</span>{% endif %}{% if d.issue_date %}<div class="compliance-muted">Issued {{ d.issue_date }}</div>{% endif %}</td><td>{% if d.verified %}<span class="compliance-pill good">Verified</span>{% else %}<span class="compliance-pill warn">Unverified</span>{% endif %}<div class="compliance-muted">{{ d.verification_method }}</div></td><td>{{ d.notes or '—' }}</td></tr>
+    {% for d in documents %}<tr><td><strong>{{ d.document_type }}</strong><div class="compliance-muted">{{ d.subject_type|title }}</div></td><td>{{ d.registration_number or d.driver_name or (('#' ~ d.related_trip_id ~ ' ' ~ d.route_from ~ ' → ' ~ d.route_to) if d.related_trip_id else '—') }}</td><td>{{ d.document_number or '—' }}</td><td>{% if d.expiry_date %}{% if d.days_remaining < 0 %}<span class="compliance-pill bad">Expired</span>{% elif d.days_remaining == 0 %}<span class="compliance-pill bad">Due today</span>{% elif d.days_remaining <= 7 %}<span class="compliance-pill bad">Urgent · {{ d.days_remaining }}d</span>{% elif d.days_remaining <= 30 %}<span class="compliance-pill warn">Expiring soon · {{ d.days_remaining }}d</span>{% else %}<span class="compliance-pill good">Valid · {{ d.days_remaining }}d</span>{% endif %}<div class="compliance-muted">Expires {{ d.expiry_date }}</div>{% else %}<span class="compliance-pill warn">Expiry not recorded</span>{% endif %}{% if d.issue_date %}<div class="compliance-muted">Issued {{ d.issue_date }}</div>{% endif %}</td><td>{% if d.verified %}<span class="compliance-pill good">Verified</span>{% else %}<span class="compliance-pill warn">Unverified</span>{% endif %}<div class="compliance-muted">{{ d.verification_method }}</div></td><td>{{ d.notes or '—' }}</td></tr>
     {% else %}<tr><td colspan="6">No compliance documents recorded yet.</td></tr>{% endfor %}
     </tbody></table></div>
   </section>
