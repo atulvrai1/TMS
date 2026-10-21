@@ -54,3 +54,16 @@ def test_overdue_reminder_created_once():
     assert row["alert_key"] == "overdue"
     assert "expired 1 day(s) ago" in row["message"]
     conn.close()
+
+
+def test_renewal_suppresses_old_document_reminders():
+    conn = make_db()
+    conn.execute("""
+        INSERT INTO compliance_documents
+            (document_id, owner_user_id, document_type, expiry_date, truck_id)
+        VALUES (2, 7, 'PUC Certificate', '2027-10-21', 1)
+    """)
+    conn.commit()
+    # The old certificate is 30 days from expiry, but the renewed record is current.
+    assert generate_expiry_notifications(conn, date(2026, 10, 21)) == 0
+    conn.close()
