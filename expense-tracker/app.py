@@ -98,6 +98,23 @@ def _get_secret_key():
 app.config["SECRET_KEY"] = _get_secret_key()
 
 
+@app.get("/healthz")
+def healthz():
+    """Container/orchestrator health probe; verify the app can reach its database."""
+    conn = None
+    try:
+        conn = get_db()
+        conn.execute("SELECT 1").fetchone()
+        return jsonify(status="ok"), 200
+    except Exception:
+        app.logger.exception("FleetFlow health check failed")
+        return jsonify(status="unhealthy"), 503
+    finally:
+        if conn is not None:
+            conn.close()
+
+
+
 def _password_matches(stored_password, candidate):
     """Accept only Werkzeug password hashes; never authenticate plaintext secrets."""
     if not candidate or not stored_password:
