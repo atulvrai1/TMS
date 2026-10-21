@@ -1,8 +1,8 @@
-from datetime import date
+import json
 
 import pytest
 
-from controller.compliance_sms import _msg07_payload, _normalise_mobile, _render_message
+from controller.compliance_sms import _normalise_mobile, _render_message, _send_my_sms_gateway
 
 
 def test_normalise_indian_mobile_accepts_country_code_and_formatting():
@@ -33,28 +33,41 @@ def test_render_message_contains_document_asset_and_expiry():
     assert "2026-10-27" in message
 
 
+def test_my_sms_gateway_sends_documented_payload(monkeypatch):
+    import controller.compliance_sms as sms
 
-def test_msg07_payload_defaults_to_mobile_and_message(monkeypatch):
-    monkeypatch.delenv("MSG07_PAYLOAD_TEMPLATE", raising=False)
-    assert _msg07_payload("9876543210", "FleetFlow test") == {
-        "to": "9876543210",
+    monkeypatch.setenv("MY_SMS_GATEWAY_API_KEY", "test-key")
+    monkeypatch.setenv("MY_SMS_GATEWAY_DEVICE_ID", "device-123")
+    captured = {}
+
+    class FakeResponse:
+        status = 202
+        def __enter__(self): return self
+        def __exit__(self, *args): return False
+        def read(self): return b'{"success":true,"status":"queued","job_id":"job-1"}'
+
+    def fake_urlopen(req, timeout):
+        captured["url"] = req.full_url
+        captured["headers"] = req.headers
+        captured["payload"] = json.loads(req.data.decode())
+        return FakeResponse()
+
+    monkeypatch.setattr(sms, "urlopen", fake_urlopen)
+    request_id, response_message = _send_my_sms_gateway("9876543210", "FleetFlow test")
+    assert captured["url"] == "https://api.mysmsgateway.com/v1/sms/send"
+    assert captured["payload"] == {
+        "device_id": "device-123",
+        "to": "+919876543210",
         "message": "FleetFlow test",
+        "sim": 1,
+        "message_type": "transactional",
     }
+    assert request_id == "job-1"
+    assert response_message == "queued"
 
 
-def test_msg07_payload_supports_provider_specific_schema(monkeypatch):
-    monkeypatch.setenv(
-        "MSG07_PAYLOAD_TEMPLATE",
-        '{"recipient":"{{mobile}}","text":{"body":"{{message}}"},"channel":"sms"}',
-    )
-    assert _msg07_payload("9876543210", "Expiry alert") == {
-        "recipient": "9876543210",
-        "text": {"body": "Expiry alert"},
-        "channel": "sms",
-    }
-
-
-def test_msg07_payload_rejects_invalid_json(monkeypatch):
-    monkeypatch.setenv("MSG07_PAYLOAD_TEMPLATE", "{not-json")
-    with pytest.raises(RuntimeError, match="valid JSON"):
-        _msg07_payload("9876543210", "test")
+def test_my_sms_gateway_requires_key_and_device(monkeypatch):
+    monkeypatch.delenv("MY_SMS_GATEWAY_API_KEY", raising=False)
+    monkeypatch.delenv("MY_SMS_GATEWAY_DEVICE_ID", raising=False)
+    with pytest.raises(RuntimeError, match="MY_SMS_GATEWAY_API_KEY"):
+        _send_my_sms_gateway("9876543210", "test")
