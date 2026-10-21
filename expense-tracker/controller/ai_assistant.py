@@ -353,9 +353,9 @@ def _detect_intent(question: str) -> str:
     # Document/compliance questions should get honest help guidance; this branch
     # does not perform live Parivahan/VAHAN lookups.
     if re.search(
-        r"\b(puc|pollution certificate|insurance expiry|insurance policy|fitness certificate|"
+        r"\b(puc|pollution certificate|insurance expiry|insurance expired|insurance policy|fitness certificate|"
         r"national permit|state permit|permit expiry|road tax|tax token|rc expiry|"
-        r"registration certificate|document expiry|documents expire|compliance|parivahan|vahan)\b",
+        r"registration certificate|expiring documents|documents expiring|document expiry|documents expire|compliance|parivahan|vahan)\b",
         text,
     ):
         return "compliance"
