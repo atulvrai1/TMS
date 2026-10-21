@@ -402,7 +402,7 @@ def _detect_intent(question: str) -> str:
         return "drivers"
 
     if re.search(
-        r"\b(truck|trucks|vehicle|vehicles|lorry|lorries|fleet vehicle|gaadi|gadi|"
+        r"\b(truck|trucks|vehicle|vehicles|lorry|lorries|fleet vehicle|gaadi|gaadiyan|gadi|gadiyan|"
         r"truck number|number plate|registration number|reg number|rc number|"
         r"vehicle details|truck details|truck record)\b",
         text,
