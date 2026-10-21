@@ -162,6 +162,7 @@ def test_intent_router_covers_common_fleet_synonyms_and_spelling_variants():
         "insurance expired": "compliance",
         "Parivahan RC status": "compliance",
         "show documents expiring soon": "compliance",
+        "show expired documents": "compliance",
         "KA-50-EU-1045 insurance expiry": "compliance",
     }
     for question, expected in cases.items():
