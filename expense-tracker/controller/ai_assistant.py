@@ -535,43 +535,43 @@ def _query_records(state: AssistantState) -> AssistantState:
         if intent == "compliance":
             question = state.get("routing_question", state.get("question", ""))
             inspection_question = bool(re.search(
-                r"\\b(inspection|inspections|roadside|weight|cargo|overload|overloading|rupd|lupd|"
+                r"\b(inspection|inspections|roadside|weight|cargo|overload|overloading|rupd|lupd|"
                 r"reflective tape|tyres?|tires?|lights|indicators|horn|number plate|vehicle safety|"
                 r"driver behaviour|driver behavior|mobile phone|seatbelt|seat belt|wrong.side|"
                 r"overtaking|no.entry|restricted.time|unauthorized passengers|unauthorised passengers|"
                 r"corrective action|inspection finding|open finding|critical|high severity|medium severity|"
-                r"low severity|referred|corrected|closed finding)\\b",
+                r"low severity|referred|corrected|closed finding)\b",
                 question, re.I,
             ))
             if inspection_question:
                 inspection_scope, inspection_params = _owner_scope("roadside_inspections", "owner_user_id", state)
                 filters, filter_params = [], []
                 category_rules = [
-                    (r"\\b(document|documents|puc|insurance|fitness|permit|licence|license|rc)\\b", "Documents"),
-                    (r"\\b(weight|cargo|overload|overloading|weighbridge|hazardous cargo|protruding cargo)\\b", "Weight and Cargo"),
-                    (r"\\b(vehicle safety|rupd|lupd|reflective tape|tyres?|tires?|lights|indicators|horn|number plate)\\b", "Vehicle Safety"),
-                    (r"\\b(driver behaviour|driver behavior|mobile phone|seatbelt|seat belt|impairment)\\b", "Driver Behaviour"),
-                    (r"\\b(operational rules|no.entry|restricted.time|wrong.side|overtaking|unauthorized passengers|unauthorised passengers)\\b", "Operational Rules"),
+                    (r"\b(document|documents|puc|insurance|fitness|permit|licence|license|rc)\b", "Documents"),
+                    (r"\b(weight|cargo|overload|overloading|weighbridge|hazardous cargo|protruding cargo)\b", "Weight and Cargo"),
+                    (r"\b(vehicle safety|rupd|lupd|reflective tape|tyres?|tires?|lights|indicators|horn|number plate)\b", "Vehicle Safety"),
+                    (r"\b(driver behaviour|driver behavior|mobile phone|seatbelt|seat belt|impairment)\b", "Driver Behaviour"),
+                    (r"\b(operational rules|no.entry|restricted.time|wrong.side|overtaking|unauthorized passengers|unauthorised passengers)\b", "Operational Rules"),
                 ]
                 for pattern, category in category_rules:
                     if re.search(pattern, question, re.I):
                         filters.append("i.inspection_type = ?")
                         filter_params.append(category)
                         break
-                status_match = re.search(r"\\b(open|corrected|referred|closed)\\b", question, re.I)
+                status_match = re.search(r"\b(open|corrected|referred|closed)\b", question, re.I)
                 if status_match:
                     filters.append("lower(i.status) = lower(?)")
                     filter_params.append(status_match.group(1))
-                severity_match = re.search(r"\\b(low|medium|high|critical) severity\\b", question, re.I)
+                severity_match = re.search(r"\b(low|medium|high|critical) severity\b", question, re.I)
                 if severity_match:
                     filters.append("lower(i.severity) = lower(?)")
                     filter_params.append(severity_match.group(1))
-                reg_match = re.search(r"\\b([A-Z]{2}[- ]?\\d{1,2}[- ]?[A-Z]{1,3}[- ]?\\d{1,4})\\b", question, re.I)
+                reg_match = re.search(r"\b([A-Z]{2}[- ]?\d{1,2}[- ]?[A-Z]{1,3}[- ]?\d{1,4})\b", question, re.I)
                 if reg_match:
-                    registration = re.sub(r"\\s+", "", reg_match.group(1)).upper()
+                    registration = re.sub(r"\s+", "", reg_match.group(1)).upper()
                     filters.append("upper(replace(t.registration_number, ' ', '')) = ?")
                     filter_params.append(registration)
-                trip_match = re.search(r"\\btrip\\s*#?\\s*(\\d+)\\b", question, re.I)
+                trip_match = re.search(r"\btrip\s*#?\s*(\d+)\b", question, re.I)
                 if trip_match:
                     filters.append("i.trip_id = ?")
                     filter_params.append(int(trip_match.group(1)))
@@ -620,7 +620,7 @@ def _query_records(state: AssistantState) -> AssistantState:
                             f"Driver: {row['driver_name'] or 'Not recorded'} | Trip: #{row['trip_id'] if row['trip_id'] else 'Not linked'} | "
                             f"Corrective action: {row['corrective_action'] or 'Not recorded'}{challan}"
                         )
-                    answer = "Roadside inspection register (manually entered FleetFlow records):\\n" + "\\n".join(lines)
+                    answer = "Roadside inspection register (manually entered FleetFlow records):\n" + "\n".join(lines)
             else:
                 # Query only manually entered documents; never call Parivahan/VAHAN.
                 scope, params = _owner_scope("compliance_documents", "owner_user_id", state)
