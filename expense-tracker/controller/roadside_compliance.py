@@ -270,8 +270,9 @@ def register_compliance_module(app, ns):
                 "ORDER BY n.created_at DESC, n.notification_id DESC LIMIT 50",
                 notification_params,
             ).fetchall()
+            provider_url = urlsplit(os.environ.get("PARIVAHAN_API_BASE_URL", "").strip())
             parivahan_sync_configured = bool(
-                os.environ.get("PARIVAHAN_API_BASE_URL", "").strip()
+                provider_url.scheme == "https" and provider_url.netloc
                 and os.environ.get("PARIVAHAN_API_TOKEN", "").strip()
             )
             today = date.today().isoformat()
@@ -368,8 +369,8 @@ def register_compliance_module(app, ns):
                     existing = conn.execute(
                         "SELECT document_id FROM compliance_documents "
                         "WHERE truck_id=? AND document_type=? AND document_number=? "
-                        "ORDER BY document_id DESC LIMIT 1",
-                        (truck_id, doc_type, number),
+                        "AND owner_user_id IS ? ORDER BY document_id DESC LIMIT 1",
+                        (truck_id, doc_type, number, truck["owner_user_id"]),
                     ).fetchone()
                 if existing:
                     conn.execute(
