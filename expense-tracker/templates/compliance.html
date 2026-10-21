@@ -48,6 +48,7 @@
   <section class="compliance-panel">
     <h2>Pre-trip document check (advisory)</h2>
     <p class="compliance-muted">Checks the latest recorded PUC, insurance, fitness and permit expiry. Missing records are flagged for review; this is not a legal clearance or an automatic dispatch block.</p>
+    {% if parivahan_sync_configured %}<p class="compliance-muted">Authorised API adapter configured. Sync runs per truck and imported records should be reviewed.</p>{% else %}<p class="compliance-muted">Sync not configured. A valid authorised HTTPS API endpoint and token are required; the public Parivahan portal URL is not an API endpoint.</p>{% endif %}
     <div class="compliance-table-wrap"><table class="compliance-table"><thead><tr><th>Truck</th><th>PUC</th><th>Insurance</th><th>Fitness</th><th>Applicable permit</th><th>Records needing attention</th><th>Sync</th></tr></thead><tbody>
     {% for row in dispatch_checks %}<tr><td><strong>{{ row.truck.registration_number }}</strong><div class="compliance-muted">{{ row.truck.model or '' }}</div></td>
     {% for check in row.checks %}<td><span class="compliance-pill {{ 'good' if check.status == 'Valid' else 'bad' if check.status == 'Expired' else 'warn' }}">{{ check.status }}</span></td>{% endfor %}
