@@ -546,6 +546,7 @@ def _query_records(state: AssistantState) -> AssistantState:
             ))
             if inspection_question:
                 inspection_scope, inspection_params = _owner_scope("roadside_inspections", "owner_user_id", state)
+                inspection_scope = inspection_scope.replace("roadside_inspections.", "i.")
                 filters, filter_params = [], []
                 category_rules = [
                     (r"\b(document|documents|puc|insurance|fitness|permit|licence|license|rc)\b", "Documents"),
