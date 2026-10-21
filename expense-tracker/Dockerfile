@@ -39,11 +39,11 @@ USER fleetflow
 
 EXPOSE 5001
 
-# Container health check
+# Probe the running app instead of launching a second Gunicorn server.
 HEALTHCHECK --interval=30s \
     --timeout=5s \
-    --start-period=20s \
+    --start-period=30s \
     --retries=3 \
-    CMD ["gunicorn", "--bind", "0.0.0.0:5001", "--workers", "2", "--timeout", "120", "--access-logfile", "-", "--error-logfile", "-", "app:app"]
+    CMD ["curl", "--fail", "--silent", "--show-error", "http://127.0.0.1:5001/healthz"]
 # Start the Flask application using Gunicorn
 CMD ["gunicorn", "--bind", "0.0.0.0:5001", "--workers", "2", "--timeout", "120", "app:app"]
