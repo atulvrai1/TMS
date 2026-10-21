@@ -164,6 +164,16 @@ def test_intent_router_covers_common_fleet_synonyms_and_spelling_variants():
         "show documents expiring soon": "compliance",
         "show expired documents": "compliance",
         "KA-50-EU-1045 insurance expiry": "compliance",
+        "show roadside inspections": "compliance",
+        "show vehicle safety findings": "compliance",
+        "overloading finding for my truck": "compliance",
+        "RUPD missing": "compliance",
+        "driver using mobile phone": "compliance",
+        "seatbelt violation": "compliance",
+        "weight and cargo inspection": "compliance",
+        "operational rules inspection": "compliance",
+        "show open critical inspection": "compliance",
+        "PUC challan reference": "compliance",
     }
     for question, expected in cases.items():
         assert _detect_intent(question) == expected, question
