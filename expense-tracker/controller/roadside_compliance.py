@@ -9,6 +9,7 @@ from flask import abort, flash, redirect, render_template, request, session, url
 DOCUMENT_TYPES = {
     "Driving Licence (HMV)", "Registration Certificate (RC)", "Commercial Permit",
     "Fitness Certificate", "PUC Certificate", "Third-Party Insurance",
+    "National Permit", "State Permit", "Road Tax / Tax Token",
     "Trip Sheet / E-Way Bill / Cargo Manifest",
 }
 INSPECTION_TYPES = {
@@ -85,11 +86,92 @@ def _ensure_compliance_schema(get_db):
         """)
         conn.execute("CREATE INDEX IF NOT EXISTS idx_compliance_docs_expiry ON compliance_documents(expiry_date)")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_compliance_docs_truck ON compliance_documents(truck_id)")
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS compliance_expiry_alerts (
+                alert_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                document_id INTEGER NOT NULL REFERENCES compliance_documents(document_id) ON DELETE CASCADE,
+                expiry_date DATE NOT NULL,
+                alert_type TEXT NOT NULL,
+                message TEXT NOT NULL,
+                is_read INTEGER NOT NULL DEFAULT 0 CHECK(is_read IN (0,1)),
+                created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(document_id, expiry_date, alert_type)
+            )
+        """)
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_compliance_expiry_alerts_unread ON compliance_expiry_alerts(is_read, created_at DESC)")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_roadside_inspections_date ON roadside_inspections(inspection_date DESC)")
         conn.commit()
     finally:
         conn.close()
 
+
+
+def _expiry_alert_type(days_remaining):
+    """Return the single current reminder milestone for a manually entered expiry date."""
+    if days_remaining < 0:
+        return "overdue"
+    if days_remaining == 0:
+        return "expiry_today"
+    for threshold in (1, 7, 15, 30):
+        if days_remaining <= threshold:
+            return f"{threshold}_days"
+    return None
+
+
+def _sync_expiry_alerts(conn, documents, today=None):
+    """Persist deduplicated in-app reminders from the dates entered by staff.
+
+    This deliberately does not call Parivahan, VAHAN, or any external service.
+    A reminder is keyed by document, entered expiry date, and milestone.
+    """
+    today = today or date.today()
+    for document in documents:
+        expiry_raw = document["expiry_date"]
+        if not expiry_raw:
+            continue
+        try:
+            expiry = date.fromisoformat(str(expiry_raw))
+        except (TypeError, ValueError):
+            continue
+        days = (expiry - today).days
+        alert_type = _expiry_alert_type(days)
+        if not alert_type:
+            continue
+        subject = (
+            document["registration_number"] if document["subject_type"] == "truck"
+            else document["driver_name"] if document["subject_type"] == "driver"
+            else f"Trip #{document['related_trip_id']}"
+        ) or "Fleet record"
+        if days < 0:
+            message = f"{subject}: {document['document_type']} expired on {expiry.isoformat()}."
+        elif days == 0:
+            message = f"{subject}: {document['document_type']} expires today."
+        else:
+            message = f"{subject}: {document['document_type']} expires in {days} day(s), on {expiry.isoformat()}."
+        conn.execute(
+            "INSERT OR IGNORE INTO compliance_expiry_alerts "
+            "(document_id, expiry_date, alert_type, message) VALUES (?, ?, ?, ?)",
+            (document["document_id"], expiry.isoformat(), alert_type, message),
+        )
+
+
+def _fetch_unread_expiry_alerts(conn, documents):
+    """Fetch current-expiry unread reminders only for documents visible on this page."""
+    document_ids = [int(item["document_id"]) for item in documents]
+    if not document_ids:
+        return []
+    placeholders = ",".join("?" for _ in document_ids)
+    return conn.execute(
+        "SELECT a.alert_id, a.message, a.alert_type, a.created_at, d.document_type, "
+        "d.expiry_date, t.registration_number, dr.name AS driver_name "
+        "FROM compliance_expiry_alerts a "
+        "JOIN compliance_documents d ON d.document_id=a.document_id AND d.expiry_date=a.expiry_date "
+        "LEFT JOIN trucks t ON t.truck_id=d.truck_id "
+        "LEFT JOIN drivers dr ON dr.driver_id=d.driver_id "
+        f"WHERE a.is_read=0 AND d.document_id IN ({placeholders}) "
+        "ORDER BY CASE a.alert_type WHEN 'overdue' THEN 0 WHEN 'expiry_today' THEN 1 ELSE 2 END, a.created_at DESC LIMIT 50",
+        document_ids,
+    ).fetchall()
 
 def register_compliance_module(app, ns):
     get_db = ns["get_db"]
@@ -164,7 +246,11 @@ def register_compliance_module(app, ns):
         conn = get_db()
         try:
             documents, inspections, trucks, drivers, trips, challans = fetch_page_data(conn)
-            today = date.today().isoformat()
+            today_date = date.today()
+            _sync_expiry_alerts(conn, documents, today_date)
+            expiry_alerts = _fetch_unread_expiry_alerts(conn, documents)
+            conn.commit()
+            today = today_date.isoformat()
             expired = sum(1 for d in documents if d["expiry_date"] and d["expiry_date"] < today)
             # Date arithmetic without relying on database timezone: due within 30 days.
             from datetime import timedelta
@@ -177,7 +263,7 @@ def register_compliance_module(app, ns):
                 finding_groups={kind: [label for label, group in FINDINGS.items() if group == kind] for kind in sorted(INSPECTION_TYPES)},
                 severities=sorted(SEVERITIES), statuses=sorted(STATUSES), today=today,
                 expired_count=expired, expiring_count=expiring, open_findings=open_findings,
-                csrf_token=session["csrf_token"], block_content="dashboard",
+                expiry_alerts=expiry_alerts, csrf_token=session["csrf_token"], block_content="dashboard",
             )
         finally:
             conn.close()
@@ -244,6 +330,32 @@ def register_compliance_module(app, ns):
             conn.rollback()
             app.logger.exception("Unable to save compliance document")
             flash("Could not save the document. Please check the values and try again.", "error")
+        finally:
+            conn.close()
+        return redirect(url_for("roadside_compliance"))
+
+
+
+    @app.route("/compliance/alerts/<int:alert_id>/read", methods=["POST"], endpoint="compliance_expiry_alert_read")
+    @admin_required
+    def compliance_expiry_alert_read(alert_id):
+        if not _valid_csrf_token():
+            flash("Your session token is invalid. Reload the page and try again.", "error")
+            return redirect(url_for("roadside_compliance"))
+        conn = get_db()
+        try:
+            scope, params = _record_owner_filter("compliance_documents")
+            row = conn.execute(
+                "SELECT a.alert_id FROM compliance_expiry_alerts a "
+                "JOIN compliance_documents compliance_documents ON compliance_documents.document_id=a.document_id "
+                "WHERE a.alert_id=? AND " + scope,
+                [alert_id, *params],
+            ).fetchone()
+            if not row:
+                abort(404)
+            conn.execute("UPDATE compliance_expiry_alerts SET is_read=1 WHERE alert_id=?", (alert_id,))
+            conn.commit()
+            flash("Expiry reminder marked as read.", "success")
         finally:
             conn.close()
         return redirect(url_for("roadside_compliance"))
