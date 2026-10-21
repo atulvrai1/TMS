@@ -1,111 +1,168 @@
-"""My SMS Gateway REST API integration for scheduled FleetFlow compliance-expiry reminders.
-
-Configure the endpoint, authentication, and JSON payload from your My SMS Gateway workspace API docs.
-"""
+"""Official WhatsApp Cloud API integration for FleetFlow compliance reminders."""
 import json
 import logging
 import os
 import re
-import time
-from datetime import date, timedelta
+from datetime import date
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
-from flask import abort, flash, redirect, request, url_for
+from flask import flash, redirect, request, url_for
 
 logger = logging.getLogger(__name__)
-MY_SMS_GATEWAY_DEFAULT_API_URL = "https://api.mysmsgateway.com/v1/sms/send"
+DEFAULT_GRAPH_API_VERSION = "v23.0"
+DEFAULT_TEMPLATE_NAME = "fleetflow_compliance_alert"
 
 
-def _send_my_sms_gateway(mobile, message):
-    """Submit an SMS job through My SMS Gateway's documented REST API."""
-    api_url = os.environ.get("MY_SMS_GATEWAY_API_URL", "").strip() or MY_SMS_GATEWAY_DEFAULT_API_URL
-    api_key = os.environ.get("MY_SMS_GATEWAY_API_KEY", "").strip()
-    device_id = os.environ.get("MY_SMS_GATEWAY_DEVICE_ID", "").strip()
-    if not api_key or not device_id:
-        raise RuntimeError(
-            "My SMS Gateway is not configured. Set MY_SMS_GATEWAY_API_KEY and MY_SMS_GATEWAY_DEVICE_ID."
-        )
-    if not api_url.lower().startswith("https://"):
-        raise RuntimeError("MY_SMS_GATEWAY_API_URL must use HTTPS.")
+def ensure_sms_schema(get_db):
+    """Create persistent settings and deduplication tables (legacy table names retained)."""
+    conn = get_db()
     try:
-        sim = int(os.environ.get("MY_SMS_GATEWAY_SIM", "1").strip() or "1")
-    except ValueError as exc:
-        raise RuntimeError("MY_SMS_GATEWAY_SIM must be 1 or 2.") from exc
-    if sim not in (1, 2):
-        raise RuntimeError("MY_SMS_GATEWAY_SIM must be 1 or 2.")
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS compliance_sms_settings (
+                setting_id INTEGER PRIMARY KEY CHECK (setting_id = 1),
+                recipient_mobile TEXT NOT NULL DEFAULT '',
+                enabled INTEGER NOT NULL DEFAULT 0,
+                updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                updated_by INTEGER
+            )
+        """)
+        conn.execute("""
+            INSERT OR IGNORE INTO compliance_sms_settings
+                (setting_id, recipient_mobile, enabled) VALUES (1, '', 0)
+        """)
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS compliance_sms_log (
+                sms_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                document_id INTEGER NOT NULL,
+                recipient_mobile TEXT NOT NULL,
+                milestone TEXT NOT NULL,
+                status TEXT NOT NULL DEFAULT 'pending',
+                provider_request_id TEXT,
+                response_message TEXT,
+                attempts INTEGER NOT NULL DEFAULT 0,
+                last_attempt_at TEXT,
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(document_id, recipient_mobile, milestone)
+            )
+        """)
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_compliance_sms_log_status "
+            "ON compliance_sms_log(status, last_attempt_at)"
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def _normalise_mobile(raw):
+    digits = re.sub(r"\\D", "", raw or "")
+    if digits.startswith("91") and len(digits) == 12:
+        digits = digits[2:]
+    if len(digits) != 10 or digits[0] not in "6789":
+        raise ValueError("Enter a valid Indian 10-digit WhatsApp number.")
+    return digits
+
+
+def _document_label(row):
+    if row["subject_type"] == "truck":
+        return row["registration_number"] or f"truck #{row['truck_id']}"
+    if row["subject_type"] == "driver":
+        return row["driver_name"] or f"driver #{row['driver_id']}"
+    return f"trip #{row['trip_id']}"
+
+
+def _expiry_status(days_remaining, expiry_date):
+    if days_remaining > 0:
+        return f"Expires in {days_remaining} days on {expiry_date}"
+    if days_remaining == 0:
+        return f"Expires today ({expiry_date})"
+    return f"Expired {abs(days_remaining)} day(s) ago ({expiry_date})"
+
+
+def _template_parameters(row, days_remaining):
+    """Return the three text variables required by the approved WhatsApp template."""
+    return [
+        re.sub(r"[\\r\\n]+", " ", str(row["document_type"]))[:200],
+        re.sub(r"[\\r\\n]+", " ", _document_label(row))[:200],
+        _expiry_status(days_remaining, row["expiry_date"])[:200],
+    ]
+
+
+def _send_whatsapp_template(mobile, parameters):
+    """Send an approved utility template using Meta's official WhatsApp Cloud API."""
+    access_token = os.environ.get("WHATSAPP_ACCESS_TOKEN", "").strip()
+    phone_number_id = os.environ.get("WHATSAPP_PHONE_NUMBER_ID", "").strip()
+    api_version = os.environ.get("WHATSAPP_API_VERSION", DEFAULT_GRAPH_API_VERSION).strip()
+    template_name = os.environ.get("WHATSAPP_TEMPLATE_NAME", DEFAULT_TEMPLATE_NAME).strip()
+    language_code = os.environ.get("WHATSAPP_TEMPLATE_LANGUAGE", "en").strip() or "en"
+
+    if not access_token or not phone_number_id:
+        raise RuntimeError(
+            "WhatsApp Cloud API is not configured. Set WHATSAPP_ACCESS_TOKEN and WHATSAPP_PHONE_NUMBER_ID."
+        )
+    if not re.fullmatch(r"v\\d+\\.\\d+", api_version):
+        raise RuntimeError("WHATSAPP_API_VERSION must look like v23.0.")
+    if not re.fullmatch(r"[a-z0-9_]+", template_name):
+        raise RuntimeError("WHATSAPP_TEMPLATE_NAME must be a valid approved template name.")
+    if not re.fullmatch(r"[A-Za-z0-9_-]+", phone_number_id):
+        raise RuntimeError("WHATSAPP_PHONE_NUMBER_ID is invalid.")
+
     payload = {
-        "device_id": device_id,
-        "to": f"+91{mobile}",
-        "message": message,
-        "sim": sim,
-        "message_type": os.environ.get("MY_SMS_GATEWAY_MESSAGE_TYPE", "transactional").strip() or "transactional",
+        "messaging_product": "whatsapp",
+        "recipient_type": "individual",
+        "to": f"91{mobile}",
+        "type": "template",
+        "template": {
+            "name": template_name,
+            "language": {"code": language_code},
+            "components": [{
+                "type": "body",
+                "parameters": [{"type": "text", "text": str(value)} for value in parameters],
+            }],
+        },
     }
-    headers = {
-        "Authorization": f"Bearer {api_key}",
-        "Content-Type": "application/json",
-        "Accept": "application/json",
-    }
-    req = Request(api_url, data=json.dumps(payload).encode("utf-8"), headers=headers, method="POST")
+    endpoint = f"https://graph.facebook.com/{api_version}/{phone_number_id}/messages"
+    req = Request(
+        endpoint,
+        data=json.dumps(payload).encode("utf-8"),
+        headers={
+            "Authorization": f"Bearer {access_token}",
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+        },
+        method="POST",
+    )
     try:
         with urlopen(req, timeout=20) as response:
             raw = response.read().decode("utf-8", errors="replace")
             status_code = getattr(response, "status", 200)
     except HTTPError as exc:
         detail = exc.read().decode("utf-8", errors="replace")[:500]
-        raise RuntimeError(f"My SMS Gateway HTTP {exc.code}: {detail}") from exc
+        raise RuntimeError(f"WhatsApp Cloud API HTTP {exc.code}: {detail}") from exc
     except (URLError, TimeoutError) as exc:
-        raise RuntimeError(f"My SMS Gateway request failed: {exc}") from exc
+        raise RuntimeError(f"WhatsApp Cloud API request failed: {exc}") from exc
+
     if not 200 <= int(status_code) < 300:
-        raise RuntimeError(f"My SMS Gateway returned HTTP {status_code}: {raw[:300]}")
+        raise RuntimeError(f"WhatsApp Cloud API returned HTTP {status_code}: {raw[:300]}")
     try:
-        result = json.loads(raw) if raw.strip() else {}
+        result = json.loads(raw)
     except json.JSONDecodeError as exc:
-        raise RuntimeError("My SMS Gateway returned an invalid JSON response.") from exc
+        raise RuntimeError("WhatsApp Cloud API returned invalid JSON.") from exc
     if not isinstance(result, dict):
-        raise RuntimeError("My SMS Gateway returned an unexpected response.")
-    if result.get("success") is False or str(result.get("status", "")).lower() in {"failed", "error", "rejected"}:
-        raise RuntimeError(str(result.get("message") or result.get("error") or result)[:500])
-    request_id = result.get("job_id") or result.get("request_id") or result.get("message_id") or result.get("id") or ""
-    response_message = result.get("message") or result.get("status") or "Accepted"
-    return str(request_id)[:200], str(response_message)[:500]
-
-def _document_label(row):
-    if row["subject_type"] == "truck":
-        subject = row["registration_number"] or f"truck #{row['truck_id']}"
-    elif row["subject_type"] == "driver":
-        subject = row["driver_name"] or f"driver #{row['driver_id']}"
-    else:
-        subject = f"trip #{row['trip_id']}"
-    return subject
-
-
-def _render_message(row, days_remaining):
-    template = os.environ.get("MY_SMS_GATEWAY_MESSAGE_TEMPLATE", "").strip() or (
-        "FleetFlow alert: {document} for {vehicle}. Please check and renew the compliance document."
-    )
-    document = row["document_type"]
-    vehicle = _document_label(row)
-    # Keep values safe for a single SMS template variable and avoid injecting line breaks.
-    document = re.sub(r"[\r\n|]+", " ", document)[:100]
-    vehicle = re.sub(r"[\r\n|]+", " ", vehicle)[:100]
-    if days_remaining > 0:
-        vehicle = f"{vehicle}; expires in {days_remaining} days on {row['expiry_date']}"
-    elif days_remaining == 0:
-        vehicle = f"{vehicle}; expires today ({row['expiry_date']})"
-    else:
-        vehicle = f"{vehicle}; expired {abs(days_remaining)} day(s) ago ({row['expiry_date']})"
-    try:
-        message = template.format(document=document, vehicle=vehicle)
-    except (KeyError, ValueError) as exc:
-        raise RuntimeError("MY_SMS_GATEWAY_MESSAGE_TEMPLATE must use only {document} and {vehicle} placeholders.") from exc
-    if len(message) > 500:
-        raise RuntimeError("The configured SMS template expands beyond 500 characters.")
-    return message
+        raise RuntimeError("WhatsApp Cloud API returned an unexpected response.")
+    if result.get("error"):
+        error = result["error"]
+        raise RuntimeError(str(error.get("message") or error)[:500])
+    messages = result.get("messages") or []
+    message_id = messages[0].get("id", "") if messages and isinstance(messages[0], dict) else ""
+    if not message_id:
+        raise RuntimeError(f"WhatsApp Cloud API did not return a message ID: {str(result)[:300]}")
+    return str(message_id)[:200], "Accepted by WhatsApp Cloud API; delivery status may arrive asynchronously."
 
 
 def _due_documents(conn):
-    # The newest record for each document/asset pairing represents the current renewal.
+    """Latest record for each asset/document pair, at configured expiry milestones."""
     return conn.execute("""
         SELECT d.document_id, d.subject_type, d.document_type, d.expiry_date,
                d.truck_id, d.driver_id, d.trip_id,
@@ -129,7 +186,7 @@ def _due_documents(conn):
 
 
 def send_due_compliance_sms(get_db):
-    """Send today's due reminders; successful submissions are deduplicated by document/milestone."""
+    """Compatibility name: send WhatsApp reminders and deduplicate per document/milestone."""
     conn = get_db()
     sent = skipped = failed = 0
     try:
@@ -137,7 +194,8 @@ def send_due_compliance_sms(get_db):
             "SELECT recipient_mobile, enabled FROM compliance_sms_settings WHERE setting_id=1"
         ).fetchone()
         if not settings or not settings["enabled"] or not settings["recipient_mobile"]:
-            return {"sent": 0, "skipped": 0, "failed": 0, "reason": "SMS notifications are disabled or no mobile number is configured."}
+            return {"sent": 0, "skipped": 0, "failed": 0,
+                    "reason": "WhatsApp notifications are disabled or no recipient number is configured."}
         try:
             mobile = _normalise_mobile(settings["recipient_mobile"])
         except ValueError as exc:
@@ -166,8 +224,8 @@ def send_due_compliance_sms(get_db):
             )
             conn.commit()
             try:
-                message = _render_message(row, days)
-                request_id, response_message = _send_my_sms_gateway(mobile, message)
+                parameters = _template_parameters(row, days)
+                request_id, response_message = _send_whatsapp_template(mobile, parameters)
                 conn.execute(
                     "UPDATE compliance_sms_log SET status='submitted', provider_request_id=?, "
                     "response_message=? WHERE sms_id=?",
@@ -176,7 +234,7 @@ def send_due_compliance_sms(get_db):
                 conn.commit()
                 sent += 1
             except Exception as exc:
-                logger.exception("Compliance SMS failed for document_id=%s", row["document_id"])
+                logger.exception("Compliance WhatsApp failed for document_id=%s", row["document_id"])
                 conn.execute(
                     "UPDATE compliance_sms_log SET status='failed', response_message=? WHERE sms_id=?",
                     (str(exc)[:500], log["sms_id"]),
@@ -216,7 +274,7 @@ def register_compliance_sms_module(app, ns):
             conn.commit()
         finally:
             conn.close()
-        flash("SMS notification settings saved. A My SMS Gateway API endpoint and API key must be configured before delivery.", "success")
+        flash("WhatsApp notification settings saved. Configure the official WhatsApp Cloud API credentials before delivery.", "success")
         return redirect(url_for("admin_notifications"))
 
     @app.route("/admin/notifications/sms-test", methods=["POST"], endpoint="compliance_sms_test")
@@ -231,20 +289,24 @@ def register_compliance_sms_module(app, ns):
                 "SELECT recipient_mobile, enabled FROM compliance_sms_settings WHERE setting_id=1"
             ).fetchone()
             if not settings or not settings["recipient_mobile"]:
-                flash("Save a mobile number first.", "error")
+                flash("Save a WhatsApp number first.", "error")
                 return redirect(url_for("admin_notifications"))
             if not settings["enabled"]:
-                flash("Enable SMS notifications and save settings before sending a test.", "error")
+                flash("Enable WhatsApp notifications and save settings before sending a test.", "error")
                 return redirect(url_for("admin_notifications"))
             mobile = _normalise_mobile(settings["recipient_mobile"])
         finally:
             conn.close()
         try:
-            sample_row = {"document_type": "TEST DOCUMENT", "subject_type": "truck", "registration_number": "TEST-TRUCK", "truck_id": 0, "driver_id": None, "trip_id": None, "driver_name": None, "expiry_date": date.today().isoformat()}
-            sample = _render_message(sample_row, 7)
-            _send_my_sms_gateway(mobile, sample)
-            flash("My SMS Gateway accepted the test message. This confirms API submission, not handset delivery.", "success")
+            sample_row = {
+                "document_type": "TEST DOCUMENT", "subject_type": "truck",
+                "registration_number": "TEST-TRUCK", "truck_id": 0,
+                "driver_id": None, "trip_id": None, "driver_name": None,
+                "expiry_date": date.today().isoformat(),
+            }
+            _send_whatsapp_template(mobile, _template_parameters(sample_row, 7))
+            flash("WhatsApp Cloud API accepted the test template. This confirms API submission, not final delivery.", "success")
         except Exception as exc:
-            logger.exception("My SMS Gateway test failed")
-            flash(f"Test SMS failed: {str(exc)[:220]}", "error")
+            logger.exception("WhatsApp test message failed")
+            flash(f"Test WhatsApp failed: {str(exc)[:220]}", "error")
         return redirect(url_for("admin_notifications"))
