@@ -39,6 +39,12 @@ def test_vague_details_follow_up_uses_single_trip_from_previous_result():
     assert _resolve_contextual_question("show complete details", history) == "Trip #7 details"
 
 
+def test_intent_router_recognizes_puc_and_general_document_queries():
+    assert _detect_intent("Show me PUC Certificate") == "compliance"
+    assert _detect_intent("Show documents") == "compliance"
+    assert _detect_intent("show all compliance documents") == "compliance"
+
+
 def test_intent_router_recognizes_expense_questions():
     assert _detect_intent("How much did we spend on expenses?") == "expenses"
 
