@@ -360,6 +360,54 @@ def register_compliance_module(app, ns):
             conn.close()
         return redirect(url_for("roadside_compliance"))
 
+
+    @app.route("/compliance/documents/<int:document_id>/update", methods=["POST"], endpoint="compliance_document_update")
+    @admin_required
+    def compliance_document_update(document_id):
+        if not _valid_csrf_token():
+            flash("Your session token is invalid. Reload the page and try again.", "error")
+            return redirect(url_for("roadside_compliance"))
+        conn = get_db()
+        try:
+            scope, params = _record_owner_filter("compliance_documents")
+            row = conn.execute(
+                "SELECT document_id, issue_date, expiry_date FROM compliance_documents "
+                "WHERE document_id=? AND " + scope,
+                [document_id, *params],
+            ).fetchone()
+            if not row:
+                abort(404)
+            number = request.form.get("document_number", "").strip()[:120]
+            issue = date_value(request.form.get("issue_date"), "Issue date")
+            expiry = date_value(request.form.get("expiry_date"), "Expiry date")
+            method = request.form.get("verification_method", "").strip()
+            verified_raw = request.form.get("verified", "0").strip()
+            notes = request.form.get("notes", "").strip()[:500]
+            if method not in {"Physical original", "DigiLocker", "mParivahan", "Other verified digital copy", "Not verified"}:
+                raise ValueError("Choose a valid verification method.")
+            if verified_raw not in {"0", "1"}:
+                raise ValueError("Choose a valid verification status.")
+            if expiry and issue and expiry < issue:
+                raise ValueError("Expiry date cannot be earlier than issue date.")
+            conn.execute(
+                "UPDATE compliance_documents SET document_number=?, issue_date=?, expiry_date=?, "
+                "verification_method=?, verified=?, notes=?, updated_at=CURRENT_TIMESTAMP WHERE document_id=?",
+                (number or None, issue, expiry, method, int(verified_raw), notes or None, document_id),
+            )
+            _record_user_activity(conn, "Compliance Document Updated", f"Compliance document #{document_id} dates / verification details updated.")
+            conn.commit()
+            flash("Compliance document updated. Expiry reminders will use the new saved date.", "success")
+        except ValueError as error:
+            conn.rollback()
+            flash(str(error), "error")
+        except Exception:
+            conn.rollback()
+            app.logger.exception("Unable to update compliance document")
+            flash("Could not update the document. Please check the values and try again.", "error")
+        finally:
+            conn.close()
+        return redirect(url_for("roadside_compliance"))
+
     @app.route("/compliance/inspections/add", methods=["POST"], endpoint="compliance_inspection_add")
     @admin_required
     def compliance_inspection_add():
