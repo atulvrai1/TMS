@@ -321,6 +321,79 @@
     }).filter(Boolean);
 
     if (!rows.length) {
+      // Render Markdown pipe tables as real HTML tables instead of showing raw pipes.
+      const markdownLines = lines;
+      const isTableRow = line => /^\\s*\\|.*\\|\\s*$/.test(line);
+      const isSeparator = line => /^\\s*\\|?\\s*:?-{3,}:?\\s*(?:\\|\\s*:?-{3,}:?\\s*)+\\|?\\s*$/.test(line);
+      const tableStart = markdownLines.findIndex((line, index) =>
+        isTableRow(line) && index + 1 < markdownLines.length && isSeparator(markdownLines[index + 1]));
+      if (tableStart >= 0) {
+        const result = document.createElement('section');
+        result.className = 'ff-payment-results';
+        const before = markdownLines.slice(0, tableStart).filter(line => line.trim());
+        if (before.length) {
+          const heading = document.createElement('h3');
+          heading.className = 'ff-payment-title';
+          heading.textContent = before.join(' ').replace(/^#+\\s*/, '');
+          result.appendChild(heading);
+        }
+        let index = tableStart;
+        let renderedTable = false;
+        while (index < markdownLines.length) {
+          if (!isTableRow(markdownLines[index]) || index + 1 >= markdownLines.length || !isSeparator(markdownLines[index + 1])) {
+            index++;
+            continue;
+          }
+          const splitCells = line => line.trim().replace(/^\\|/, '').replace(/\\|$/, '').split('|').map(cell => cell.trim().replace(/\\\\\\|/g, '|'));
+          const headers = splitCells(markdownLines[index]);
+          index += 2;
+          const data = [];
+          while (index < markdownLines.length && isTableRow(markdownLines[index])) {
+            data.push(splitCells(markdownLines[index]));
+            index++;
+          }
+          const tableWrap = document.createElement('div');
+          tableWrap.className = 'ff-payment-table-wrap';
+          const table = document.createElement('table');
+          table.className = 'ff-payment-table';
+          const thead = document.createElement('thead'), headerRow = document.createElement('tr');
+          headers.forEach(label => { const th = document.createElement('th'); th.scope = 'col'; th.textContent = label; headerRow.appendChild(th); });
+          thead.appendChild(headerRow); table.appendChild(thead);
+          const tbody = document.createElement('tbody');
+          data.forEach(cells => {
+            const values = headers.map((header, cellIndex) => {
+              let value = cells[cellIndex] || '—';
+              if (/^document id$/i.test(header)) value = value.replace(/^Document\\s+#?/i, '').replace(/^#/, '');
+              if (/^expiry date$/i.test(header)) value = value.replace(/^Expiry\\s*:\\s*/i, '');
+              if (/^expiry status$/i.test(header)) {
+                const days = value.match(/(-?\\d+)\\s+day\\(s\\)\\s+(away|ago)/i);
+                if (/expired/i.test(value) || (days && (days[2].toLowerCase() === 'ago' || Number(days[1]) < 0))) value = 'Expired';
+                else if (days && Number(days[1]) <= 30) value = 'Expiring Soon';
+                else if (/valid/i.test(value) || days) value = 'Valid';
+              }
+              return value;
+            });
+            const tr = document.createElement('tr');
+            values.forEach((value, cellIndex) => {
+              const td = document.createElement('td');
+              td.textContent = value;
+              if (/amount|fine|cost|freight|received|due|total/i.test(headers[cellIndex] || '')) td.className = 'ff-payment-amount';
+              tr.appendChild(td);
+            });
+            tbody.appendChild(tr);
+          });
+          table.appendChild(tbody); tableWrap.appendChild(table); result.appendChild(tableWrap);
+          renderedTable = true;
+        }
+        if (renderedTable) {
+          const trailing = markdownLines.slice(index).filter(line => line.trim());
+          if (trailing.length) {
+            const note = document.createElement('p'); note.className = 'ff-payment-footnote'; note.textContent = trailing.join(' '); result.appendChild(note);
+          }
+          bubble.replaceChildren(result);
+          return;
+        }
+      }
       bubble.textContent = text;
       return;
     }
