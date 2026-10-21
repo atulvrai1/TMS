@@ -56,7 +56,7 @@ def ensure_sms_schema(get_db):
 
 
 def _normalise_mobile(raw):
-    digits = re.sub(r"\\D", "", raw or "")
+    digits = re.sub(r"\D", "", raw or "")
     if digits.startswith("91") and len(digits) == 12:
         digits = digits[2:]
     if len(digits) != 10 or digits[0] not in "6789":
@@ -83,7 +83,7 @@ def _expiry_status(days_remaining, expiry_date):
 def _template_parameters(row, days_remaining):
     """Return the three text variables required by the approved WhatsApp template."""
     return [
-        re.sub(r"[\\r\\n]+", " ", str(row["document_type"]))[:200],
+        re.sub(r"[\r\n]+", " ", str(row["document_type"]))[:200],
         re.sub(r"[\\r\\n]+", " ", _document_label(row))[:200],
         _expiry_status(days_remaining, row["expiry_date"])[:200],
     ]
@@ -101,7 +101,7 @@ def _send_whatsapp_template(mobile, parameters):
         raise RuntimeError(
             "WhatsApp Cloud API is not configured. Set WHATSAPP_ACCESS_TOKEN and WHATSAPP_PHONE_NUMBER_ID."
         )
-    if not re.fullmatch(r"v\\d+\\.\\d+", api_version):
+    if not re.fullmatch(r"v\d+\.\d+", api_version):
         raise RuntimeError("WHATSAPP_API_VERSION must look like v23.0.")
     if not re.fullmatch(r"[a-z0-9_]+", template_name):
         raise RuntimeError("WHATSAPP_TEMPLATE_NAME must be a valid approved template name.")
