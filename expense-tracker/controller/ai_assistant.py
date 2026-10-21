@@ -347,10 +347,10 @@ def _detect_intent(question: str) -> str:
     # Specific roadside-compliance terms take precedence over generic challan words.
     # This lets questions such as "PUC challan reference" search the compliance register.
     if re.search(
-        r"\b(puc|pollution certificate|insurance expiry|insurance expired|insurance policy|fitness certificate|"
+        r"\b(puc|pollution certificate|insurance|insurance expiry|insurance expired|insurance policy|fitness|fitness certificate|"
         r"national permit|state permit|commercial permit|permit expiry|road tax|tax token|rc expiry|"
-        r"registration certificate|expired documents|documents expired|expiring documents|documents expiring|"
-        r"document expiry|documents expire|documents|document register|document history|document details|compliance|parivahan|vahan|roadside|inspection|inspections|findings|"
+        r"registration certificate|rc|driving licence|driving license|licence expiry|license expiry|dl expiry|expired documents|documents expired|expiring documents|documents expiring|"
+        r"document expiry|documents expire|documents|document register|document history|document details|commercial permit|permit|tax token|road tax|compliance|parivahan|vahan|roadside|inspection|inspections|findings|"
         r"weight and cargo|overloading|rupd|lupd|reflective tape|vehicle safety|driver behaviour|driver behavior|"
         r"mobile phone use|seatbelt|operational rules|corrective action)\b",
         text,
