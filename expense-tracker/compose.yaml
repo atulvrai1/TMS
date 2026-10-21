@@ -30,12 +30,6 @@ services:
       SMTP_FROM: ${SMTP_FROM:-}
       SMTP_USERNAME: ${SMTP_USERNAME:-}
       SMTP_PASSWORD: ${SMTP_PASSWORD:-}
-      # Fast2SMS DLT credentials belong in the private .env.docker file.
-      FAST2SMS_API_KEY: ${FAST2SMS_API_KEY:-}
-      FAST2SMS_SENDER_ID: ${FAST2SMS_SENDER_ID:-}
-      FAST2SMS_ENTITY_ID: ${FAST2SMS_ENTITY_ID:-}
-      FAST2SMS_TEMPLATE_ID: ${FAST2SMS_TEMPLATE_ID:-}
-      FAST2SMS_MESSAGE_TEMPLATE: ${FAST2SMS_MESSAGE_TEMPLATE:-}
     volumes:
       - fleetflow_data:/data
       - fleetflow_uploads:/app/uploads
@@ -43,32 +37,6 @@ services:
       - no-new-privileges:true
     init: true
 
-  compliance-sms-worker:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    image: fleetflow:local
-    container_name: fleetflow-compliance-sms-worker
-    restart: unless-stopped
-    command: ["python", "controller/compliance_sms_worker.py"]
-    environment:
-      APP_ENV: ${APP_ENV:-development}
-      FLASK_SECRET_KEY: ${FLASK_SECRET_KEY:?Set FLASK_SECRET_KEY in .env.docker}
-      DATABASE_PATH: /data/tms.db
-      FLEETFLOW_PUBLIC_URL: ${FLEETFLOW_PUBLIC_URL:-http://127.0.0.1:5001}
-      FAST2SMS_API_KEY: ${FAST2SMS_API_KEY:-}
-      FAST2SMS_SENDER_ID: ${FAST2SMS_SENDER_ID:-}
-      FAST2SMS_ENTITY_ID: ${FAST2SMS_ENTITY_ID:-}
-      FAST2SMS_TEMPLATE_ID: ${FAST2SMS_TEMPLATE_ID:-}
-      FAST2SMS_MESSAGE_TEMPLATE: ${FAST2SMS_MESSAGE_TEMPLATE:-}
-      COMPLIANCE_SMS_CHECK_INTERVAL_SECONDS: ${COMPLIANCE_SMS_CHECK_INTERVAL_SECONDS:-86400}
-    volumes:
-      - fleetflow_data:/data
-    depends_on:
-      - fleetflow
-    security_opt:
-      - no-new-privileges:true
-    init: true
 
 volumes:
   fleetflow_data:
