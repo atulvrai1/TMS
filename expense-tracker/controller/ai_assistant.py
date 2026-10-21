@@ -216,6 +216,11 @@ def _save_conversation_message(role, content):
 def _resolve_contextual_question(question: str, history: list) -> str:
     """Resolve short references from recent turns without guessing across unrelated chats."""
     text = " ".join((question or "").split())
+    # Normalize common compact IDs such as "trip7", "trip#7", and "trip 7"
+    # before routing/query extraction. Users often type these without spaces.
+    text = re.sub(r"\btrip\s*#?\s*(\d+)\b", r"Trip #\1", text, flags=re.I)
+    # Common speech-to-text / informal typing contraction in "give em details".
+    text = re.sub(r"\bgive\s+em\b", "give me", text, flags=re.I)
     if not history or not text:
         return text
     if re.search(r"\btrip\s*#?\s*\d+\b", text, re.I):
