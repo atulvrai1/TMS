@@ -343,6 +343,19 @@ def _detect_intent(question: str) -> str:
     ):
         return "users"
 
+    # Specific roadside-compliance terms take precedence over generic challan words.
+    # This lets questions such as "PUC challan reference" search the compliance register.
+    if re.search(
+        r"\\b(puc|pollution certificate|insurance expiry|insurance expired|insurance policy|fitness certificate|"
+        r"national permit|state permit|commercial permit|permit expiry|road tax|tax token|rc expiry|"
+        r"registration certificate|expired documents|documents expired|expiring documents|documents expiring|"
+        r"document expiry|documents expire|compliance|parivahan|vahan|roadside|inspection|inspections|"
+        r"weight and cargo|overloading|rupd|lupd|reflective tape|vehicle safety|driver behaviour|driver behavior|"
+        r"mobile phone use|seatbelt|operational rules|corrective action)\\b",
+        text,
+    ):
+        return "compliance"
+
     # Challans and traffic penalties.
     if re.search(
         r"\b(challan|challans|chalan|chalans|e[ -]?challan|traffic fine|fine amount|"
@@ -520,80 +533,169 @@ def _query_records(state: AssistantState) -> AssistantState:
     conn = get_db()
     try:
         if intent == "compliance":
-            # Query only manually entered records; never call Parivahan/VAHAN.
-            scope, params = _owner_scope("compliance_documents", "owner_user_id", state)
             question = state.get("routing_question", state.get("question", ""))
-            filters, filter_params = [], []
-            type_rules = [
-                (r"\b(puc|pollution)\b", "PUC Certificate"),
-                (r"\b(rc|registration certificate)\b", "Registration Certificate (RC)"),
-                (r"\b(insurance|insured)\b", "Third-Party Insurance"),
-                (r"\bfitness\b", "Fitness Certificate"),
-                (r"\b(national permit|state permit|commercial permit|permit)\b", None),
-                (r"\b(tax token|road tax)\b", "Road Tax / Tax Token"),
-                (r"\b(driving licence|driving license|licence|license|dl)\b", "Driving Licence (HMV)"),
-                (r"\b(e-?way bill|trip sheet|cargo manifest)\b", "Trip Sheet / E-Way Bill / Cargo Manifest"),
-            ]
-            for pattern, doc_type in type_rules:
-                if re.search(pattern, question, re.I):
-                    if doc_type:
-                        filters.append("compliance_documents.document_type = ?")
-                        filter_params.append(doc_type)
-                    else:
-                        permit_match = re.search(r"\b(national permit|state permit|commercial permit)\b", question, re.I)
-                        if permit_match:
-                            filters.append("lower(compliance_documents.document_type) = lower(?)")
-                            filter_params.append(permit_match.group(1).title())
-                    break
-            reg_match = re.search(r"\b([A-Z]{2}[- ]?\d{1,2}[- ]?[A-Z]{1,3}[- ]?\d{1,4})\b", question, re.I)
-            if reg_match:
-                registration = re.sub(r"\s+", "", reg_match.group(1)).upper()
-                filters.append("upper(replace(trucks.registration_number, ' ', '')) = ?")
-                filter_params.append(registration)
-            if re.search(r"\b(expired|already expired)\b", question, re.I):
-                filters.append("compliance_documents.expiry_date IS NOT NULL AND compliance_documents.expiry_date < date('now')")
-            elif re.search(r"\b(expir|expiry|expires|expiring|renew|renewal|validity|due soon|upcoming)\b", question, re.I):
-                filters.append("compliance_documents.expiry_date IS NOT NULL AND compliance_documents.expiry_date <= date('now', '+30 days')")
-            query = (
-                "SELECT compliance_documents.document_id, compliance_documents.subject_type, "
-                "compliance_documents.document_type, compliance_documents.document_number, "
-                "compliance_documents.issue_date, compliance_documents.expiry_date, "
-                "compliance_documents.verified, compliance_documents.verification_method, "
-                "trucks.registration_number, drivers.name AS driver_name, trips.trip_id AS related_trip_id, "
-                "trips.route_from, trips.route_to FROM compliance_documents "
-                "LEFT JOIN trucks ON trucks.truck_id = compliance_documents.truck_id "
-                "LEFT JOIN drivers ON drivers.driver_id = compliance_documents.driver_id "
-                "LEFT JOIN trips ON trips.trip_id = compliance_documents.trip_id "
-                f"WHERE {scope}"
-            )
-            if filters:
-                query += " AND " + " AND ".join(filters)
-            query += " ORDER BY CASE WHEN compliance_documents.expiry_date IS NULL THEN 2 WHEN compliance_documents.expiry_date < date('now') THEN 0 ELSE 1 END, compliance_documents.expiry_date ASC LIMIT 50"
-            rows = conn.execute(query, params + filter_params).fetchall()
-            if not rows:
-                answer = "I couldn't find matching manually entered compliance documents in the records available to your account. No live Parivahan/VAHAN status was checked."
-            else:
-                lines = []
-                today = date.today()
-                for row in rows:
-                    subject = row["registration_number"] or row["driver_name"] or (
-                        f"Trip #{row['related_trip_id']}" if row["related_trip_id"] else row["subject_type"].title()
-                    )
-                    expiry = row["expiry_date"]
-                    if not expiry:
-                        expiry_status = "Expiry date not recorded"
-                    else:
+            inspection_question = bool(re.search(
+                r"\\b(inspection|inspections|roadside|weight|cargo|overload|overloading|rupd|lupd|"
+                r"reflective tape|tyres?|tires?|lights|indicators|horn|number plate|vehicle safety|"
+                r"driver behaviour|driver behavior|mobile phone|seatbelt|seat belt|wrong.side|"
+                r"overtaking|no.entry|restricted.time|unauthorized passengers|unauthorised passengers|"
+                r"corrective action|inspection finding|open finding|critical|high severity|medium severity|"
+                r"low severity|referred|corrected|closed finding)\\b",
+                question, re.I,
+            ))
+            if inspection_question:
+                inspection_scope, inspection_params = _owner_scope("roadside_inspections", "owner_user_id", state)
+                filters, filter_params = [], []
+                category_rules = [
+                    (r"\\b(document|documents|puc|insurance|fitness|permit|licence|license|rc)\\b", "Documents"),
+                    (r"\\b(weight|cargo|overload|overloading|weighbridge|hazardous cargo|protruding cargo)\\b", "Weight and Cargo"),
+                    (r"\\b(vehicle safety|rupd|lupd|reflective tape|tyres?|tires?|lights|indicators|horn|number plate)\\b", "Vehicle Safety"),
+                    (r"\\b(driver behaviour|driver behavior|mobile phone|seatbelt|seat belt|impairment)\\b", "Driver Behaviour"),
+                    (r"\\b(operational rules|no.entry|restricted.time|wrong.side|overtaking|unauthorized passengers|unauthorised passengers)\\b", "Operational Rules"),
+                ]
+                for pattern, category in category_rules:
+                    if re.search(pattern, question, re.I):
+                        filters.append("i.inspection_type = ?")
+                        filter_params.append(category)
+                        break
+                status_match = re.search(r"\\b(open|corrected|referred|closed)\\b", question, re.I)
+                if status_match:
+                    filters.append("lower(i.status) = lower(?)")
+                    filter_params.append(status_match.group(1))
+                severity_match = re.search(r"\\b(low|medium|high|critical) severity\\b", question, re.I)
+                if severity_match:
+                    filters.append("lower(i.severity) = lower(?)")
+                    filter_params.append(severity_match.group(1))
+                reg_match = re.search(r"\\b([A-Z]{2}[- ]?\\d{1,2}[- ]?[A-Z]{1,3}[- ]?\\d{1,4})\\b", question, re.I)
+                if reg_match:
+                    registration = re.sub(r"\\s+", "", reg_match.group(1)).upper()
+                    filters.append("upper(replace(t.registration_number, ' ', '')) = ?")
+                    filter_params.append(registration)
+                trip_match = re.search(r"\\btrip\\s*#?\\s*(\\d+)\\b", question, re.I)
+                if trip_match:
+                    filters.append("i.trip_id = ?")
+                    filter_params.append(int(trip_match.group(1)))
+                keyword_terms = [
+                    "overload", "overloading", "cargo", "rupd", "lupd", "reflective tape", "tyre", "tire",
+                    "lights", "indicators", "horn", "number plate", "mobile phone", "seatbelt", "seat belt",
+                    "wrong-side", "wrong side", "overtaking", "no-entry", "no entry", "passengers",
+                    "impairment", "expired", "missing", "damaged", "unsafe",
+                ]
+                matched_terms = [term for term in keyword_terms if term in question.lower()]
+                if matched_terms:
+                    term_clauses = []
+                    for term in matched_terms:
+                        term_clauses.append("(lower(i.findings_json) LIKE ? OR lower(COALESCE(i.notes,'')) LIKE ? OR lower(COALESCE(i.corrective_action,'')) LIKE ?)")
+                        like = "%" + term.lower() + "%"
+                        filter_params.extend([like, like, like])
+                    filters.append("(" + " OR ".join(term_clauses) + ")")
+                query = (
+                    "SELECT i.inspection_id, i.inspection_date, i.location, i.inspection_type, i.findings_json, "
+                    "i.severity, i.status, i.corrective_action, i.notes, i.officer_name, i.officer_rank, "
+                    "t.registration_number, dr.name AS driver_name, i.trip_id, "
+                    "c.challan_number, c.violation "
+                    "FROM roadside_inspections i JOIN trucks t ON t.truck_id=i.truck_id "
+                    "LEFT JOIN drivers dr ON dr.driver_id=i.driver_id "
+                    "LEFT JOIN challans c ON c.challan_id=i.challan_id "
+                    f"WHERE {inspection_scope}"
+                )
+                if filters:
+                    query += " AND " + " AND ".join(filters)
+                query += " ORDER BY i.inspection_date DESC, i.inspection_id DESC LIMIT 50"
+                rows = conn.execute(query, inspection_params + filter_params).fetchall()
+                if not rows:
+                    answer = "I couldn't find matching roadside inspection or safety records in the records available to your account. Add the inspection manually on Roadside Compliance to make it searchable."
+                else:
+                    lines = []
+                    for row in rows:
                         try:
-                            days_left = (date.fromisoformat(str(expiry)) - today).days
-                            expiry_status = "Expired" if days_left < 0 else "Expires today" if days_left == 0 else f"Expires in {days_left} day(s)" if days_left <= 30 else f"Entered expiry date is {days_left} day(s) away"
-                        except ValueError:
-                            expiry_status = "Invalid stored expiry date"
-                    verification = "Verified by staff" if row["verified"] else "Not verified"
-                    lines.append(
-                        f"Document #{row['document_id']} | {row['document_type']} | {subject} | "
-                        f"Expiry: {expiry or 'Not recorded'} | {expiry_status} | {verification}"
-                    )
-                answer = "Compliance register (based on dates entered in FleetFlow; not a live government lookup):\n" + "\n".join(lines)
+                            findings = json.loads(row["findings_json"] or "[]")
+                        except (TypeError, ValueError):
+                            findings = []
+                        challan = f" | Challan: {row['challan_number'] or '—'} ({row['violation'] or 'violation not recorded'})" if row["challan_number"] else ""
+                        lines.append(
+                            f"Inspection #{row['inspection_id']} | {row['inspection_date']} | {row['registration_number']} | "
+                            f"{row['inspection_type']} | Findings: {', '.join(findings) if findings else 'None recorded'} | "
+                            f"Severity: {row['severity']} | Status: {row['status']} | Location: {row['location'] or 'Not recorded'} | "
+                            f"Driver: {row['driver_name'] or 'Not recorded'} | Trip: #{row['trip_id'] if row['trip_id'] else 'Not linked'} | "
+                            f"Corrective action: {row['corrective_action'] or 'Not recorded'}{challan}"
+                        )
+                    answer = "Roadside inspection register (manually entered FleetFlow records):\\n" + "\\n".join(lines)
+            else:
+                # Query only manually entered documents; never call Parivahan/VAHAN.
+                scope, params = _owner_scope("compliance_documents", "owner_user_id", state)
+                question = state.get("routing_question", state.get("question", ""))
+                filters, filter_params = [], []
+                type_rules = [
+                    (r"\b(puc|pollution)\b", "PUC Certificate"),
+                    (r"\b(rc|registration certificate)\b", "Registration Certificate (RC)"),
+                    (r"\b(insurance|insured)\b", "Third-Party Insurance"),
+                    (r"\bfitness\b", "Fitness Certificate"),
+                    (r"\b(national permit|state permit|commercial permit|permit)\b", None),
+                    (r"\b(tax token|road tax)\b", "Road Tax / Tax Token"),
+                    (r"\b(driving licence|driving license|licence|license|dl)\b", "Driving Licence (HMV)"),
+                    (r"\b(e-?way bill|trip sheet|cargo manifest)\b", "Trip Sheet / E-Way Bill / Cargo Manifest"),
+                ]
+                for pattern, doc_type in type_rules:
+                    if re.search(pattern, question, re.I):
+                        if doc_type:
+                            filters.append("compliance_documents.document_type = ?")
+                            filter_params.append(doc_type)
+                        else:
+                            permit_match = re.search(r"\b(national permit|state permit|commercial permit)\b", question, re.I)
+                            if permit_match:
+                                filters.append("lower(compliance_documents.document_type) = lower(?)")
+                                filter_params.append(permit_match.group(1).title())
+                        break
+                reg_match = re.search(r"\b([A-Z]{2}[- ]?\d{1,2}[- ]?[A-Z]{1,3}[- ]?\d{1,4})\b", question, re.I)
+                if reg_match:
+                    registration = re.sub(r"\s+", "", reg_match.group(1)).upper()
+                    filters.append("upper(replace(trucks.registration_number, ' ', '')) = ?")
+                    filter_params.append(registration)
+                if re.search(r"\b(expired|already expired)\b", question, re.I):
+                    filters.append("compliance_documents.expiry_date IS NOT NULL AND compliance_documents.expiry_date < date('now')")
+                elif re.search(r"\b(expir|expiry|expires|expiring|renew|renewal|validity|due soon|upcoming)\b", question, re.I):
+                    filters.append("compliance_documents.expiry_date IS NOT NULL AND compliance_documents.expiry_date <= date('now', '+30 days')")
+                query = (
+                    "SELECT compliance_documents.document_id, compliance_documents.subject_type, "
+                    "compliance_documents.document_type, compliance_documents.document_number, "
+                    "compliance_documents.issue_date, compliance_documents.expiry_date, "
+                    "compliance_documents.verified, compliance_documents.verification_method, "
+                    "trucks.registration_number, drivers.name AS driver_name, trips.trip_id AS related_trip_id, "
+                    "trips.route_from, trips.route_to FROM compliance_documents "
+                    "LEFT JOIN trucks ON trucks.truck_id = compliance_documents.truck_id "
+                    "LEFT JOIN drivers ON drivers.driver_id = compliance_documents.driver_id "
+                    "LEFT JOIN trips ON trips.trip_id = compliance_documents.trip_id "
+                    f"WHERE {scope}"
+                )
+                if filters:
+                    query += " AND " + " AND ".join(filters)
+                query += " ORDER BY CASE WHEN compliance_documents.expiry_date IS NULL THEN 2 WHEN compliance_documents.expiry_date < date('now') THEN 0 ELSE 1 END, compliance_documents.expiry_date ASC LIMIT 50"
+                rows = conn.execute(query, params + filter_params).fetchall()
+                if not rows:
+                    answer = "I couldn't find matching manually entered compliance documents in the records available to your account. No live Parivahan/VAHAN status was checked."
+                else:
+                    lines = []
+                    today = date.today()
+                    for row in rows:
+                        subject = row["registration_number"] or row["driver_name"] or (
+                            f"Trip #{row['related_trip_id']}" if row["related_trip_id"] else row["subject_type"].title()
+                        )
+                        expiry = row["expiry_date"]
+                        if not expiry:
+                            expiry_status = "Expiry date not recorded"
+                        else:
+                            try:
+                                days_left = (date.fromisoformat(str(expiry)) - today).days
+                                expiry_status = "Expired" if days_left < 0 else "Expires today" if days_left == 0 else f"Expires in {days_left} day(s)" if days_left <= 30 else f"Entered expiry date is {days_left} day(s) away"
+                            except ValueError:
+                                expiry_status = "Invalid stored expiry date"
+                        verification = "Verified by staff" if row["verified"] else "Not verified"
+                        lines.append(
+                            f"Document #{row['document_id']} | {row['document_type']} | {subject} | "
+                            f"Expiry: {expiry or 'Not recorded'} | {expiry_status} | {verification}"
+                        )
+                    answer = "Compliance register (based on dates entered in FleetFlow; not a live government lookup):\n" + "\n".join(lines)
         elif intent == "trips":
             scope, params = _owner_scope("trips", "owner_user_id", state)
             question = state.get("routing_question", state.get("question", ""))
