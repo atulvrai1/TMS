@@ -352,7 +352,7 @@ def _detect_intent(question: str) -> str:
         r"registration certificate|rc|driving licence|driving license|licence expiry|license expiry|dl expiry|expired documents|documents expired|expiring documents|documents expiring|"
         r"document expiry|documents expire|documents|document register|document history|document details|commercial permit|permit|tax token|road tax|compliance|parivahan|vahan|roadside|inspection|inspections|findings|"
         r"weight and cargo|overloading|rupd|lupd|reflective tape|vehicle safety|driver behaviour|driver behavior|"
-        r"mobile phone use|seatbelt|operational rules|corrective action)\b",
+        r"driver using mobile phone|driver using a mobile phone|mobile phone while driving|using mobile phone while driving|mobile phone use|seatbelt|operational rules|corrective action)\b",
         text,
     ):
         return "compliance"
