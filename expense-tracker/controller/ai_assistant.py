@@ -350,7 +350,7 @@ def _detect_intent(question: str) -> str:
         r"\b(puc|pollution certificate|insurance expiry|insurance expired|insurance policy|fitness certificate|"
         r"national permit|state permit|commercial permit|permit expiry|road tax|tax token|rc expiry|"
         r"registration certificate|expired documents|documents expired|expiring documents|documents expiring|"
-        r"document expiry|documents expire|compliance|parivahan|vahan|roadside|inspection|inspections|"
+        r"document expiry|documents expire|documents|document register|document history|document details|compliance|parivahan|vahan|roadside|inspection|inspections|findings|"
         r"weight and cargo|overloading|rupd|lupd|reflective tape|vehicle safety|driver behaviour|driver behavior|"
         r"mobile phone use|seatbelt|operational rules|corrective action)\b",
         text,
@@ -540,7 +540,7 @@ def _query_records(state: AssistantState) -> AssistantState:
                 r"reflective tape|tyres?|tires?|lights|indicators|horn|number plate|vehicle safety|"
                 r"driver behaviour|driver behavior|mobile phone|seatbelt|seat belt|wrong.side|"
                 r"overtaking|no.entry|restricted.time|unauthorized passengers|unauthorised passengers|"
-                r"corrective action|inspection finding|open finding|critical|high severity|medium severity|"
+                r"corrective action|inspection finding|open finding|findings|severity|critical|high severity|medium severity|"
                 r"low severity|referred|corrected|closed finding)\b",
                 question, re.I,
             ))
