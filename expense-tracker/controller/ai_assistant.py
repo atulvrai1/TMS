@@ -320,28 +320,106 @@ def _load_recent_assistant_history(limit=12):
 
 
 def _detect_intent(question: str) -> str:
-    """Route everyday English, Hindi and Roman-Hindi requests."""
-    text = " ".join((question or "").lower().split())
-    if re.search(r"\b(admin|admins|administrator|administrators)\b", text) and re.search(r"\b(show|list|all|total|count|who|users?|accounts?)\b", text):
+    """Route common English, Hindi, Hinglish, and everyday fleet wording deterministically.
+
+    Keep this function dependency-free: it is also the reliable fallback when an
+    external language model is unavailable. Specific financial and fleet terms
+    are checked before broad trip/status words to avoid misrouting follow-ups.
+    """
+    text = " ".join((question or "").lower().replace("₹", " rupees ").split())
+    # Administrative directory queries should not be mistaken for driver records.
+    if re.search(r"\b(admin|admins|administrator|administrators|super admin)\b", text) and re.search(
+        r"\b(show|list|all|total|count|who|find|search|view|kitne|kaun)\b", text
+    ):
         return "admins"
-    if re.search(r"\b(users?|accounts?|staff|members)\b", text) and re.search(r"\b(show|list|all|total|count|who)\b", text):
+    if re.search(r"\b(users?|accounts?|staff|members|team members|employees|logins?)\b", text) and re.search(
+        r"\b(show|list|all|total|count|who|find|search|view|kitne|kaun)\b", text
+    ):
         return "users"
-    if re.search(r"\b(challan|challans|chalan|e-?challan|traffic fine)\b", text):
+
+    # Traffic penalties, fines, and e-challan vocabulary.
+    if re.search(
+        r"\b(challan|challans|chalan|chalans|e[ -]?challan|traffic fine|fine amount|"
+        r"over speeding|overspeeding|traffic penalty|penalty|jurmana|chalan kaat|challan status)\b",
+        text,
+    ):
         return "challans"
-    if re.search(r"\b(driver|drivers|chalak|license number|licence number)\b", text) and not re.search(r"\btrips?\b", text):
+
+    # Payment intent comes before trips because users often mention a trip while
+    # asking about money collected, outstanding freight, or a balance.
+    if re.search(
+        r"\b(due|balance|remaining|outstanding|pending payment|payment due|amount due|"
+        r"freight balance|receivable|receivables|paid|payment|payments|received|collection|"
+        r"collected|got paid|got money|money received|amount received|advance|"
+        r"baaki|baki|kitna dena|kitna lena|kitna mila|paisa|paise|rupaye|rupees|"
+        r"bhugtan|jama|mila|mili|mile|aaya|aaye|payment aaya)\b",
+        text,
+    ):
+        return "payments"
+
+    if re.search(
+        r"\b(driver|drivers|chalak|truck driver|driver details|driver record|"
+        r"driving licence|driving license|licence number|license number|dl number)\b",
+        text,
+    ) and not re.search(r"\btrip\s*#?\s*\d+\b", text):
         return "drivers"
-    if re.search(r"\b(truck|trucks|vehicle|vehicles|lorry|gaadi|gadi|number plate|registration number)\b", text) and not re.search(r"\btrips?\b", text):
+
+    if re.search(
+        r"\b(truck|trucks|vehicle|vehicles|lorry|lorries|fleet vehicle|gaadi|gadi|"
+        r"truck number|number plate|registration number|reg number|rc number|"
+        r"vehicle details|truck details|truck record)\b",
+        text,
+    ) and not re.search(r"\btrip\s*#?\s*\d+\b", text):
         return "trucks"
-    if re.search(r"\b(got|received|collected|mila|mili|mile|jama kiya|jama hua|paise aaye|payment aaya)\b", text) and re.search(r"\btrip\s*#?\s*\d+\b|\b(it|that|this|uske liye|is trip par|us trip)\b", text):
-        return "payments"
-    if any(word in text for word in ("maintenance", "service", "repair", "servicing", "gaadi kharab", "truck kharab", "theek kar", "mechanic")):
+
+    if re.search(
+        r"\b(maintenance|maintainance|service|servicing|repair|repaired|breakdown|"
+        r"garage|mechanic|workshop|spare parts|oil change|tyre change|tire change|"
+        r"vehicle damage|gaadi kharab|truck kharab|theek kar|service due|service cost)\b",
+        text,
+    ):
         return "maintenance"
-    if re.search(r"\b(due|balance|remaining|outstanding|baaki|baki|kitna dena|kitna lena|payment|payments|paid|received|mila|mili|mile|jama|bhugtan)\b", text):
-        return "payments"
-    if any(word in text for word in ("expense", "expenses", "spend", "spent", "cost", "profit", "p&l", "kharcha", "kharch", "kharche", "munafa", "nuksan", "diesel", "toll", "fuel")):
+
+    if re.search(
+        r"\b(expense|expenses|expense record|spend|spent|spending|cost|costs|"
+        r"profit|loss|p&l|diesel|fuel|toll|parking|food expense|driver allowance|"
+        r"repair cost|kharcha|kharch|kharche|kharchaa|munafa|nuksan|kitna laga|"
+        r"kitna kharch|paisa laga|petrol|lubricant|loading charge|unloading charge)\b",
+        text,
+    ):
         return "expenses"
-    if any(word in text for word in ("trip", "trips", "dispatch", "route", "delivery", "kahan", "kidhar", "kab", "status", "maal", "samaan", "trip lagao", "trip banao", "trip bnao")):
+
+    if re.search(
+        r"\b(driver|drivers|chalak|license number|licence number)\b", text
+    ):
+        return "drivers"
+    if re.search(
+        r"\b(truck|trucks|vehicle|vehicles|lorry|gaadi|gadi|number plate|registration number)\b",
+        text,
+    ):
+        return "trucks"
+
+    if re.search(
+        r"\b(trip|trips|dispatch|route|delivery|shipment|consignment|journey|"
+        r"trip status|trip history|trip details|trip banao|trip bnao|trip lagao|"
+        r"trip create|trip complete|trip finish|kahan|kidhar|kab|maal|samaan|"
+        r"pending|unfinished|not completed|open trip|scheduled|in progress|completed|"
+        r"cancelled|canceled|cancel trip|poora|pura|khatam)\b",
+        text,
+    ):
         return "trips"
+
+    # PUC/RC/insurance/permit/fitness are compliance guidance on this branch,
+    # not a supported live government lookup intent. Route these to help rather
+    # than pretending they are truck or maintenance database results.
+    if re.search(
+        r"\b(puc|pollution certificate|insurance expiry|insurance policy|fitness certificate|"
+        r"national permit|state permit|permit expiry|road tax|tax token|rc expiry|"
+        r"registration certificate|document expiry|documents expire|compliance|parivahan|vahan)\b",
+        text,
+    ):
+        return "help"
+
     return "help"
 
 
