@@ -1230,19 +1230,19 @@ def _format_record_tables(answer: str, intent: str) -> str:
             # Normalize compliance values before they reach the frontend. Keep the
             # original document record in the database; this only formats the answer.
             if intent == "compliance" and parts and parts[0].lower().startswith("document #"):
-                parts[0] = re.sub(r"^Document\\s+#?", "", parts[0], flags=re.I).strip()
+                parts[0] = re.sub(r"^Document\s+#?", "", parts[0], flags=re.I).strip()
                 if len(parts) > 3:
-                    parts[3] = re.sub(r"^Expiry\\s*:\\s*", "", parts[3], flags=re.I).strip()
+                    parts[3] = re.sub(r"^Expiry\s*:\s*", "", parts[3], flags=re.I).strip()
                 if len(parts) > 4:
                     expiry_text = parts[4]
-                    days_match = re.search(r"(-?\\d+)\\s+day\\(s\\)\\s+(away|ago)", expiry_text, re.I)
-                    if re.search(r"\\bexpired\\b", expiry_text, re.I) or (
+                    days_match = re.search(r"(-?\d+)\s+day\(s\)\s+(away|ago)", expiry_text, re.I)
+                    if re.search(r"\bexpired\b", expiry_text, re.I) or (
                         days_match and (days_match.group(2).lower() == "ago" or int(days_match.group(1)) < 0)
                     ):
                         parts[4] = "Expired"
                     elif days_match and int(days_match.group(1)) <= 30:
                         parts[4] = "Expiring Soon"
-                    elif days_match or re.search(r"\\bvalid\\b", expiry_text, re.I):
+                    elif days_match or re.search(r"\bvalid\b", expiry_text, re.I):
                         parts[4] = "Valid"
             if intent == "trips" and parts:
                 trip_match = re.match(r"^(#\d+)\s+(.+)$", parts[0])
