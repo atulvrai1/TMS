@@ -694,20 +694,25 @@ def _query_records(state: AssistantState) -> AssistantState:
                 question = state.get("routing_question", state.get("question", ""))
                 reg_match = re.search(r"\b([A-Z]{2}\s*[- ]?\s*\d{1,2}\s*[- ]?\s*[A-Z]{1,3}\s*[- ]?\s*\d{1,4})\b", question, re.I)
                 status_match = re.search(r"\b(available|maintenance|in trip|busy|free)\b", question, re.I)
-                conditions, values = [], []
+                conditions, filter_values = [], []
                 if reg_match:
                     reg = re.sub(r"[^A-Z0-9]", "", reg_match.group(1).upper())
                     conditions.append("upper(replace(replace(registration_number, '-', ''), ' ', '')) = ?")
-                    values.append(reg)
+                    filter_values.append(reg)
                 if status_match:
                     status = {"busy": "In Trip", "free": "Available"}.get(status_match.group(1).lower(), status_match.group(1).title())
                     conditions.append("status = ?")
-                    values.append(status)
-                query = "SELECT truck_id, registration_number, model, year, capacity_tons, status, last_service_date FROM trucks"
+                    filter_values.append(status)
+                # Enforce the same server-side ownership policy as trip/payment queries.
+                scope, scope_values = _owner_scope("trucks", "owner_user_id", state)
+                query = (
+                    "SELECT truck_id, registration_number, model, year, capacity_tons, status, last_service_date "
+                    "FROM trucks WHERE " + scope
+                )
                 if conditions:
-                    query += " WHERE " + " AND ".join(conditions)
+                    query += " AND " + " AND ".join(conditions)
                 query += " ORDER BY registration_number COLLATE NOCASE LIMIT 30"
-                rows = conn.execute(query, values).fetchall()
+                rows = conn.execute(query, scope_values + filter_values).fetchall()
                 if not reg_match and not status_match:
                     ignored = {"truck", "trucks", "vehicle", "vehicles", "lorry", "gaadi", "gadi", "details", "record", "records", "status", "dikhao", "batao", "wali", "wala", "ka", "ki", "ke", "hai", "hain"}
                     model_terms = [word for word in re.findall(r"[a-z0-9]+", question.lower()) if len(word) > 2 and word not in ignored]
@@ -728,10 +733,22 @@ def _query_records(state: AssistantState) -> AssistantState:
                     question = state.get("routing_question", state.get("question", ""))
                     name_match = re.search(r"\b(?:driver\s+(?:named\s+)?)?([A-Z][A-Za-z'-]+(?:\s+[A-Z][A-Za-z'-]+){0,2})\s+driver\b|\bdriver\s+(?:named\s+)?([A-Z][A-Za-z .'-]{1,40})", question, re.I)
                     label = next((group.strip() for group in name_match.groups() if group), "") if name_match else ""
+                    # Admins can see records owned by operational users and their own;
+                    # the super-admin scope is handled by _owner_scope.
+                    scope, scope_values = _owner_scope("drivers", "owner_user_id", state)
                     if label:
-                        rows = conn.execute("SELECT driver_id, name, status, license_number, contact_info FROM drivers WHERE lower(name) LIKE lower(?) ORDER BY name COLLATE NOCASE LIMIT 30", ("%" + label + "%",)).fetchall()
+                        rows = conn.execute(
+                            "SELECT driver_id, name, status, license_number, contact_info FROM drivers "
+                            "WHERE " + scope + " AND lower(name) LIKE lower(?) "
+                            "ORDER BY name COLLATE NOCASE LIMIT 30",
+                            scope_values + ["%" + label + "%"],
+                        ).fetchall()
                     else:
-                        rows = conn.execute("SELECT driver_id, name, status, license_number, contact_info FROM drivers ORDER BY name COLLATE NOCASE LIMIT 30").fetchall()
+                        rows = conn.execute(
+                            "SELECT driver_id, name, status, license_number, contact_info FROM drivers "
+                            "WHERE " + scope + " ORDER BY name COLLATE NOCASE LIMIT 30",
+                            scope_values,
+                        ).fetchall()
                 if re.search(r"\b(total|count|kitne|kitna|number of|how many)\b", question, re.I):
                     answer = f"Total drivers in records available to your account: {len(rows)}."
                 else:
