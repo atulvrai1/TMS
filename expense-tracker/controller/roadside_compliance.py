@@ -8,6 +8,7 @@ from flask import abort, flash, redirect, render_template, request, session, url
 
 DOCUMENT_TYPES = {
     "Driving Licence (HMV)", "Registration Certificate (RC)", "Commercial Permit",
+    "National Permit", "State Permit", "Road Tax / Tax Token",
     "Fitness Certificate", "PUC Certificate", "Third-Party Insurance",
     "Trip Sheet / E-Way Bill / Cargo Manifest",
 }
@@ -118,7 +119,8 @@ def register_compliance_module(app, ns):
         inspection_scope, inspection_params = _record_owner_filter("roadside_inspections")
         documents = conn.execute(
             "SELECT d.*, t.registration_number, dr.name AS driver_name, "
-            "tr.trip_id AS related_trip_id, tr.route_from, tr.route_to "
+            "tr.trip_id AS related_trip_id, tr.route_from, tr.route_to, "
+            "CAST(julianday(d.expiry_date) - julianday(date('now')) AS INTEGER) AS days_remaining "
             "FROM compliance_documents d LEFT JOIN trucks t ON t.truck_id=d.truck_id "
             "LEFT JOIN drivers dr ON dr.driver_id=d.driver_id "
             "LEFT JOIN trips tr ON tr.trip_id=d.trip_id "
@@ -155,7 +157,66 @@ def register_compliance_module(app, ns):
             ).fetchall()
         except Exception:
             challans = []
-        return documents, inspections, trucks, drivers, trips, challans
+        # Advisory pre-trip check: it flags missing/expired records but does not
+        # determine legal dispatch eligibility. Requirements can vary by operation/state.
+        truck_document_rows = conn.execute(
+            "SELECT truck_id, document_type, expiry_date FROM compliance_documents "
+            "WHERE subject_type='truck' AND truck_id IS NOT NULL "
+            "ORDER BY document_id DESC"
+        ).fetchall()
+        latest_by_truck_type = {}
+        for row in truck_document_rows:
+            latest_by_truck_type.setdefault(
+                (row["truck_id"], row["document_type"]), row["expiry_date"]
+            )
+
+        permit_types = ("Commercial Permit", "National Permit", "State Permit")
+        today_date = date.today()
+        dispatch_checks = []
+        required_documents = (
+            ("PUC", ("PUC Certificate",)),
+            ("Insurance", ("Third-Party Insurance",)),
+            ("Fitness certificate", ("Fitness Certificate",)),
+        )
+        for truck in trucks:
+            checks = []
+            for label, types in required_documents:
+                recorded = any((truck["truck_id"], kind) in latest_by_truck_type for kind in types)
+                expiry = next(
+                    (latest_by_truck_type.get((truck["truck_id"], kind)) for kind in types
+                     if (truck["truck_id"], kind) in latest_by_truck_type),
+                    None,
+                )
+                if not recorded:
+                    status = "Missing record"
+                elif not expiry:
+                    status = "Expiry date missing"
+                else:
+                    days = (date.fromisoformat(expiry) - today_date).days
+                    status = "Expired" if days < 0 else "Due today" if days == 0 else "Urgent" if days <= 7 else "Expiring soon" if days <= 30 else "Valid"
+                checks.append({"label": label, "status": status})
+
+            permit_expiries = [
+                latest_by_truck_type[(truck["truck_id"], kind)]
+                for kind in permit_types
+                if (truck["truck_id"], kind) in latest_by_truck_type
+            ]
+            if not permit_expiries:
+                permit_status = "Missing record"
+            else:
+                dated_permits = [date.fromisoformat(value) for value in permit_expiries if value]
+                if not dated_permits:
+                    permit_status = "Expiry date missing"
+                elif any(value >= today_date for value in dated_permits):
+                    days = min((value - today_date).days for value in dated_permits if value >= today_date)
+                    permit_status = "Due today" if days == 0 else "Urgent" if days <= 7 else "Expiring soon" if days <= 30 else "Valid"
+                else:
+                    permit_status = "Expired"
+            checks.append({"label": "Applicable permit", "status": permit_status})
+            attention = sum(1 for item in checks if item["status"] != "Valid")
+            dispatch_checks.append({"truck": truck, "checks": checks, "attention_count": attention})
+
+        return documents, inspections, trucks, drivers, trips, challans, dispatch_checks
 
     @app.route("/compliance", methods=["GET"], endpoint="roadside_compliance")
     @admin_required
@@ -163,7 +224,7 @@ def register_compliance_module(app, ns):
         session.setdefault("csrf_token", __import__("secrets").token_urlsafe(32))
         conn = get_db()
         try:
-            documents, inspections, trucks, drivers, trips, challans = fetch_page_data(conn)
+            documents, inspections, trucks, drivers, trips, challans, dispatch_checks = fetch_page_data(conn)
             today = date.today().isoformat()
             expired = sum(1 for d in documents if d["expiry_date"] and d["expiry_date"] < today)
             # Date arithmetic without relying on database timezone: due within 30 days.
@@ -173,6 +234,7 @@ def register_compliance_module(app, ns):
             return render_template(
                 "compliance.html", documents=documents, inspections=inspections,
                 trucks=trucks, drivers=drivers, trips=trips, challans=challans,
+                dispatch_checks=dispatch_checks,
                 document_types=sorted(DOCUMENT_TYPES), inspection_types=sorted(INSPECTION_TYPES),
                 finding_groups={kind: [label for label, group in FINDINGS.items() if group == kind] for kind in sorted(INSPECTION_TYPES)},
                 severities=sorted(SEVERITIES), statuses=sorted(STATUSES), today=today,
