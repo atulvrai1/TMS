@@ -117,7 +117,7 @@ def test_payment_prompt_understands_trip_number_without_space():
     assert draft["trip_id"] == 3
     assert draft["amount"] == "10000.00"
 
-from controller.roadside_compliance import DOCUMENT_TYPES, FINDINGS, INSPECTION_TYPES, SEVERITIES, STATUSES
+from controller.roadside_compliance import DOCUMENT_TYPES, FINDINGS, INSPECTION_TYPES, SEVERITIES, STATUSES, _expiry_alert_type
 
 
 def test_roadside_compliance_catalog_covers_requested_inspection_areas():
@@ -127,6 +127,9 @@ def test_roadside_compliance_catalog_covers_requested_inspection_areas():
     assert "Fitness Certificate" in DOCUMENT_TYPES
     assert "PUC Certificate" in DOCUMENT_TYPES
     assert "Third-Party Insurance" in DOCUMENT_TYPES
+    assert "National Permit" in DOCUMENT_TYPES
+    assert "State Permit" in DOCUMENT_TYPES
+    assert "Road Tax / Tax Token" in DOCUMENT_TYPES
     assert "Trip Sheet / E-Way Bill / Cargo Manifest" in DOCUMENT_TYPES
     assert {"Documents", "Weight and Cargo", "Vehicle Safety", "Driver Behaviour", "Operational Rules"} <= INSPECTION_TYPES
     assert "Overloading / weight limit concern" in FINDINGS
@@ -166,3 +169,14 @@ def test_intent_router_covers_common_fleet_synonyms_and_spelling_variants():
 def test_intent_router_does_not_confuse_spending_with_received_payments():
     assert _detect_intent("kitna paisa laga diesel mein") == "expenses"
     assert _detect_intent("trip 3 ke paise mile") == "payments"
+
+
+
+def test_manual_compliance_expiry_reminder_milestones():
+    assert _expiry_alert_type(45) is None
+    assert _expiry_alert_type(30) == "30_days"
+    assert _expiry_alert_type(15) == "15_days"
+    assert _expiry_alert_type(7) == "7_days"
+    assert _expiry_alert_type(1) == "1_days"
+    assert _expiry_alert_type(0) == "expiry_today"
+    assert _expiry_alert_type(-1) == "overdue"
