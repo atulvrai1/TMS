@@ -6,6 +6,7 @@ The assistant never accepts SQL or executes model-generated code.
 """
 import os
 import hashlib
+import json
 import re
 import time
 import uuid
