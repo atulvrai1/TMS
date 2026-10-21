@@ -84,7 +84,7 @@ def _template_parameters(row, days_remaining):
     """Return the three text variables required by the approved WhatsApp template."""
     return [
         re.sub(r"[\r\n]+", " ", str(row["document_type"]))[:200],
-        re.sub(r"[\\r\\n]+", " ", _document_label(row))[:200],
+        re.sub(r"[\r\n]+", " ", _document_label(row))[:200],
         _expiry_status(days_remaining, row["expiry_date"])[:200],
     ]
 
