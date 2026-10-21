@@ -2,12 +2,7 @@
 
 Records findings and expiry alerts; it does not make legal determinations or calculate statutory fines.
 """
-import json
-import os
 from datetime import date
-from urllib.error import HTTPError, URLError
-from urllib.parse import quote, urlsplit
-from urllib.request import Request, urlopen
 from flask import abort, flash, redirect, render_template, request, session, url_for
 
 from controller.compliance_reminders import ensure_notification_schema, generate_expiry_notifications
@@ -267,14 +262,15 @@ def register_compliance_module(app, ns):
                 "LEFT JOIN trucks t ON t.truck_id=d.truck_id "
                 "LEFT JOIN drivers dr ON dr.driver_id=d.driver_id "
                 f"WHERE {notification_scope.replace('compliance_notifications.', 'n.')} "
+                "AND d.document_id = (SELECT MAX(d2.document_id) FROM compliance_documents d2 "
+                "WHERE d2.document_type=d.document_type "
+                "AND IFNULL(d2.truck_id, 0)=IFNULL(d.truck_id, 0) "
+                "AND IFNULL(d2.driver_id, 0)=IFNULL(d.driver_id, 0) "
+                "AND IFNULL(d2.trip_id, 0)=IFNULL(d.trip_id, 0) "
+                "AND IFNULL(d2.owner_user_id, -1)=IFNULL(d.owner_user_id, -1)) "
                 "ORDER BY n.created_at DESC, n.notification_id DESC LIMIT 50",
                 notification_params,
             ).fetchall()
-            provider_url = urlsplit(os.environ.get("PARIVAHAN_API_BASE_URL", "").strip())
-            parivahan_sync_configured = bool(
-                provider_url.scheme == "https" and provider_url.netloc
-                and os.environ.get("PARIVAHAN_API_TOKEN", "").strip()
-            )
             today = date.today().isoformat()
             expired = sum(1 for d in documents if d["expiry_date"] and d["expiry_date"] < today)
             # Date arithmetic without relying on database timezone: due within 30 days.
@@ -286,7 +282,6 @@ def register_compliance_module(app, ns):
                 trucks=trucks, drivers=drivers, trips=trips, challans=challans,
                 dispatch_checks=dispatch_checks,
                 compliance_notifications=[dict(row) for row in notification_rows],
-                parivahan_sync_configured=parivahan_sync_configured,
                 document_types=sorted(DOCUMENT_TYPES), inspection_types=sorted(INSPECTION_TYPES),
                 finding_groups={kind: [label for label, group in FINDINGS.items() if group == kind] for kind in sorted(INSPECTION_TYPES)},
                 severities=sorted(SEVERITIES), statuses=sorted(STATUSES), today=today,
@@ -295,118 +290,6 @@ def register_compliance_module(app, ns):
             )
         finally:
             conn.close()
-
-    @app.route("/compliance/sync/<int:truck_id>", methods=["POST"], endpoint="compliance_sync_truck")
-    @admin_required
-    def compliance_sync_truck(truck_id):
-        if not _valid_csrf_token():
-            flash("Your session token is invalid. Reload the page and try again.", "error")
-            return redirect(url_for("roadside_compliance"))
-
-        base_url = os.environ.get("PARIVAHAN_API_BASE_URL", "").strip().rstrip("/")
-        token = os.environ.get("PARIVAHAN_API_TOKEN", "").strip()
-        parsed_url = urlsplit(base_url)
-        if not base_url or not token or parsed_url.scheme != "https" or not parsed_url.netloc:
-            flash(
-                "Automatic sync is not configured. FleetFlow needs an authorised API endpoint and token; "
-                "the public Parivahan website is not a supported API endpoint.",
-                "error",
-            )
-            return redirect(url_for("roadside_compliance"))
-
-        conn = get_db()
-        try:
-            truck_scope, truck_params = _record_owner_filter("trucks")
-            truck = conn.execute(
-                f"SELECT truck_id, registration_number, owner_user_id FROM trucks "
-                f"WHERE truck_id=? AND {truck_scope}",
-                [truck_id, *truck_params],
-            ).fetchone()
-            if not truck:
-                abort(404)
-
-            endpoint_url = f"{base_url}/vehicles/{quote(truck['registration_number'], safe='')}"
-            api_request = Request(
-                endpoint_url,
-                headers={"Authorization": f"Bearer {token}", "Accept": "application/json"},
-                method="GET",
-            )
-            try:
-                with urlopen(api_request, timeout=12) as response:
-                    if response.status != 200:
-                        raise ValueError("The authorised vehicle-data provider returned an unexpected status.")
-                    payload = json.loads(response.read(1024 * 1024).decode("utf-8"))
-            except (HTTPError, URLError, TimeoutError, json.JSONDecodeError, UnicodeDecodeError, OSError) as error:
-                app.logger.warning("Compliance sync failed for truck %s (%s)", truck_id, type(error).__name__)
-                flash("The authorised vehicle-data service could not be reached. No records were changed.", "error")
-                return redirect(url_for("roadside_compliance"))
-
-            if not isinstance(payload, dict) or not isinstance(payload.get("documents"), list):
-                flash("The API response did not match the documented FleetFlow vehicle-data format. No records were changed.", "error")
-                return redirect(url_for("roadside_compliance"))
-
-            source = str(payload.get("source", "")).strip().casefold()
-            synced = 0
-            for item in payload["documents"]:
-                if not isinstance(item, dict):
-                    continue
-                doc_type = str(item.get("document_type", "")).strip()
-                if doc_type not in DOCUMENT_TYPES or doc_type in {
-                    "Driving Licence (HMV)", "Trip Sheet / E-Way Bill / Cargo Manifest"
-                }:
-                    continue
-                number = str(item.get("document_number", "")).strip()[:120]
-                issue = date_value(item.get("issue_date"), "Issue date")
-                expiry = date_value(item.get("expiry_date"), "Expiry date")
-                if not expiry or (issue and expiry < issue):
-                    continue
-                # Only a response explicitly identifying Parivahan as the source can
-                # be marked source-verified; all other imports remain unverified.
-                verified = 1 if source == "parivahan" and item.get("verified") is True else 0
-                notes = f"Imported from authorised API; source={source or 'unspecified'}."[:500]
-                existing = None
-                if number:
-                    existing = conn.execute(
-                        "SELECT document_id FROM compliance_documents "
-                        "WHERE truck_id=? AND document_type=? AND document_number=? "
-                        "AND owner_user_id IS ? ORDER BY document_id DESC LIMIT 1",
-                        (truck_id, doc_type, number, truck["owner_user_id"]),
-                    ).fetchone()
-                if existing:
-                    conn.execute(
-                        "UPDATE compliance_documents SET issue_date=?, expiry_date=?, "
-                        "verification_method='Authorised API sync', verified=?, notes=?, "
-                        "updated_at=CURRENT_TIMESTAMP WHERE document_id=?",
-                        (issue, expiry, verified, notes, existing["document_id"]),
-                    )
-                else:
-                    conn.execute(
-                        "INSERT INTO compliance_documents "
-                        "(subject_type, truck_id, document_type, document_number, issue_date, expiry_date, "
-                        "verification_method, verified, notes, owner_user_id, created_by, created_at) "
-                        "VALUES ('truck', ?, ?, ?, ?, ?, 'Authorised API sync', ?, ?, ?, ?, CURRENT_TIMESTAMP)",
-                        (truck_id, doc_type, number or None, issue, expiry, verified, notes,
-                         truck["owner_user_id"], session["user_id"]),
-                    )
-                synced += 1
-            if synced:
-                generate_expiry_notifications(conn)
-                _record_user_activity(conn, "Compliance API Sync", f"Synced {synced} document record(s) for truck {truck['registration_number']}.")
-                conn.commit()
-                flash(f"Imported or updated {synced} document record(s) for {truck['registration_number']}. Review the source and expiry dates.", "success")
-            else:
-                conn.rollback()
-                flash("The provider returned no supported document records. Existing records were not changed.", "info")
-        except ValueError as error:
-            conn.rollback()
-            flash(str(error), "error")
-        except Exception:
-            conn.rollback()
-            app.logger.exception("Unable to sync compliance documents")
-            flash("Compliance sync failed safely. Existing records were not changed.", "error")
-        finally:
-            conn.close()
-        return redirect(url_for("roadside_compliance"))
 
     @app.route("/compliance/documents/add", methods=["POST"], endpoint="compliance_document_add")
     @admin_required
