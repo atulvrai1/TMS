@@ -166,7 +166,11 @@ def register_compliance_module(app, ns):
             except (TypeError, ValueError):
                 item["findings"] = []
             inspections.append(item)
-        trucks = conn.execute("SELECT truck_id, registration_number, model FROM trucks ORDER BY registration_number").fetchall()
+        truck_scope, truck_params = _record_owner_filter("trucks")
+        trucks = conn.execute(
+            f"SELECT truck_id, registration_number, model FROM trucks WHERE {truck_scope} ORDER BY registration_number",
+            truck_params,
+        ).fetchall()
         drivers = conn.execute("SELECT driver_id, name, license_number FROM drivers ORDER BY name").fetchall()
         trips = conn.execute("SELECT trip_id, route_from, route_to, status FROM trips ORDER BY trip_id DESC LIMIT 100").fetchall()
         challan_scope, challan_params = _record_owner_filter("challans")
@@ -181,8 +185,9 @@ def register_compliance_module(app, ns):
         # determine legal dispatch eligibility. Requirements can vary by operation/state.
         truck_document_rows = conn.execute(
             "SELECT truck_id, document_type, expiry_date FROM compliance_documents "
-            "WHERE subject_type='truck' AND truck_id IS NOT NULL "
-            "ORDER BY document_id DESC"
+            f"WHERE {doc_scope} AND subject_type='truck' AND truck_id IS NOT NULL "
+            "ORDER BY document_id DESC",
+            doc_params,
         ).fetchall()
         latest_by_truck_type = {}
         for row in truck_document_rows:
