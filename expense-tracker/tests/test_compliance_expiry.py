@@ -1,4 +1,8 @@
+import sys
 from datetime import date
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from controller.roadside_compliance import classify_expiry
 
