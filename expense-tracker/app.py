@@ -2408,7 +2408,7 @@ def admin_notifications():
         notifications=notifications,
         sms_settings=sms_settings,
         sms_provider_configured=all(os.environ.get(name, "").strip() for name in (
-            "MY_SMS_GATEWAY_API_KEY", "MY_SMS_GATEWAY_DEVICE_ID"
+            "WHATSAPP_ACCESS_TOKEN", "WHATSAPP_PHONE_NUMBER_ID"
         )),
         csrf_token=session["csrf_token"],
         block_content="dashboard"
@@ -2975,7 +2975,7 @@ register_challan_module(app, globals())
 from controller.roadside_compliance import register_compliance_module
 register_compliance_module(app, globals())
 
-# Register My SMS Gateway settings and scheduled compliance reminder support.
+# Register WhatsApp Cloud API settings and scheduled compliance reminder support.
 from controller.compliance_sms import register_compliance_sms_module
 register_compliance_sms_module(app, globals())
 
