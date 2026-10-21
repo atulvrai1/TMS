@@ -139,8 +139,7 @@ def register_compliance_module(app, ns):
         inspection_scope, inspection_params = _record_owner_filter("roadside_inspections")
         documents = conn.execute(
             "SELECT d.*, t.registration_number, dr.name AS driver_name, "
-            "tr.trip_id AS related_trip_id, tr.route_from, tr.route_to, "
-            "CAST(julianday(d.expiry_date) - julianday(date('now')) AS INTEGER) AS days_remaining "
+            "tr.trip_id AS related_trip_id, tr.route_from, tr.route_to "
             "FROM compliance_documents d LEFT JOIN trucks t ON t.truck_id=d.truck_id "
             "LEFT JOIN drivers dr ON dr.driver_id=d.driver_id "
             "LEFT JOIN trips tr ON tr.trip_id=d.trip_id "
@@ -150,6 +149,14 @@ def register_compliance_module(app, ns):
             "d.expiry_date, d.document_id DESC LIMIT 200",
             doc_params,
         ).fetchall()
+        documents = [dict(row) for row in documents]
+        for document in documents:
+            try:
+                document["days_remaining"] = (
+                    date.fromisoformat(document["expiry_date"]) - date.today()
+                ).days if document["expiry_date"] else None
+            except (TypeError, ValueError):
+                document["days_remaining"] = None
         inspection_rows = conn.execute(
             "SELECT i.*, t.registration_number, dr.name AS driver_name "
             "FROM roadside_inspections i JOIN trucks t ON t.truck_id=i.truck_id "
