@@ -367,15 +367,9 @@ def _detect_intent(question: str) -> str:
     ):
         return "payments"
 
-    # Expense words precede vehicle words so "truck repair cost" and "diesel
-    # for truck" return financial records rather than the truck directory.
-    if re.search(
-        r"\b(expense|expenses|expense record|spend|spent|spending|cost|costs|"
-        r"profit|loss|p&l|diesel|fuel|toll|parking|food expense|driver allowance|"
-        r"repair cost|kharcha|kharch|kharche|kharchaa|munafa|nuksan|kitna laga|"
-        r"kitna kharch|paisa laga|paise lage|petrol|lubricant|loading charge|unloading charge)\b",
-        text,
-    ):
+    # An explicit repair-cost request is financial; otherwise maintenance
+    # language takes precedence over the generic word "costs".
+    if re.search(r"\brepair cost\b", text):
         return "expenses"
 
     if re.search(
@@ -385,6 +379,20 @@ def _detect_intent(question: str) -> str:
         text,
     ):
         return "maintenance"
+
+    # Expense words precede vehicle words so "truck repair cost" and "diesel
+    # for truck" return financial records rather than the truck directory.
+    if re.search(
+        r"\b(expense|expenses|expense record|spend|spent|spending|"
+        r"profit|loss|p&l|diesel|fuel|toll|parking|food expense|driver allowance|"
+        r"kharcha|kharch|kharche|kharchaa|munafa|nuksan|kitna laga|"
+        r"kitna kharch|paisa laga|paise lage|petrol|lubricant|loading charge|unloading charge)\b",
+        text,
+    ):
+        return "expenses"
+
+    if re.search(r"\b(cost|costs|total spend|how much spent)\b", text):
+        return "expenses"
 
     if re.search(
         r"\b(driver|drivers|chalak|truck driver|driver details|driver record|"
