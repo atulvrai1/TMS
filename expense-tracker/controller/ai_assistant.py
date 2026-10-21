@@ -540,7 +540,7 @@ def _query_records(state: AssistantState) -> AssistantState:
                 r"reflective tape|tyres?|tires?|lights|indicators|horn|number plate|vehicle safety|"
                 r"driver behaviour|driver behavior|mobile phone|seatbelt|seat belt|wrong.side|"
                 r"overtaking|no.entry|restricted.time|unauthorized passengers|unauthorised passengers|"
-                r"corrective action|inspection finding|open finding|findings|severity|critical|high severity|medium severity|"
+                r"corrective action|inspection finding|open finding|findings|severity|critical|challan|high severity|medium severity|"
                 r"low severity|referred|corrected|closed finding)\b",
                 question, re.I,
             ))
@@ -560,6 +560,8 @@ def _query_records(state: AssistantState) -> AssistantState:
                         filters.append("i.inspection_type = ?")
                         filter_params.append(category)
                         break
+                if re.search(r"\bchallan\b", question, re.I):
+                    filters.append("i.challan_id IS NOT NULL")
                 status_match = re.search(r"\b(open|corrected|referred|closed)\b", question, re.I)
                 if status_match:
                     filters.append("lower(i.status) = lower(?)")
