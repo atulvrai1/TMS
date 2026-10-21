@@ -132,6 +132,7 @@ def test_roadside_compliance_catalog_covers_requested_inspection_areas():
 def test_intent_router_covers_common_fleet_synonyms_and_spelling_variants():
     cases = {
         "gaadi ka status batao": "trucks",
+        "Meri gaadiyan dikhao": "trucks",
         "show vehicle registration number": "trucks",
         "Rakesh chalak ka record": "drivers",
         "driver ka licence number": "drivers",
