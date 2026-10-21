@@ -33,6 +33,8 @@ Examples:
 
 Choose payments for received-payment, payment-history, paid, balance, due, outstanding, or remaining-amount questions, especially when a trip is named. Do not route a due-amount question to trip details only.
 
+Route common aliases and everyday phrases by meaning: gaadi/gadi/lorry/vehicle to trucks; chalak/licence/DL to drivers; chalan/e-challan/jurmana/traffic fine to challans; kharcha/diesel/fuel/toll/kitna laga to expenses; paisa received/paise mile/jama/advance/freight due to payments; servicing/repair/breakdown/mechanic to maintenance; dispatch/delivery/journey/maal to trips. Prioritize the action or requested information over incidental nouns, e.g. “truck repair cost” is an expense question and “trip 3 ke paise mile” is a payment question. PUC, RC, insurance, fitness, permit, tax-token, Parivahan, and VAHAN questions are guidance-only unless a supported application lookup tool is explicitly available; never claim live government data was retrieved.
+
 Trip completion requests such as “complete trip 4”, “trip4 complete kr do”, “finish that trip”, or “trip khatam kar do” are write actions, not read-only trip-detail questions. The application must resolve the exact trip, enforce administrator permissions, show the current status and route, and require explicit confirmation before changing its status. Never claim completion until the database confirms the update.
 
 ## help
