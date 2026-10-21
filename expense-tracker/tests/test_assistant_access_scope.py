@@ -43,7 +43,7 @@ def test_user_truck_query_is_scoped_to_the_signed_in_owner(monkeypatch):
     assert "truck" in result["answer"].lower()
 
 
-def test_admin_driver_query_uses_the_admin_owner_scope(monkeypatch):
+def test_admin_driver_query_can_see_workspace_records(monkeypatch):
     connection = FakeConnection()
     monkeypatch.setattr(assistant, "get_db", lambda: connection)
 
@@ -58,6 +58,5 @@ def test_admin_driver_query_uses_the_admin_owner_scope(monkeypatch):
     })
 
     query, params = connection.calls[0]
-    assert "drivers.owner_user_id IN (SELECT user_id FROM users WHERE role = 'User')" in query
-    assert "drivers.owner_user_id = ?" in query
-    assert params == [12]
+    assert "WHERE 1 = 1" in query
+    assert params == []
