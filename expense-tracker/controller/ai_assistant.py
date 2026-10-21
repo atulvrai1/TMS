@@ -1173,6 +1173,99 @@ def _normalize_graph_input(state: AssistantState) -> AssistantState:
     return {"routing_question": question}
 
 
+def _format_record_tables(answer: str, intent: str) -> str:
+    """Deterministically render pipe-delimited database rows as Markdown tables."""
+    if not isinstance(answer, str) or intent not in {
+        "trips", "expenses", "payments", "maintenance", "trucks",
+        "drivers", "challans", "compliance", "users", "admins",
+    }:
+        return answer
+
+    def cell(value):
+        return str(value).strip().replace("|", "\\|").replace("\n", " ")
+
+    def headers_for(line, count):
+        first = line.split("|", 1)[0].strip().lower()
+        if first.startswith("inspection #"):
+            names = ["Inspection ID", "Date", "Vehicle", "Inspection Type", "Findings", "Severity", "Status", "Location", "Driver", "Trip", "Corrective Action", "Challan"]
+        elif first.startswith("document #"):
+            names = ["Document ID", "Document Type", "Vehicle / Subject", "Expiry Date", "Expiry Status", "Verification"]
+        elif first.startswith("payment #"):
+            names = ["Payment ID", "Trip", "Amount", "Payment Date", "Reference"]
+        elif first.startswith("expense #"):
+            names = ["Expense ID", "Trip", "Category", "Amount", "Date", "Status", "Description"]
+        elif first.startswith("truck #"):
+            names = ["Truck ID", "Registration", "Model", "Year", "Capacity", "Status", "Last Service"]
+        elif first.startswith("driver #"):
+            names = ["Driver ID", "Name", "Status", "Licence", "Contact"]
+        elif first.startswith("challan #"):
+            names = ["Challan ID", "Challan Number", "Vehicle", "Violation", "Fine", "Status", "Due Date"]
+        elif first.startswith("user #"):
+            names = ["User ID", "Name", "Role", "Account Status"]
+        elif intent == "trips":
+            names = ["Trip ID", "Route", "Start Date", "Status", "Truck", "Driver", "Freight", "Received", "Due"]
+        else:
+            names = ["Record"]
+        while len(names) < count:
+            names.append("Detail " + str(len(names) + 1))
+        return names[:count]
+
+    lines = answer.splitlines()
+    output = []
+    index = 0
+    prefix = re.compile(r"^(?:Inspection #\d+|Document #\d+|Payment #\d+|Expense #\d+|Truck #\d+|Driver #\d+|Challan #\d+|User #\d+|#\d+\b)", re.I)
+    while index < len(lines):
+        line = lines[index]
+        if "|" not in line or not prefix.match(line.strip()):
+            output.append(line)
+            index += 1
+            continue
+        block = []
+        first_line = line
+        while index < len(lines):
+            candidate = lines[index].strip()
+            if "|" not in candidate or not prefix.match(candidate):
+                break
+            block.append([cell(part) for part in candidate.split("|")])
+            index += 1
+        width = max(len(row) for row in block)
+        block = [row + ["—"] * (width - len(row)) for row in block]
+        headers = headers_for(first_line, width)
+        output.append("| " + " | ".join(headers) + " |")
+        output.append("| " + " | ".join(["---"] * width) + " |")
+        output.extend("| " + " | ".join(row) + " |" for row in block)
+
+    formatted = "\n".join(output)
+
+    # Outstanding-balance rows have historically been emitted as labelled prose.
+    if intent == "payments":
+        due_rows = []
+        for line in formatted.splitlines():
+            match = re.match(
+                r"^Trip #?(\d+) \((.*?)\): freight ₹([\d,]+(?:\.\d{2})?), received ₹([\d,]+(?:\.\d{2})?), outstanding ₹([\d,]+(?:\.\d{2})?)\.?$",
+                line.strip(), re.I
+            )
+            if match:
+                due_rows.append(match.groups())
+        if due_rows:
+            table = ["| Trip ID | Route | Freight | Received | Outstanding |", "| --- | --- | ---: | ---: | ---: |"]
+            table.extend("| " + " | ".join(cell(value) for value in row) + " |" for row in due_rows)
+            formatted = re.sub(r"(?m)^Trip #?\d+ \(.*?\): freight .*?$", "", formatted).rstrip() + "\n" + "\n".join(table)
+
+    if intent == "maintenance" and not re.search(r"(?m)^\|", formatted):
+        match = re.search(r"(\d+) service records, ₹([\d,]+(?:\.\d{2})?) total recorded cost\. Latest service date: ([^.]+)\.", formatted, re.I)
+        if match:
+            table = [
+                "| Metric | Value |", "| --- | --- |",
+                "| Service records | " + match.group(1) + " |",
+                "| Total recorded cost | ₹" + match.group(2) + " |",
+                "| Latest service date | " + cell(match.group(3)) + " |",
+            ]
+            formatted = re.sub(r"(?m)^.*service records, ₹[\d,]+(?:\.\d{2})? total recorded cost\. Latest service date: [^.]+\.?$", "", formatted, flags=re.I).rstrip()
+            formatted = (formatted + "\n" if formatted else "") + "\n".join(table)
+    return formatted
+
+
 def _validate_graph_answer(state: AssistantState) -> AssistantState:
     """Final answer-quality gate: never return an empty or malformed model result."""
     answer = state.get("answer")
@@ -1354,6 +1447,8 @@ def ask_fleetflow_assistant():
         answer = result.get("answer")
         if isinstance(answer, str) and answer.strip():
             answer = _format_answer_for_user(question.strip(), answer, state.get('long_term_memories', []))
+            # Enforce structured record tables after optional language rewriting.
+            answer = _format_record_tables(answer, result.get("intent", "help"))
         if not isinstance(answer, str) or not answer.strip():
             current_app.logger.error("FleetFlow assistant graph returned an empty answer")
             return jsonify(error="The assistant returned an empty response. Please try again."), 503
