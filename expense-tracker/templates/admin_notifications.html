@@ -11,30 +11,30 @@
     </div>
 
     <section class="table-container" style="padding: 1.5rem; margin-bottom: 1.5rem;" aria-labelledby="sms-settings-heading">
-        <h2 id="sms-settings-heading">Mobile SMS alerts</h2>
-        <p style="color: var(--ink-muted);">Configure the administrator number that receives document-expiry reminders. The checker runs automatically once per day in a separate Docker worker. SMS is sent only for the latest record for each asset/document type.</p>
+        <h2 id="sms-settings-heading">WhatsApp compliance alerts</h2>
+        <p style="color: var(--ink-muted);">Configure the single WhatsApp number that receives document-expiry reminders. The checker runs automatically once per day in a separate Docker worker and only checks the latest record for each asset/document type.</p>
         {% if sms_provider_configured %}
-        <p>My SMS Gateway API key and device ID are configured in the server environment.</p>
+        <p>WhatsApp Cloud API token and Phone Number ID are configured in the server environment.</p>
         {% else %}
-        <p><strong>Provider setup is incomplete.</strong> Add your My SMS Gateway API key and device ID to the private <code>.env.docker</code> file, then rebuild/restart Docker.</p>
+        <p><strong>Provider setup is incomplete.</strong> Add WHATSAPP_ACCESS_TOKEN and WHATSAPP_PHONE_NUMBER_ID to the private <code>.env.docker</code> file, then rebuild/restart Docker.</p>
         {% endif %}
         <form method="POST" action="{{ url_for('compliance_sms_settings_save') }}" style="display:grid; gap: .75rem; max-width: 34rem;">
             <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
             <div class="form-group">
-                <label for="recipient_mobile">Administrator mobile number (India)</label>
+                <label for="recipient_mobile">WhatsApp recipient number (India)</label>
                 <input class="form-input" id="recipient_mobile" name="recipient_mobile" type="tel" inputmode="numeric" autocomplete="tel" maxlength="16" placeholder="9876543210" value="{{ sms_settings.recipient_mobile if sms_settings else '' }}" required>
             </div>
             <label style="display:flex; gap:.5rem; align-items:center;">
                 <input type="checkbox" name="enabled" value="1" {% if sms_settings and sms_settings.enabled %}checked{% endif %}>
-                Enable automatic SMS expiry alerts
+                Enable automatic WhatsApp expiry alerts
             </label>
-            <button class="btn-primary" type="submit">Save SMS settings</button>
+            <button class="btn-primary" type="submit">Save WhatsApp settings</button>
         </form>
         <form method="POST" action="{{ url_for('compliance_sms_test') }}" style="margin-top: .75rem;">
             <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-            <button class="btn-secondary" type="submit">Send test SMS</button>
+            <button class="btn-secondary" type="submit">Send test WhatsApp</button>
         </form>
-        <p style="font-size:.875rem; color:var(--ink-muted);">My SMS Gateway queues messages for your paired Android phone/SIM. Provider acceptance does not guarantee handset delivery; check the gateway dashboard and phone inbox.</p>
+        <p style="font-size:.875rem; color:var(--ink-muted);">FleetFlow sends an approved Utility template through Meta's official WhatsApp Cloud API. The recipient must have opted in, and the template must be approved. API acceptance is not proof of delivery; WhatsApp delivery status can arrive asynchronously.</p>
     </section>
 
     <section class="table-container" style="padding: 1.5rem; margin-bottom: 1.5rem;" aria-labelledby="compliance-expiry-heading">
