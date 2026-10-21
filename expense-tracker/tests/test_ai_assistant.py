@@ -25,7 +25,7 @@ def test_compact_trip_id_and_informal_details_request_are_normalized():
     assert question == "give me details for Trip #7"
     assert _detect_intent(question) == "trips"
     import re
-    match = re.search(r"\\btrip\\s*#?\\s*(\\d+)\\b", question, re.I)
+    match = re.search(r"\btrip\s*#?\s*(\d+)\b", question, re.I)
     assert match and int(match.group(1)) == 7
 
 
