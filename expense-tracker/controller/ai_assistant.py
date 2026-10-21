@@ -1226,7 +1226,12 @@ def _format_record_tables(answer: str, intent: str) -> str:
             candidate = lines[index].strip()
             if "|" not in candidate or not prefix.match(candidate):
                 break
-            block.append([cell(part) for part in candidate.split("|")])
+            parts = [cell(part) for part in candidate.split("|")]
+            if intent == "trips" and parts:
+                trip_match = re.match(r"^(#\d+)\s+(.+)$", parts[0])
+                if trip_match:
+                    parts = [trip_match.group(1), trip_match.group(2)] + parts[1:]
+            block.append(parts)
             index += 1
         width = max(len(row) for row in block)
         block = [row + ["—"] * (width - len(row)) for row in block]
@@ -1263,6 +1268,11 @@ def _format_record_tables(answer: str, intent: str) -> str:
             ]
             formatted = re.sub(r"(?m)^.*service records, ₹[\d,]+(?:\.\d{2})? total recorded cost\. Latest service date: [^.]+\.?$", "", formatted, flags=re.I).rstrip()
             formatted = (formatted + "\n" if formatted else "") + "\n".join(table)
+    # Count-only answers are summaries, but still use a consistent table layout.
+    if not re.search(r"(?m)^\|", formatted):
+        count_match = re.search(r"^(Total .*?:)\s*(\d+)\.?$", formatted.strip(), re.I)
+        if count_match:
+            formatted = "| Summary | Count |\n| --- | ---: |\n| " + cell(count_match.group(1).rstrip(":")) + " | " + count_match.group(2) + " |"
     return formatted
 
 
