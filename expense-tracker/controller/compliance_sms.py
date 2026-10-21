@@ -185,7 +185,7 @@ def _due_documents(conn):
     """).fetchall()
 
 
-def send_due_compliance_sms(get_db):
+def send_due_compliance_whatsapp(get_db):
     """Compatibility name: send WhatsApp reminders and deduplicate per document/milestone."""
     conn = get_db()
     sent = skipped = failed = 0
@@ -244,6 +244,10 @@ def send_due_compliance_sms(get_db):
         return {"sent": sent, "skipped": skipped, "failed": failed, "reason": None}
     finally:
         conn.close()
+
+
+# Keep the old callable name for any local scripts that used the SMS worker API.
+send_due_compliance_sms = send_due_compliance_whatsapp
 
 
 def register_compliance_sms_module(app, ns):
