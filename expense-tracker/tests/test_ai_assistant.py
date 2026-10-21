@@ -117,7 +117,7 @@ def test_payment_prompt_understands_trip_number_without_space():
     assert draft["trip_id"] == 3
     assert draft["amount"] == "10000.00"
 
-from controller.roadside_compliance import DOCUMENT_TYPES, FINDINGS, INSPECTION_TYPES, SEVERITIES, STATUSES, _expiry_alert_type
+from controller.roadside_compliance import DOCUMENT_TYPES, FINDINGS, INSPECTION_TYPES, SEVERITIES, STATUSES, _expiry_alert_type, _sync_expiry_alerts
 
 
 def test_roadside_compliance_catalog_covers_requested_inspection_areas():
@@ -183,3 +183,39 @@ def test_manual_compliance_expiry_reminder_milestones():
     assert _expiry_alert_type(1) == "1_days"
     assert _expiry_alert_type(0) == "expiry_today"
     assert _expiry_alert_type(-1) == "overdue"
+
+
+
+def test_manual_expiry_reminders_are_persisted_without_duplicates():
+    import sqlite3
+    from datetime import date, timedelta
+
+    conn = sqlite3.connect(":memory:")
+    conn.execute("""
+        CREATE TABLE compliance_expiry_alerts (
+            document_id INTEGER NOT NULL,
+            expiry_date DATE NOT NULL,
+            alert_type TEXT NOT NULL,
+            message TEXT NOT NULL,
+            UNIQUE(document_id, expiry_date, alert_type)
+        )
+    """)
+    today = date(2026, 10, 21)
+    document = {
+        "document_id": 9,
+        "expiry_date": (today + timedelta(days=7)).isoformat(),
+        "subject_type": "truck",
+        "registration_number": "MP09AB1234",
+        "driver_name": None,
+        "related_trip_id": None,
+        "document_type": "PUC Certificate",
+    }
+    _sync_expiry_alerts(conn, [document], today)
+    _sync_expiry_alerts(conn, [document], today)
+    rows = conn.execute(
+        "SELECT alert_type, message FROM compliance_expiry_alerts"
+    ).fetchall()
+    assert len(rows) == 1
+    assert rows[0][0] == "7_days"
+    assert "MP09AB1234" in rows[0][1]
+    conn.close()
