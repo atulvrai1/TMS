@@ -420,12 +420,11 @@ def _classify(state: AssistantState) -> AssistantState:
     intent = _detect_intent(routed_question)
     # Financial/maintenance words are strong routing signals. Do not let an LLM
     # override a specific balance/payment/expense question as a generic trip query.
-    force_deterministic_intent = bool(re.search(
-        r"\b(?:due|balance|remaining|outstanding|baaki|baki|kitna dena|kitna lena|"
-        r"payment|payments|received|receiving|paid|freight|collection|mila|mili|mile|jama|bhugtan|"
-        r"expense|expenses|kharcha|kharch|diesel|toll|maintenance|servicing|service|repair|mechanic|truck|trucks|vehicle|vehicles|lorry|gaadi|gadi|driver|drivers|challan|challans|chalan|traffic fine|users?|accounts?|staff|members|admins?|administrators?|pending|unfinished|not completed|open trips?|scheduled|in progress|completed|cancelled|canceled)\b",
-        routed_question, re.I
-    ))
+    # If deterministic routing recognized a supported category, trust it.
+    # The model is only a fallback for requests without known intent keywords;
+    # this prevents it from overriding clear aliases such as "chalak", "kharcha",
+    # "paise mile", or "truck repair cost".
+    force_deterministic_intent = intent != "help"
     api_key = os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")
     if api_key:
         try:
