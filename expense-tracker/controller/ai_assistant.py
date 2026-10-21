@@ -437,7 +437,15 @@ def _classify(state: AssistantState) -> AssistantState:
     # The model is only a fallback for requests without known intent keywords;
     # this prevents it from overriding clear aliases such as "chalak", "kharcha",
     # "paise mile", or "truck repair cost".
-    force_deterministic_intent = intent != "help"
+    compliance_guidance_request = bool(re.search(
+        r"\b(puc|pollution certificate|insurance expiry|insurance expired|insurance policy|"
+        r"fitness certificate|national permit|state permit|permit expiry|road tax|tax token|"
+        r"rc expiry|registration certificate|document expiry|documents expire|compliance|"
+        r"parivahan|vahan)\b",
+        routed_question,
+        re.I,
+    ))
+    force_deterministic_intent = intent != "help" or compliance_guidance_request
     api_key = os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")
     if api_key:
         try:
