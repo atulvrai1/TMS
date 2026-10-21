@@ -28,7 +28,7 @@
   </section>
   <section class="compliance-panel">
     <h2>Official vehicle services</h2>
-    <p class="compliance-muted">Use these official pages for manual checks. Automatic sync is available only after an authorised vehicle-data API endpoint and token are configured; the public pages themselves are not treated as an API.</p>
+    <p class="compliance-muted">Use these official pages for manual checks. FleetFlow does not automatically sync with Parivahan; check documents on the official portal and update their validity dates here.</p>
     <div class="compliance-grid">
       <div><strong>Vehicle status, PUCC and insurance</strong><p><a href="https://analytics.parivahan.gov.in/analytics/vehiclestatusreport" target="_blank" rel="noopener noreferrer">Open Parivahan vehicle status ↗</a></p></div>
       <div><strong>PUC services</strong><p><a href="https://vahan.parivahan.gov.in/puc/views/PucCertificate.xhtml" target="_blank" rel="noopener noreferrer">Open VAHAN PUC portal ↗</a></p></div>
@@ -48,11 +48,10 @@
   <section class="compliance-panel">
     <h2>Pre-trip document check (advisory)</h2>
     <p class="compliance-muted">Checks the latest recorded PUC, insurance, fitness and permit expiry. Missing records are flagged for review; this is not a legal clearance or an automatic dispatch block.</p>
-    {% if parivahan_sync_configured %}<p class="compliance-muted">Authorised API adapter configured. Sync runs per truck and imported records should be reviewed.</p>{% else %}<p class="compliance-muted">Sync not configured. A valid authorised HTTPS API endpoint and token are required; the public Parivahan portal URL is not an API endpoint.</p>{% endif %}
-    <div class="compliance-table-wrap"><table class="compliance-table"><thead><tr><th>Truck</th><th>PUC</th><th>Insurance</th><th>Fitness</th><th>Applicable permit</th><th>Records needing attention</th><th>Sync</th></tr></thead><tbody>
+    <div class="compliance-table-wrap"><table class="compliance-table"><thead><tr><th>Truck</th><th>PUC</th><th>Insurance</th><th>Fitness</th><th>Applicable permit</th><th>Records needing attention</th></tr></thead><tbody>
     {% for row in dispatch_checks %}<tr><td><strong>{{ row.truck.registration_number }}</strong><div class="compliance-muted">{{ row.truck.model or '' }}</div></td>
     {% for check in row.checks %}<td><span class="compliance-pill {{ 'good' if check.status == 'Valid' else 'bad' if check.status == 'Expired' else 'warn' }}">{{ check.status }}</span></td>{% endfor %}
-    <td>{{ row.attention_count }}</td><td>{% if parivahan_sync_configured %}<form action="{{ url_for('compliance_sync_truck', truck_id=row.truck.truck_id) }}" method="post"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button class="btn-secondary" type="submit">Sync records</button></form>{% else %}<span class="compliance-muted">Not configured</span>{% endif %}</td></tr>{% else %}<tr><td colspan="7">Add trucks to see their pre-trip document checks.</td></tr>{% endfor %}
+    <td>{{ row.attention_count }}</td></tr>{% else %}<tr><td colspan="6">Add trucks to see their pre-trip document checks.</td></tr>{% endfor %}
     </tbody></table></div>
   </section>
   <div class="compliance-grid">
