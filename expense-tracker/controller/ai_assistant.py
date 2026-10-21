@@ -564,7 +564,7 @@ def _query_records(state: AssistantState) -> AssistantState:
                 if status_match:
                     filters.append("lower(i.status) = lower(?)")
                     filter_params.append(status_match.group(1))
-                severity_match = re.search(r"\b(low|medium|high|critical) severity\b", question, re.I)
+                severity_match = re.search(r"\b(low|medium|high|critical)(?:\s+severity)?\b", question, re.I)
                 if severity_match:
                     filters.append("lower(i.severity) = lower(?)")
                     filter_params.append(severity_match.group(1))
