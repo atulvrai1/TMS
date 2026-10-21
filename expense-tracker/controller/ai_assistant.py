@@ -355,7 +355,7 @@ def _detect_intent(question: str) -> str:
     if re.search(
         r"\b(puc|pollution certificate|insurance expiry|insurance expired|insurance policy|fitness certificate|"
         r"national permit|state permit|permit expiry|road tax|tax token|rc expiry|"
-        r"registration certificate|expiring documents|documents expiring|document expiry|documents expire|compliance|parivahan|vahan)\b",
+        r"registration certificate|expired documents|documents expired|expiring documents|documents expiring|document expiry|documents expire|compliance|parivahan|vahan)\b",
         text,
     ):
         return "compliance"
