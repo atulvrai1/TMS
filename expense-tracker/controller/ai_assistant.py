@@ -516,11 +516,9 @@ def _owner_scope(alias: str, owner_column: str, state: AssistantState):
     if state["email"].lower() == SUPER_ADMIN_EMAIL.lower():
         return "1 = 1", []
     if state["role"] == "Admin":
-        return (
-            f"({alias}.{owner_column} IN (SELECT user_id FROM users WHERE role = 'User') "
-            f"OR {alias}.{owner_column} = ?)",
-            [state["user_id"]],
-        )
+        # Keep assistant read scope aligned with the dashboard: administrators
+        # can query records across the FleetFlow workspace.
+        return "1 = 1", []
     if alias == "trips":
         return (
             "trips.driver_id = (SELECT driver_id FROM users WHERE user_id = ?)",
