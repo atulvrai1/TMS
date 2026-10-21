@@ -28,6 +28,8 @@ Examples:
 - "trip 3 ke paise mile", "trip 3 ka due amount", "us trip ke 10000 mile" -> payments
 - "service kab hui", "gaadi repair" -> maintenance
 - "PUC expiry", "insurance kab expire hoga", "kaunse documents expire ho rahe hain" -> compliance (query only manually entered FleetFlow records)
+- "show roadside inspections", "overloading finding", "RUPD missing", "driver using mobile phone", "seatbelt violation", "vehicle safety", "weight and cargo", "operational rules", "open critical inspection", "corrective action for truck MP09AB1234" -> compliance inspection history (manually entered FleetFlow records)
+- When a question includes a specific compliance term plus a challan reference, search the compliance register first; a generic "show pending challans" request still routes to challans.
 - "show me users", "total users" -> users (administrator access only)
 - "show me admin", "total admins" -> admins (administrator access only)
 - greetings, app how-to questions, unrelated or unclear requests -> help
