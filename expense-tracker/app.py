@@ -2398,18 +2398,11 @@ def admin_notifications():
     conn = get_db()
     try:
         notifications = _load_admin_notifications(conn)
-        sms_settings = conn.execute(
-            "SELECT recipient_mobile, enabled, updated_at FROM compliance_sms_settings WHERE setting_id=1"
-        ).fetchone()
     finally:
         conn.close()
     return render_template(
         "admin_notifications.html",
         notifications=notifications,
-        sms_settings=sms_settings,
-        sms_provider_configured=all(os.environ.get(name, "").strip() for name in (
-            "FAST2SMS_API_KEY", "FAST2SMS_SENDER_ID", "FAST2SMS_ENTITY_ID", "FAST2SMS_TEMPLATE_ID"
-        )),
         csrf_token=session["csrf_token"],
         block_content="dashboard"
     )
@@ -2974,10 +2967,6 @@ register_challan_module(app, globals())
 # Register roadside compliance documents and inspection workflows.
 from controller.roadside_compliance import register_compliance_module
 register_compliance_module(app, globals())
-
-# Register Fast2SMS settings and scheduled compliance reminder support.
-from controller.compliance_sms import register_compliance_sms_module
-register_compliance_sms_module(app, globals())
 
 
 from controller.ai_assistant import assistant_bp
