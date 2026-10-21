@@ -2,7 +2,11 @@ import json
 
 import pytest
 
-from controller.compliance_sms import _normalise_mobile, _render_message, _send_my_sms_gateway
+from controller.compliance_sms import (
+    _normalise_mobile,
+    _template_parameters,
+    _send_whatsapp_template,
+)
 
 
 def test_normalise_indian_mobile_accepts_country_code_and_formatting():
@@ -15,7 +19,7 @@ def test_normalise_mobile_rejects_invalid_numbers(value):
         _normalise_mobile(value)
 
 
-def test_render_message_contains_document_asset_and_expiry():
+def test_template_parameters_contain_document_asset_and_expiry():
     row = {
         "document_type": "Third-Party Insurance",
         "subject_type": "truck",
@@ -26,25 +30,34 @@ def test_render_message_contains_document_asset_and_expiry():
         "driver_name": None,
         "expiry_date": "2026-10-27",
     }
-    message = _render_message(row, 7)
-    assert "Third-Party Insurance" in message
-    assert "BR-XX-1234" in message
-    assert "7 days" in message
-    assert "2026-10-27" in message
+    params = _template_parameters(row, 7)
+    assert params == [
+        "Third-Party Insurance",
+        "BR-XX-1234",
+        "Expires in 7 days on 2026-10-27",
+    ]
 
 
-def test_my_sms_gateway_sends_documented_payload(monkeypatch):
-    import controller.compliance_sms as sms
+def test_whatsapp_cloud_api_sends_approved_template(monkeypatch):
+    import controller.compliance_sms as whatsapp
 
-    monkeypatch.setenv("MY_SMS_GATEWAY_API_KEY", "test-key")
-    monkeypatch.setenv("MY_SMS_GATEWAY_DEVICE_ID", "device-123")
+    monkeypatch.setenv("WHATSAPP_ACCESS_TOKEN", "test-token")
+    monkeypatch.setenv("WHATSAPP_PHONE_NUMBER_ID", "123456789")
+    monkeypatch.setenv("WHATSAPP_API_VERSION", "v23.0")
+    monkeypatch.setenv("WHATSAPP_TEMPLATE_NAME", "fleetflow_compliance_alert")
     captured = {}
 
     class FakeResponse:
-        status = 202
-        def __enter__(self): return self
-        def __exit__(self, *args): return False
-        def read(self): return b'{"success":true,"status":"queued","job_id":"job-1"}'
+        status = 200
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return False
+
+        def read(self):
+            return b'{"messaging_product":"whatsapp","messages":[{"id":"wamid.test-1"}]}'
 
     def fake_urlopen(req, timeout):
         captured["url"] = req.full_url
@@ -52,22 +65,37 @@ def test_my_sms_gateway_sends_documented_payload(monkeypatch):
         captured["payload"] = json.loads(req.data.decode())
         return FakeResponse()
 
-    monkeypatch.setattr(sms, "urlopen", fake_urlopen)
-    request_id, response_message = _send_my_sms_gateway("9876543210", "FleetFlow test")
-    assert captured["url"] == "https://api.mysmsgateway.com/v1/sms/send"
+    monkeypatch.setattr(whatsapp, "urlopen", fake_urlopen)
+    request_id, response_message = _send_whatsapp_template(
+        "9876543210", ["Insurance", "BR-XX-1234", "Expires in 7 days"]
+    )
+
+    assert captured["url"] == "https://graph.facebook.com/v23.0/123456789/messages"
+    assert captured["headers"]["Authorization"] == "Bearer test-token"
     assert captured["payload"] == {
-        "device_id": "device-123",
-        "to": "+919876543210",
-        "message": "FleetFlow test",
-        "sim": 1,
-        "message_type": "transactional",
+        "messaging_product": "whatsapp",
+        "recipient_type": "individual",
+        "to": "919876543210",
+        "type": "template",
+        "template": {
+            "name": "fleetflow_compliance_alert",
+            "language": {"code": "en"},
+            "components": [{
+                "type": "body",
+                "parameters": [
+                    {"type": "text", "text": "Insurance"},
+                    {"type": "text", "text": "BR-XX-1234"},
+                    {"type": "text", "text": "Expires in 7 days"},
+                ],
+            }],
+        },
     }
-    assert request_id == "job-1"
-    assert response_message == "queued"
+    assert request_id == "wamid.test-1"
+    assert "accepted" in response_message.lower()
 
 
-def test_my_sms_gateway_requires_key_and_device(monkeypatch):
-    monkeypatch.delenv("MY_SMS_GATEWAY_API_KEY", raising=False)
-    monkeypatch.delenv("MY_SMS_GATEWAY_DEVICE_ID", raising=False)
-    with pytest.raises(RuntimeError, match="MY_SMS_GATEWAY_API_KEY"):
-        _send_my_sms_gateway("9876543210", "test")
+def test_whatsapp_cloud_api_requires_credentials(monkeypatch):
+    monkeypatch.delenv("WHATSAPP_ACCESS_TOKEN", raising=False)
+    monkeypatch.delenv("WHATSAPP_PHONE_NUMBER_ID", raising=False)
+    with pytest.raises(RuntimeError, match="WHATSAPP_ACCESS_TOKEN"):
+        _send_whatsapp_template("9876543210", ["Insurance", "Truck 1", "Expires in 7 days"])
