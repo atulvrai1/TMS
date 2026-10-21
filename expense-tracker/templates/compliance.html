@@ -20,16 +20,25 @@
   <header class="panel-header">
     <div><h1 class="dashboard-title">Roadside Compliance</h1><p class="dashboard-subtitle">Document validity, truck safety checks, cargo concerns, and inspection follow-up in one register.</p></div>
   </header>
-  <div class="compliance-note"><strong>Important:</strong> This register records operational findings and reminders; it does not determine whether an offence occurred or calculate statutory penalties. Confirm applicable requirements and fine amounts with current law and the issuing authority.</div>
+  <div class="compliance-note"><strong>Manual register:</strong> FleetFlow uses the document details and expiry dates entered by your team. It does not fetch live status from Parivahan / VAHAN. Enter or update the details after checking the original document or an official source. This register does not determine offences or statutory penalties.</div>
   <section class="stats-grid" aria-label="Compliance summary">
     <div class="stat-tile"><span class="stat-label">Expired documents</span><span class="stat-value">{{ expired_count }}</span></div>
     <div class="stat-tile"><span class="stat-label">Expiring within 30 days</span><span class="stat-value">{{ expiring_count }}</span></div>
     <div class="stat-tile"><span class="stat-label">Open inspection findings</span><span class="stat-value">{{ open_findings }}</span></div>
   </section>
+  {% if expiry_alerts %}
+  <section class="compliance-panel" aria-labelledby="expiry-alert-heading">
+    <h2 id="expiry-alert-heading">Document expiry reminders <span class="compliance-pill warn">{{ expiry_alerts|length }} unread</span></h2>
+    <p class="compliance-muted">These reminders are calculated only from the expiry dates saved in FleetFlow. They are not live government-status checks.</p>
+    <div class="compliance-table-wrap"><table class="compliance-table"><thead><tr><th>Reminder</th><th>Document</th><th>Expiry date</th><th>Action</th></tr></thead><tbody>
+      {% for alert in expiry_alerts %}<tr><td><span class="compliance-pill {{ 'bad' if alert.alert_type == 'overdue' else 'warn' }}">{{ 'Expired' if alert.alert_type == 'overdue' else 'Expires today' if alert.alert_type == 'expiry_today' else alert.alert_type|replace('_',' ')|title }}</span><div>{{ alert.message }}</div></td><td>{{ alert.document_type }}<div class="compliance-muted">{{ alert.registration_number or alert.driver_name or 'Related fleet record' }}</div></td><td>{{ alert.expiry_date }}</td><td><form method="post" action="{{ url_for('compliance_expiry_alert_read', alert_id=alert.alert_id) }}"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button class="btn-ghost" type="submit">Mark read</button></form></td></tr>{% endfor %}
+    </tbody></table></div>
+  </section>
+  {% endif %}
   <div class="compliance-grid">
     <section class="compliance-panel">
       <h2>＋ Register a compliance document</h2>
-      <p class="compliance-muted">Record expiry dates for alerts. Do not store passwords or unnecessary personal data here.</p>
+      <p class="compliance-muted">Enter the dates exactly as shown on the document. Reminders are generated at 30, 15, 7 and 1 day before expiry, on the expiry date, and after expiry. No live Parivahan/VAHAN sync is performed. Do not store passwords or unnecessary personal data here.</p>
       <form class="compliance-form" action="{{ url_for('compliance_document_add') }}" method="post">
         <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
         <div><label for="doc-subject">Record belongs to *</label><select id="doc-subject" name="subject_type" required><option value="truck">Truck / vehicle</option><option value="driver">Driver</option><option value="trip">Trip / cargo documents</option></select></div>
@@ -40,7 +49,7 @@
         <div><label for="doc-number">Document number / reference</label><input id="doc-number" name="document_number" maxlength="120"></div>
         <div><label for="doc-method">Verification method *</label><select id="doc-method" name="verification_method"><option>Physical original</option><option>DigiLocker</option><option>mParivahan</option><option>Other verified digital copy</option><option>Not verified</option></select></div>
         <div><label for="doc-issue">Issue date</label><input id="doc-issue" type="date" name="issue_date"></div>
-        <div><label for="doc-expiry">Expiry date</label><input id="doc-expiry" type="date" name="expiry_date"></div>
+        <div><label for="doc-expiry">Expiry date</label><input id="doc-expiry" type="date" name="expiry_date"><small class="compliance-muted">Use the expiry date entered from the physical / verified document.</small></div>
         <div><label for="doc-verified">Verification status</label><select id="doc-verified" name="verified"><option value="0">Not verified</option><option value="1">Verified by authorized staff</option></select></div>
         <div class="wide"><label for="doc-notes">Notes</label><textarea id="doc-notes" name="notes" rows="2" maxlength="500"></textarea></div>
         <div class="wide"><button class="btn-primary" type="submit">Save document record</button></div>
