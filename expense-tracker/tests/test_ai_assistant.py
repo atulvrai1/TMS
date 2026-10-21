@@ -243,3 +243,26 @@ def test_manual_expiry_reminders_are_persisted_without_duplicates():
     assert rows[0][0] == "7_days"
     assert "MP09AB1234" in rows[0][1]
     conn.close()
+
+
+def test_record_answer_rows_are_always_rendered_as_markdown_tables():
+    from controller.ai_assistant import _format_record_tables
+
+    cases = [
+        ("Here are the latest trips you can access:\n#7 Bhopal → Indore | 2026-10-21 | Scheduled | KA-50-EU-1045 | Ramesh", "trips",
+         ["Trip ID", "Route", "Start Date", "Status", "Truck", "Driver"]),
+        ("Received payments:\nPayment #11 | Trip #4 (Fatuha → Patna) | ₹10,000.00 | 2026-10-20", "payments",
+         ["Payment ID", "Trip", "Amount", "Payment Date"]),
+        ("Compliance register:\nDocument #9 | PUC Certificate | MP09AB1234 | 2026-10-28 | Expires in 7 day(s) | Verified by staff", "compliance",
+         ["Document ID", "Document Type", "Vehicle / Subject", "Expiry Date", "Expiry Status", "Verification"]),
+        ("Expense records:\nExpense #5 | Trip #4 (Fatuha → Patna) | Diesel | ₹500.00 | 2026-10-20 | Approved | highway fuel", "expenses",
+         ["Expense ID", "Trip", "Category", "Amount", "Date", "Status", "Description"]),
+        ("Maintenance summary for records available to your account: 3 service records, ₹5,000.00 total recorded cost. Latest service date: 2026-10-20.", "maintenance",
+         ["Metric", "Value"]),
+    ]
+    for answer, intent, expected_headers in cases:
+        result = _format_record_tables(answer, intent)
+        assert "| ---" in result
+        for header in expected_headers:
+            assert header in result
+
