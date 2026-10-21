@@ -20,6 +20,15 @@ def test_intent_router_recognizes_pending_trip_count_in_hinglish():
     assert _detect_intent("Abhi kitne trips pending hain?") == "trips"
 
 
+def test_compact_trip_id_and_informal_details_request_are_normalized():
+    question = _resolve_contextual_question("give em details for trip7", [])
+    assert question == "give me details for Trip #7"
+    assert _detect_intent(question) == "trips"
+    import re
+    match = re.search(r"\\btrip\\s*#?\\s*(\\d+)\\b", question, re.I)
+    assert match and int(match.group(1)) == 7
+
+
 def test_vague_details_follow_up_uses_single_trip_from_previous_result():
     history = [
         {"role": "user", "content": "Abhi kitne trips pending hain?"},
