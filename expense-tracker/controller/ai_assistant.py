@@ -358,7 +358,7 @@ def _detect_intent(question: str) -> str:
         r"registration certificate|document expiry|documents expire|compliance|parivahan|vahan)\b",
         text,
     ):
-        return "help"
+        return "compliance"
 
     if re.search(r"\b(got|received|collected|mila|mili|mile|jama kiya|jama hua|paise aaye|payment aaya)\b", text) and re.search(
         r"\b\d[\d,]*(?:\.\d{1,2})?\b", text
@@ -519,7 +519,82 @@ def _query_records(state: AssistantState) -> AssistantState:
     intent = state.get("intent", "help")
     conn = get_db()
     try:
-        if intent == "trips":
+        if intent == "compliance":
+            # Query only manually entered records; never call Parivahan/VAHAN.
+            scope, params = _owner_scope("compliance_documents", "owner_user_id", state)
+            question = state.get("routing_question", state.get("question", ""))
+            filters, filter_params = [], []
+            type_rules = [
+                (r"\b(puc|pollution)\b", "PUC Certificate"),
+                (r"\b(rc|registration certificate)\b", "Registration Certificate (RC)"),
+                (r"\b(insurance|insured)\b", "Third-Party Insurance"),
+                (r"\bfitness\b", "Fitness Certificate"),
+                (r"\b(national permit|state permit|commercial permit|permit)\b", None),
+                (r"\b(tax token|road tax)\b", "Road Tax / Tax Token"),
+                (r"\b(driving licence|driving license|licence|license|dl)\b", "Driving Licence (HMV)"),
+                (r"\b(e-?way bill|trip sheet|cargo manifest)\b", "Trip Sheet / E-Way Bill / Cargo Manifest"),
+            ]
+            for pattern, doc_type in type_rules:
+                if re.search(pattern, question, re.I):
+                    if doc_type:
+                        filters.append("compliance_documents.document_type = ?")
+                        filter_params.append(doc_type)
+                    else:
+                        permit_match = re.search(r"\b(national permit|state permit|commercial permit)\b", question, re.I)
+                        if permit_match:
+                            filters.append("lower(compliance_documents.document_type) = lower(?)")
+                            filter_params.append(permit_match.group(1).title())
+                    break
+            reg_match = re.search(r"\b([A-Z]{2}[- ]?\d{1,2}[- ]?[A-Z]{1,3}[- ]?\d{1,4})\b", question, re.I)
+            if reg_match:
+                registration = re.sub(r"\s+", "", reg_match.group(1)).upper()
+                filters.append("upper(replace(trucks.registration_number, ' ', '')) = ?")
+                filter_params.append(registration)
+            if re.search(r"\b(expired|already expired)\b", question, re.I):
+                filters.append("compliance_documents.expiry_date IS NOT NULL AND compliance_documents.expiry_date < date('now')")
+            elif re.search(r"\b(expir|expiry|expires|expiring|renew|renewal|validity|due soon|upcoming)\b", question, re.I):
+                filters.append("compliance_documents.expiry_date IS NOT NULL AND compliance_documents.expiry_date <= date('now', '+30 days')")
+            query = (
+                "SELECT compliance_documents.document_id, compliance_documents.subject_type, "
+                "compliance_documents.document_type, compliance_documents.document_number, "
+                "compliance_documents.issue_date, compliance_documents.expiry_date, "
+                "compliance_documents.verified, compliance_documents.verification_method, "
+                "trucks.registration_number, drivers.name AS driver_name, trips.trip_id AS related_trip_id, "
+                "trips.route_from, trips.route_to FROM compliance_documents "
+                "LEFT JOIN trucks ON trucks.truck_id = compliance_documents.truck_id "
+                "LEFT JOIN drivers ON drivers.driver_id = compliance_documents.driver_id "
+                "LEFT JOIN trips ON trips.trip_id = compliance_documents.trip_id "
+                f"WHERE {scope}"
+            )
+            if filters:
+                query += " AND " + " AND ".join(filters)
+            query += " ORDER BY CASE WHEN compliance_documents.expiry_date IS NULL THEN 2 WHEN compliance_documents.expiry_date < date('now') THEN 0 ELSE 1 END, compliance_documents.expiry_date ASC LIMIT 50"
+            rows = conn.execute(query, params + filter_params).fetchall()
+            if not rows:
+                answer = "I couldn't find matching manually entered compliance documents in the records available to your account. No live Parivahan/VAHAN status was checked."
+            else:
+                lines = []
+                today = date.today()
+                for row in rows:
+                    subject = row["registration_number"] or row["driver_name"] or (
+                        f"Trip #{row['related_trip_id']}" if row["related_trip_id"] else row["subject_type"].title()
+                    )
+                    expiry = row["expiry_date"]
+                    if not expiry:
+                        expiry_status = "Expiry date not recorded"
+                    else:
+                        try:
+                            days_left = (date.fromisoformat(str(expiry)) - today).days
+                            expiry_status = "Expired" if days_left < 0 else "Expires today" if days_left == 0 else f"Expires in {days_left} day(s)" if days_left <= 30 else f"Entered expiry date is {days_left} day(s) away"
+                        except ValueError:
+                            expiry_status = "Invalid stored expiry date"
+                    verification = "Verified by staff" if row["verified"] else "Not verified"
+                    lines.append(
+                        f"Document #{row['document_id']} | {row['document_type']} | {subject} | "
+                        f"Expiry: {expiry or 'Not recorded'} | {expiry_status} | {verification}"
+                    )
+                answer = "Compliance register (based on dates entered in FleetFlow; not a live government lookup):\n" + "\n".join(lines)
+        elif intent == "trips":
             scope, params = _owner_scope("trips", "owner_user_id", state)
             question = state.get("routing_question", state.get("question", ""))
             trip_id_match = re.search(r"\btrip\s*#?\s*(\d+)\b", question, re.IGNORECASE)
