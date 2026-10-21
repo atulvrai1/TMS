@@ -30,13 +30,13 @@ services:
       SMTP_FROM: ${SMTP_FROM:-}
       SMTP_USERNAME: ${SMTP_USERNAME:-}
       SMTP_PASSWORD: ${SMTP_PASSWORD:-}
-      # Msg07 API credentials stay in the private .env.docker file.
-      MSG07_API_URL: ${MSG07_API_URL:-}
-      MSG07_API_KEY: ${MSG07_API_KEY:-}
-      MSG07_AUTH_HEADER: ${MSG07_AUTH_HEADER:-Authorization}
-      MSG07_AUTH_SCHEME: ${MSG07_AUTH_SCHEME-Bearer}
-      MSG07_PAYLOAD_TEMPLATE: ${MSG07_PAYLOAD_TEMPLATE:-}
-      MSG07_MESSAGE_TEMPLATE: ${MSG07_MESSAGE_TEMPLATE:-}
+      # My SMS Gateway credentials stay in the private .env.docker file.
+      MY_SMS_GATEWAY_API_URL: ${MY_SMS_GATEWAY_API_URL:-https://api.mysmsgateway.com/v1/sms/send}
+      MY_SMS_GATEWAY_API_KEY: ${MY_SMS_GATEWAY_API_KEY:-}
+      MY_SMS_GATEWAY_DEVICE_ID: ${MY_SMS_GATEWAY_DEVICE_ID:-}
+      MY_SMS_GATEWAY_SIM: ${MY_SMS_GATEWAY_SIM:-1}
+      MY_SMS_GATEWAY_MESSAGE_TYPE: ${MY_SMS_GATEWAY_MESSAGE_TYPE:-transactional}
+      MY_SMS_GATEWAY_MESSAGE_TEMPLATE: ${MY_SMS_GATEWAY_MESSAGE_TEMPLATE:-}
     volumes:
       - fleetflow_data:/data
       - fleetflow_uploads:/app/uploads
@@ -57,12 +57,6 @@ services:
       FLASK_SECRET_KEY: ${FLASK_SECRET_KEY:?Set FLASK_SECRET_KEY in .env.docker}
       DATABASE_PATH: /data/tms.db
       FLEETFLOW_PUBLIC_URL: ${FLEETFLOW_PUBLIC_URL:-http://127.0.0.1:5001}
-      MSG07_API_URL: ${MSG07_API_URL:-}
-      MSG07_API_KEY: ${MSG07_API_KEY:-}
-      MSG07_AUTH_HEADER: ${MSG07_AUTH_HEADER:-Authorization}
-      MSG07_AUTH_SCHEME: ${MSG07_AUTH_SCHEME-Bearer}
-      MSG07_PAYLOAD_TEMPLATE: ${MSG07_PAYLOAD_TEMPLATE:-}
-      MSG07_MESSAGE_TEMPLATE: ${MSG07_MESSAGE_TEMPLATE:-}
       COMPLIANCE_SMS_CHECK_INTERVAL_SECONDS: ${COMPLIANCE_SMS_CHECK_INTERVAL_SECONDS:-86400}
     volumes:
       - fleetflow_data:/data
