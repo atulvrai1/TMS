@@ -4,7 +4,7 @@ on:
   push:
     branches: [main, "fix/**", "feat/**"]
   pull_request:
-    branches: [main, "fix/**"]
+    branches: [main, "fix/**", "feat/**", "chore/**"]
 
 jobs:
   security-smoke-tests:
