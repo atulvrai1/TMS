@@ -38,6 +38,26 @@ SEVERITIES = {"Low", "Medium", "High", "Critical"}
 STATUSES = {"Open", "Corrected", "Referred", "Closed"}
 
 
+def classify_expiry(expiry_value, today=None):
+    """Return a UI status for a recorded ISO date; this is a reminder, not a legal ruling."""
+    if not expiry_value:
+        return "Expiry date missing"
+    try:
+        expiry = date.fromisoformat(str(expiry_value))
+    except (TypeError, ValueError):
+        return "Invalid expiry date"
+    days = (expiry - (today or date.today())).days
+    if days < 0:
+        return "Expired"
+    if days == 0:
+        return "Due today"
+    if days <= 7:
+        return "Urgent"
+    if days <= 30:
+        return "Expiring soon"
+    return "Valid"
+
+
 def _ensure_compliance_schema(get_db):
     conn = get_db()
     try:
@@ -187,13 +207,7 @@ def register_compliance_module(app, ns):
                      if (truck["truck_id"], kind) in latest_by_truck_type),
                     None,
                 )
-                if not recorded:
-                    status = "Missing record"
-                elif not expiry:
-                    status = "Expiry date missing"
-                else:
-                    days = (date.fromisoformat(expiry) - today_date).days
-                    status = "Expired" if days < 0 else "Due today" if days == 0 else "Urgent" if days <= 7 else "Expiring soon" if days <= 30 else "Valid"
+                status = "Missing record" if not recorded else classify_expiry(expiry, today_date)
                 checks.append({"label": label, "status": status})
 
             permit_expiries = [
