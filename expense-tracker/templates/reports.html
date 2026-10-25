@@ -57,6 +57,7 @@
   </section>
 
   <section aria-label="Reports"><div class="report-catalog">
+<a href="{{ url_for('reports', report_name='reconciliation', start_date=start_date, end_date=end_date) }}"><span class="report-icon" aria-hidden="true">🧾</span><span><strong>Trip Financial Reconciliation</strong><small>Completed-trip freight, lifetime receipts, outstanding balances, overpayments and costs</small></span></a>
 <a href="{{ url_for('reports', report_name='profit-loss', start_date=start_date, end_date=end_date) }}"><span class="report-icon" aria-hidden="true">⚖️</span><span><strong>Profit &amp; Loss Report</strong><small>Completed-trip revenue less approved trip costs and maintenance</small></span></a>
 <a href="{{ url_for('reports', report_name='truck-revenue', start_date=start_date, end_date=end_date) }}"><span class="report-icon" aria-hidden="true">🚚</span><span><strong>Truck Revenue Report</strong><small>Trip performance and operating costs</small></span></a>
 <a href="{{ url_for('reports', report_name='party-revenue', start_date=start_date, end_date=end_date) }}"><span class="report-icon" aria-hidden="true">🧑‍💼</span><span><strong>Party Revenue Report</strong><small>Freight and collections overview</small></span></a>
