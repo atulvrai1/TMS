@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+{% block title %}Parties · FleetFlow{% endblock %}
+{% block breadcrumb %}Parties & Ledger{% endblock %}
+{% block content_dashboard %}
+<style>
+.party-page{max-width:1200px;margin:0 auto;color:var(--ink,#172033)}.party-heading{display:flex;justify-content:space-between;align-items:flex-start;gap:1rem;flex-wrap:wrap;margin-bottom:1.4rem}.party-heading h1{margin:0 0 .35rem;font-size:1.8rem}.party-muted{color:var(--ink-muted,#687386)}.party-stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:1rem;margin-bottom:1.4rem}.party-stat,.party-panel{background:var(--surface,#fff);border:1px solid var(--border,#e5e9f0);border-radius:14px;padding:1rem 1.15rem;box-shadow:0 4px 18px rgba(20,35,60,.035)}.party-stat strong{display:block;font-size:1.45rem;margin-top:.3rem}.party-grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(280px,.7fr);gap:1rem}.party-panel h2{font-size:1.08rem;margin:0 0 1rem}.party-form{display:grid;grid-template-columns:1fr 1fr;gap:.8rem}.party-form label{display:block;font-size:.84rem;font-weight:600;margin-bottom:.3rem}.party-form input,.party-form select,.party-form textarea{width:100%;box-sizing:border-box;border:1px solid var(--border,#dbe1ea);border-radius:8px;padding:.65rem;background:var(--surface,#fff);color:inherit;font:inherit}.party-form .wide{grid-column:1/-1}.party-form button,.party-primary{border:0;border-radius:8px;background:var(--industry-blue,#2457c5);color:white;padding:.7rem 1rem;font-weight:600;cursor:pointer}.party-table-wrap{overflow:auto}.party-table{width:100%;border-collapse:collapse;min-width:680px}.party-table th,.party-table td{text-align:left;padding:.8rem .65rem;border-bottom:1px solid var(--border,#e5e9f0);font-size:.9rem}.party-table th{color:var(--ink-muted,#687386);font-size:.78rem;text-transform:uppercase;letter-spacing:.04em}.party-table a{font-weight:600;color:var(--industry-blue,#2457c5);text-decoration:none}.party-tag{display:inline-block;padding:.2rem .5rem;border-radius:99px;background:#edf3ff;color:#2854a5;font-size:.75rem}.party-empty{padding:1.5rem;text-align:center;color:var(--ink-muted,#687386)}@media(max-width:800px){.party-grid{grid-template-columns:1fr}}@media(max-width:520px){.party-form{grid-template-columns:1fr}.party-form .wide{grid-column:auto}}
+</style>
+<div class="party-page">
+ <div class="party-heading"><div><h1>Parties & Ledger</h1><div class="party-muted">Keep customer and supplier contacts and their debit/credit history in one place.</div></div><a class="party-primary" href="#add-party">+ Add party</a></div>
+ <div class="party-stats">
+  <div class="party-stat"><span class="party-muted">Parties</span><strong>{{ totals.party_count or 0 }}</strong></div>
+  <div class="party-stat"><span class="party-muted">Net ledger balance</span><strong>₹{{ "%.2f"|format(totals.net_balance or 0) }}</strong><small class="party-muted">Debit minus credit across visible parties</small></div>
+ </div>
+ <div class="party-grid">
+  <section class="party-panel"><h2>Party register</h2>
+   <div class="party-table-wrap"><table class="party-table"><thead><tr><th>Party</th><th>Type</th><th>Contact</th><th>Entries</th><th>Balance</th></tr></thead><tbody>
+   {% for p in parties %}<tr><td><a href="{{ url_for('party_ledger', party_id=p.party_id) }}">{{ p.name }}</a>{% if p.gstin %}<br><small class="party-muted">GSTIN {{ p.gstin }}</small>{% endif %}</td><td><span class="party-tag">{{ p.party_type }}</span></td><td>{{ p.phone or "—" }}{% if p.email %}<br><small>{{ p.email }}</small>{% endif %}</td><td>{{ p.entry_count }}</td><td>₹{{ "%.2f"|format(p.balance) }}</td></tr>
+   {% else %}<tr><td colspan="5" class="party-empty">No parties yet. Add your first customer or supplier using the form.</td></tr>{% endfor %}
+   </tbody></table></div>
+  </section>
+  <section class="party-panel" id="add-party"><h2>Add a party</h2>
+   <form class="party-form" method="post" action="{{ url_for('parties') }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <div class="wide"><label for="party-name">Party / business name *</label><input id="party-name" name="name" maxlength="160" required autocomplete="organization"></div>
+    <div><label for="party-type">Account type *</label><select id="party-type" name="party_type"><option>Customer</option><option>Supplier</option><option>Both</option></select></div>
+    <div><label for="party-phone">Phone</label><input id="party-phone" name="phone" maxlength="40" inputmode="tel"></div>
+    <div class="wide"><label for="party-email">Email</label><input id="party-email" name="email" type="email" maxlength="254"></div>
+    <div class="wide"><label for="party-gstin">GSTIN (optional)</label><input id="party-gstin" name="gstin" maxlength="15" minlength="15" pattern="[0-9A-Za-z]{15}" title="GSTIN is 15 letters and digits"></div>
+    <div class="wide"><label for="party-address">Address</label><textarea id="party-address" name="address" rows="2" maxlength="500"></textarea></div>
+    <div class="wide"><label for="party-notes">Notes</label><textarea id="party-notes" name="notes" rows="2" maxlength="1000"></textarea></div>
+    <div class="wide"><button type="submit">Save party</button></div>
+   </form>
+  </section>
+ </div>
+</div>
+{% endblock %}
