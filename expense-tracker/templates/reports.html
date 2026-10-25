@@ -56,6 +56,7 @@
     <div class="kpi"><div class="kpi-label">Expense records</div><div class="kpi-value">{{ expense_summary.expense_count }}</div></div>
     <div class="kpi"><div class="kpi-label">Payment records</div><div class="kpi-value">{{ payment_summary.payment_count }}</div></div>
     <div class="kpi"><div class="kpi-label">Active trips</div><div class="kpi-value">{{ trip_summary.active_count }}</div></div>
+    <div class="kpi"><div class="kpi-label">Maintenance spend</div><div class="kpi-value">₹{{ "%.2f"|format(maintenance_summary.maintenance_cost or 0) }}</div><div class="note">{{ maintenance_summary.service_count }} service records</div></div>
   </div>
 
   <div class="grid">
@@ -117,7 +118,8 @@ document.addEventListener('DOMContentLoaded', function () {
       data:{labels:labels,datasets:[
         {label:'Booked freight',data:{{ monthly_freight|tojson }},tension:.25},
         {label:'Collections',data:{{ monthly_payments|tojson }},tension:.25},
-        {label:'Approved expenses',data:{{ monthly_expenses|tojson }},tension:.25}
+        {label:'Approved trip expenses',data:{{ monthly_expenses|tojson }},tension:.25},
+        {label:'Maintenance',data:{{ monthly_maintenance|tojson }},tension:.25}
       ]},
       options:{...commonOptions,scales:{y:{beginAtZero:true,ticks:{callback:function(v){return currency.format(v)}}}}}
     });
