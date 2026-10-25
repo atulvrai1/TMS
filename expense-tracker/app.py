@@ -1,4 +1,6 @@
 import os
+import csv
+import io
 import hashlib
 import re
 import secrets
@@ -3480,6 +3482,62 @@ def reports():
         category_labels=category_labels, category_values=category_values,
         status_labels=status_labels, status_values=status_values,
         top_trips=top_trips,
+    )
+
+
+@app.route("/reports/export.csv", methods=["GET"])
+@access_required
+def export_reports_csv():
+    """Download a scoped, date-filtered trip-level finance report."""
+    start_date = request.args.get("start_date", "").strip()
+    end_date = request.args.get("end_date", "").strip()
+    try:
+        start_obj = datetime.strptime(start_date, "%Y-%m-%d").date()
+        end_obj = datetime.strptime(end_date, "%Y-%m-%d").date()
+        if start_obj > end_obj:
+            raise ValueError("start date must not be after end date")
+    except ValueError:
+        flash("Choose a valid date range before exporting the report.", "error")
+        return redirect(url_for("reports"))
+
+    conn = get_db()
+    trip_scope, trip_params = _record_owner_filter("t")
+    rows = conn.execute(
+        "SELECT t.trip_id, t.start_date, t.route_from, t.route_to, t.status, "
+        "COALESCE(tr.registration_number, '') AS truck, COALESCE(dr.name, '') AS driver, "
+        "COALESCE(t.freight_amount, 0) AS freight, "
+        "COALESCE((SELECT SUM(p.amount) FROM trip_payments p WHERE p.trip_id=t.trip_id "
+        "AND p.payment_date BETWEEN ? AND ?), 0) AS received, "
+        "COALESCE((SELECT SUM(e.amount) FROM expenses e WHERE e.trip_id=t.trip_id "
+        "AND e.status='Approved' AND e.date BETWEEN ? AND ?), 0) AS approved_expenses "
+        "FROM trips t LEFT JOIN trucks tr ON tr.truck_id=t.truck_id "
+        "LEFT JOIN drivers dr ON dr.driver_id=t.driver_id "
+        f"WHERE {trip_scope} AND t.start_date BETWEEN ? AND ? "
+        "ORDER BY t.start_date DESC, t.trip_id DESC",
+        [start_date, end_date, start_date, end_date, *trip_params, start_date, end_date]
+    ).fetchall()
+    conn.close()
+
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow([
+        "Trip ID", "Trip Date", "Origin", "Destination", "Status", "Truck", "Driver",
+        "Booked Freight INR", "Collections INR", "Approved Trip Expenses INR",
+        "Freight Less Approved Expenses INR"
+    ])
+    for row in rows:
+        freight = float(row["freight"] or 0)
+        costs = float(row["approved_expenses"] or 0)
+        writer.writerow([
+            row["trip_id"], row["start_date"], row["route_from"], row["route_to"],
+            row["status"], row["truck"], row["driver"], f"{freight:.2f}",
+            f"{float(row['received'] or 0):.2f}", f"{costs:.2f}", f"{freight-costs:.2f}"
+        ])
+    response_data = io.BytesIO(output.getvalue().encode("utf-8-sig"))
+    response_data.seek(0)
+    return send_file(
+        response_data, mimetype="text/csv", as_attachment=True,
+        download_name=f"fleetflow-report-{start_date}-to-{end_date}.csv"
     )
 
 if __name__ == "__main__":
