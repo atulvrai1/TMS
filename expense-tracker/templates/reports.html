@@ -37,6 +37,7 @@
 @media(max-width:560px){.analytics-page .workflow-links{grid-template-columns:1fr}}
 @media(max-width:1100px){.analytics-page .kpis{grid-template-columns:repeat(3,minmax(0,1fr))}}
 @media(max-width:760px){.analytics-page .grid{grid-template-columns:1fr}.analytics-page .kpis{grid-template-columns:repeat(2,minmax(0,1fr))}.analytics-page .chart-box{height:270px}}
+.report-catalog{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:1rem;margin:1.1rem 0 1.4rem}.report-catalog a{display:flex;align-items:center;gap:1rem;min-height:112px;padding:1.1rem 1.25rem;border:1px solid var(--border,#e1e5eb);border-radius:13px;background:var(--surface,#fff);box-shadow:0 2px 4px rgba(15,23,42,.08);text-decoration:none;color:inherit;transition:transform .15s,border-color .15s,box-shadow .15s}.report-catalog a:hover{transform:translateY(-2px);border-color:var(--industry-blue,#2457c5);box-shadow:0 8px 22px rgba(15,23,42,.1)}.report-catalog .report-icon{display:grid;place-items:center;flex:0 0 68px;height:68px;font-size:2.4rem}.report-catalog strong{font-size:1.08rem;font-weight:650}.report-catalog small{display:block;color:var(--ink-muted,#6b7280);margin-top:.3rem;line-height:1.4}@media(max-width:600px){.report-catalog{grid-template-columns:1fr}.report-catalog a{min-height:88px}}
 </style>
 <div class="analytics-page">
   <div class="head">
@@ -45,6 +46,14 @@
       <div class="muted">One view of trip volume, freight, collections and approved operating costs.</div>
     </div>
   </div>
+  <section aria-label="Reports"><div class="report-catalog">
+<a href="#business-summary"><span class="report-icon" aria-hidden="true">⚖️</span><span><strong>Profit &amp; Loss Report</strong><small>Freight, approved costs and estimated trip margin</small></span></a>
+<a href="#truck-revenue-report"><span class="report-icon" aria-hidden="true">🚚</span><span><strong>Truck Revenue Report</strong><small>Trip performance and operating costs</small></span></a>
+<a href="#party-revenue-report"><span class="report-icon" aria-hidden="true">🧑‍💼</span><span><strong>Party Revenue Report</strong><small>Freight and collections overview</small></span></a>
+<a href="#supplier-balance-report"><span class="report-icon" aria-hidden="true">💰</span><span><strong>Supplier Balance Report</strong><small>Supplier-related operating costs</small></span></a>
+<a href="#party-balance-report"><span class="report-icon" aria-hidden="true">💵</span><span><strong>Party Balance Report</strong><small>Collections and recorded freight gap</small></span></a>
+<a href="#transaction-report"><span class="report-icon" aria-hidden="true">📑</span><span><strong>Transaction Report</strong><small>Recent freight trip and payment records</small></span></a>
+</div></section>
   <section class="panel">
     <form method="get" action="{{ url_for('reports') }}" class="filters">
       <div><label for="start_date">From</label><input type="date" id="start_date" name="start_date" value="{{ start_date }}" required></div>
@@ -69,7 +78,7 @@
     <div class="kpi"><div class="kpi-label">Collections received</div><div class="kpi-value">₹{{ "%.2f"|format(receipts) }}</div></div>
     <div class="kpi"><div class="kpi-label">Approved expenses</div><div class="kpi-value">₹{{ "%.2f"|format(approved_expenses) }}</div></div>
   </div>
-  <div class="kpis">
+  <div class="kpis" id="party-balance-report">
     <div class="kpi"><div class="kpi-label">Estimated trip margin</div><div class="kpi-value">₹{{ "%.2f"|format(estimated_trip_margin) }}</div><div class="note">Booked freight less approved costs.</div></div>
     <div class="kpi"><div class="kpi-label">Freight not yet collected*</div><div class="kpi-value">₹{{ "%.2f"|format(collection_gap) }}</div><div class="note">Freight less recorded receipts; negative values mean receipts exceed freight in this period.</div></div>
     <div class="kpi"><div class="kpi-label">Expense records</div><div class="kpi-value">{{ expense_summary.expense_count }}</div></div>
@@ -79,21 +88,21 @@
   </div>
 
   <div class="grid" id="business-trends">
-    <section class="panel">
+    <section class="panel" id="party-revenue-report">
       <h2 style="margin-top:0">Monthly business trend</h2>
       <div class="chart-box"><canvas id="monthlyChart" aria-label="Monthly freight, collections and approved expenses chart"></canvas></div>
       {% if not month_labels %}<div class="empty">No trip, collection or expense activity in this date range.</div>{% endif %}
     </section>
-    <section class="panel">
+    <section class="panel" id="supplier-balance-report">
       <h2 style="margin-top:0">Approved costs by category</h2>
       <div class="chart-box"><canvas id="expenseChart" aria-label="Approved expenses by category chart"></canvas></div>
       {% if not category_labels %}<div class="empty">No approved expense records in this date range.</div>{% endif %}
     </section>
-    <section class="panel">
+    <section class="panel" id="truck-revenue-report">
       <h2 style="margin-top:0">Trip status mix</h2>
       <div class="chart-box"><canvas id="statusChart" aria-label="Trip status distribution chart"></canvas></div>
     </section>
-    <section class="panel" id="latest-trips">
+    <section class="panel" id="transaction-report">
       <h2 style="margin-top:0">Latest freight trips</h2>
       <div class="table-wrap">
         <table>
