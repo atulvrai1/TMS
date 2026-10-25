@@ -148,7 +148,7 @@
       <tr><td>#{{ row.trip_id }}</td><td>{{ row.route_from }} → {{ row.route_to }}</td><td>{{ row.end_date }}</td><td>{{ row.truck }}</td><td>₹{{ "%.2f"|format(row.revenue or 0) }}</td><td>₹{{ "%.2f"|format(row.costs or 0) }}</td><td>₹{{ "%.2f"|format((row.revenue or 0)-(row.costs or 0)) }}</td></tr>
     {% else %}<tr><td colspan="7" class="empty">No valid completed trips in this date range.</td></tr>{% endfor %}
     </tbody></table></div>
-    <p class="note">Trip net profit/loss equals freight revenue minus approved expenses recorded within the selected period. Truck maintenance is shown in truck and overall reports, not duplicated into trip costs.</p>
+    <p class="note">Trip net profit/loss equals freight revenue for trips completed in the selected date range minus all approved expenses linked to each listed trip, even if an expense was entered on a different date. Truck maintenance is shown in truck and overall reports, not duplicated into trip costs.</p>
   </section>
   {% elif pnl_tab == 'truck' %}
   <section class="panel">
