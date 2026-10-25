@@ -3335,6 +3335,135 @@ def transport_documents():
         csrf_token=session.get("csrf_token", ""), today=date.today().isoformat(), block_content="dashboard"
     )
 
+
+@app.route("/reports", methods=["GET"])
+@access_required
+def reports():
+    """Scoped operational and financial analytics with date filters."""
+    today = date.today()
+    default_start = date(today.year - 1, today.month, min(today.day, 28)).isoformat()
+    start_date = request.args.get("start_date", default_start).strip()
+    end_date = request.args.get("end_date", today.isoformat()).strip()
+    try:
+        start_obj = datetime.strptime(start_date, "%Y-%m-%d").date()
+        end_obj = datetime.strptime(end_date, "%Y-%m-%d").date()
+        if start_obj > end_obj:
+            raise ValueError("start date must not be after end date")
+    except ValueError:
+        flash("Choose a valid date range. The report has been reset to the default period.", "error")
+        start_date, end_date = default_start, today.isoformat()
+
+    conn = get_db()
+    trip_scope, trip_params = _record_owner_filter("t")
+    # _record_owner_filter applies driver assignment for non-admin accounts and
+    # workspace-wide visibility for administrators.
+    trip_where = f"{trip_scope} AND t.start_date BETWEEN ? AND ?"
+    trip_args = [*trip_params, start_date, end_date]
+    trip_summary = conn.execute(
+        "SELECT COUNT(*) AS trip_count, "
+        "COALESCE(SUM(CASE WHEN t.status = 'Completed' THEN 1 ELSE 0 END), 0) AS completed_count, "
+        "COALESCE(SUM(CASE WHEN t.status = 'Cancelled' THEN 1 ELSE 0 END), 0) AS cancelled_count, "
+        "COALESCE(SUM(CASE WHEN t.status IN ('Scheduled','In Progress') THEN 1 ELSE 0 END), 0) AS active_count, "
+        "COALESCE(SUM(t.freight_amount), 0) AS freight_total "
+        f"FROM trips t WHERE {trip_where}", trip_args
+    ).fetchone()
+
+    expense_scope, expense_params = _record_owner_filter("t")
+    expense_where = (
+        f"{expense_scope} AND e.date BETWEEN ? AND ? AND e.status = 'Approved' "
+        "AND t.start_date BETWEEN ? AND ?"
+    )
+    expense_args = [*expense_params, start_date, end_date, start_date, end_date]
+    expense_summary = conn.execute(
+        "SELECT COALESCE(SUM(e.amount), 0) AS approved_expenses, COUNT(*) AS expense_count "
+        "FROM expenses e JOIN trips t ON t.trip_id = e.trip_id WHERE " + expense_where,
+        expense_args
+    ).fetchone()
+
+    payment_scope, payment_params = _record_owner_filter("t")
+    payment_summary = conn.execute(
+        "SELECT COALESCE(SUM(p.amount), 0) AS receipts, COUNT(*) AS payment_count "
+        "FROM trip_payments p JOIN trips t ON t.trip_id = p.trip_id "
+        f"WHERE {payment_scope} AND p.payment_date BETWEEN ? AND ? "
+        "AND t.start_date BETWEEN ? AND ?",
+        [*payment_params, start_date, end_date, start_date, end_date]
+    ).fetchone()
+
+    monthly_trips = conn.execute(
+        "SELECT strftime('%Y-%m', t.start_date) AS month, COUNT(*) AS trips, "
+        "COALESCE(SUM(t.freight_amount), 0) AS freight "
+        f"FROM trips t WHERE {trip_where} GROUP BY month ORDER BY month",
+        trip_args
+    ).fetchall()
+    monthly_expenses = conn.execute(
+        "SELECT strftime('%Y-%m', e.date) AS month, COALESCE(SUM(e.amount), 0) AS amount "
+        "FROM expenses e JOIN trips t ON t.trip_id = e.trip_id "
+        f"WHERE {expense_where} GROUP BY month ORDER BY month",
+        expense_args
+    ).fetchall()
+    monthly_payments = conn.execute(
+        "SELECT strftime('%Y-%m', p.payment_date) AS month, COALESCE(SUM(p.amount), 0) AS amount "
+        "FROM trip_payments p JOIN trips t ON t.trip_id = p.trip_id "
+        f"WHERE {payment_scope} AND p.payment_date BETWEEN ? AND ? "
+        "AND t.start_date BETWEEN ? AND ? GROUP BY month ORDER BY month",
+        [*payment_params, start_date, end_date, start_date, end_date]
+    ).fetchall()
+    expense_categories = conn.execute(
+        "SELECT COALESCE(e.category, 'Other') AS category, COALESCE(SUM(e.amount), 0) AS amount "
+        "FROM expenses e JOIN trips t ON t.trip_id = e.trip_id "
+        f"WHERE {expense_where} GROUP BY COALESCE(e.category, 'Other') ORDER BY amount DESC",
+        expense_args
+    ).fetchall()
+    top_trips = conn.execute(
+        "SELECT t.trip_id, t.route_from, t.route_to, t.start_date, t.status, "
+        "COALESCE(t.freight_amount, 0) AS freight, "
+        "COALESCE((SELECT SUM(p.amount) FROM trip_payments p WHERE p.trip_id=t.trip_id "
+        "AND p.payment_date BETWEEN ? AND ?), 0) AS received, "
+        "COALESCE((SELECT SUM(e.amount) FROM expenses e WHERE e.trip_id=t.trip_id "
+        "AND e.status='Approved' AND e.date BETWEEN ? AND ?), 0) AS costs "
+        f"FROM trips t WHERE {trip_where} ORDER BY freight DESC, t.trip_id DESC LIMIT 10",
+        [start_date, end_date, start_date, end_date, *trip_args]
+    ).fetchall()
+    conn.close()
+
+    months = sorted(
+        {row["month"] for row in monthly_trips}
+        | {row["month"] for row in monthly_expenses}
+        | {row["month"] for row in monthly_payments}
+    )
+    month_labels = [datetime.strptime(m, "%Y-%m").strftime("%b %Y") for m in months]
+    trip_by_month = {row["month"]: row for row in monthly_trips}
+    expense_by_month = {row["month"]: float(row["amount"] or 0) for row in monthly_expenses}
+    payment_by_month = {row["month"]: float(row["amount"] or 0) for row in monthly_payments}
+    monthly_freight = [round(float(trip_by_month[m]["freight"] or 0), 2) if m in trip_by_month else 0 for m in months]
+    monthly_expense_values = [round(expense_by_month.get(m, 0), 2) for m in months]
+    monthly_payment_values = [round(payment_by_month.get(m, 0), 2) for m in months]
+    category_labels = [row["category"] for row in expense_categories]
+    category_values = [round(float(row["amount"] or 0), 2) for row in expense_categories]
+    status_labels = ["Completed", "Scheduled / In Progress", "Cancelled"]
+    status_values = [
+        int(trip_summary["completed_count"] or 0),
+        int(trip_summary["active_count"] or 0),
+        int(trip_summary["cancelled_count"] or 0),
+    ]
+    freight_total = float(trip_summary["freight_total"] or 0)
+    approved_expenses = float(expense_summary["approved_expenses"] or 0)
+    receipts = float(payment_summary["receipts"] or 0)
+    return render_template(
+        "reports.html",
+        start_date=start_date, end_date=end_date,
+        trip_summary=trip_summary, expense_summary=expense_summary,
+        payment_summary=payment_summary,
+        freight_total=freight_total, approved_expenses=approved_expenses,
+        receipts=receipts, estimated_trip_margin=freight_total-approved_expenses,
+        collection_gap=freight_total-receipts,
+        month_labels=month_labels, monthly_freight=monthly_freight,
+        monthly_expenses=monthly_expense_values, monthly_payments=monthly_payment_values,
+        category_labels=category_labels, category_values=category_values,
+        status_labels=status_labels, status_values=status_values,
+        top_trips=top_trips,
+    )
+
 if __name__ == "__main__":
     # Never enable the interactive debugger by default.
     app.run(debug=False, host=os.environ.get("FLASK_HOST", "127.0.0.1"), port=int(os.environ.get("PORT", "5001")))
