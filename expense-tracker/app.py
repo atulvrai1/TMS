@@ -3386,8 +3386,9 @@ def transport_documents():
 
 
 @app.route("/reports", methods=["GET"])
+@app.route("/reports/<report_name>", methods=["GET"])
 @access_required
-def reports():
+def reports(report_name=None):
     """Scoped operational and financial analytics with date filters."""
     today = date.today()
     default_start = date(today.year - 1, today.month, min(today.day, 28)).isoformat()
@@ -3597,8 +3598,7 @@ def reports():
     freight_total = float(trip_summary["freight_total"] or 0)
     approved_expenses = float(expense_summary["approved_expenses"] or 0)
     receipts = float(payment_summary["receipts"] or 0)
-    return render_template(
-        "reports.html",
+    report_context = dict(
         start_date=start_date, end_date=end_date,
         trip_summary=trip_summary, expense_summary=expense_summary,
         payment_summary=payment_summary,
@@ -3628,6 +3628,22 @@ def reports():
         transaction_report=transaction_report,
         block_content="dashboard",
     )
+    report_titles = {
+        "profit-loss": "Profit & Loss Report",
+        "truck-revenue": "Truck Revenue Report",
+        "party-revenue": "Party Revenue Report",
+        "supplier-balance": "Supplier Balance Report",
+        "party-balance": "Party Balance Report",
+        "transactions": "Transaction Report",
+    }
+    if report_name is not None:
+        if report_name not in report_titles:
+            abort(404)
+        return render_template(
+            "report_detail.html", **report_context,
+            report_name=report_name, report_title=report_titles[report_name]
+        )
+    return render_template("reports.html", **report_context)
 
 
 @app.route("/reports/export.csv", methods=["GET"])
