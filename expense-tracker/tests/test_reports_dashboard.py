@@ -69,6 +69,22 @@ conn.execute(
 )
 # These transactions fall inside the selected period although their trip began
 # before it. The overview must include them because transaction dates drive totals.
+# P&L must exclude missing/invalid completion dates and include a valid completion date.
+valid_pnl_trip_id = conn.execute(
+    "INSERT INTO trips (truck_id, driver_id, freight_amount, start_date, end_date, route_from, route_to, status, owner_user_id) "
+    "VALUES (?, ?, 40000, ?, ?, 'Patna', 'Ranchi', 'Completed', ?)",
+    (truck_id, driver_id, date.today().isoformat(), date.today().isoformat(), user_id),
+).lastrowid
+missing_end_trip_id = conn.execute(
+    "INSERT INTO trips (truck_id, driver_id, freight_amount, start_date, route_from, route_to, status, owner_user_id) "
+    "VALUES (?, ?, 125000, ?, 'Patna', 'Bhopal', 'Completed', ?)",
+    (truck_id, driver_id, date.today().isoformat(), user_id),
+).lastrowid
+invalid_dates_trip_id = conn.execute(
+    "INSERT INTO trips (truck_id, driver_id, freight_amount, start_date, end_date, route_from, route_to, status, owner_user_id) "
+    "VALUES (?, ?, 25000, ?, ?, 'Patna', 'Indore', 'Completed', ?)",
+    (truck_id, driver_id, date.today().isoformat(), (date.today() - timedelta(days=1)).isoformat(), user_id),
+).lastrowid
 conn.execute(
     "INSERT INTO expenses (trip_id, category, amount, date, description, created_by, status) "
     "VALUES (?, 'Toll', 1000, ?, 'Historical trip toll recorded today', ?, 'Approved')",
@@ -115,6 +131,16 @@ with app.test_client() as client:
     # Payments and expenses use their own dates, not the linked trip's start date.
     assert b"22000.00" in response.data
     assert b"8500.00" in response.data
+
+    # P&L includes only completed trips with a valid end date on/after start date.
+    pnl = client.get(
+        "/reports/profit-loss?start_date=" + (date.today() - timedelta(days=1)).isoformat() +
+        "&end_date=" + date.today().isoformat()
+    )
+    assert pnl.status_code == 200, pnl.status_code
+    assert b"Freight revenue - completed trips" in pnl.data
+    assert b"40000.00" in pnl.data
+    assert b"125000.00" not in pnl.data
 
     reconciliation = client.get(
         "/reports/reconciliation?start_date=" + (date.today() - timedelta(days=1)).isoformat() +
