@@ -337,7 +337,7 @@ def _detect_intent(question: str) -> str:
     text = " ".join((question or "").lower().replace("₹", " rupees ").split())
 
     # Reports and analytics should be routed before individual record categories.
-    if re.search(r"\b(report|reports|dashboard|revenue trend|monthly revenue|profit and loss|p&l|financial summary|business overview|compare .*month|chart|graph|analytics|performance report|truck performance|driver performance)\b", text):
+    if re.search(r"\b(report|reports|dashboard|revenue|collections? summary|freight earned|profit|loss|p&l|financial summary|business overview|compare .*month|chart|graph|analytics|performance|profitability|outstanding summary|truck performance|driver performance)\b", text):
         return "reports"
 
     # Admin and account-directory questions.
