@@ -988,6 +988,144 @@ def download_driver_document(document_id):
     return response
 
 
+@app.route("/parties", methods=["GET", "POST"])
+@access_required
+def parties():
+    """Party register with a small, auditable debit/credit ledger."""
+    session.setdefault("csrf_token", secrets.token_urlsafe(32))
+    conn = get_db()
+    if request.method == "POST":
+        if not _valid_csrf_token():
+            conn.close()
+            flash("Your session token is invalid. Reload the page and try again.", "error")
+            return redirect(url_for("parties"))
+        name = request.form.get("name", "").strip()
+        party_type = request.form.get("party_type", "Customer").strip()
+        phone = request.form.get("phone", "").strip()
+        email = request.form.get("email", "").strip().lower()
+        gstin = request.form.get("gstin", "").strip().upper()
+        address = request.form.get("address", "").strip()
+        notes = request.form.get("notes", "").strip()
+        if not name or len(name) > 160:
+            flash("Enter a party name (up to 160 characters).", "error")
+        elif party_type not in ("Customer", "Supplier", "Both"):
+            flash("Choose a valid party type.", "error")
+        elif email and not re.fullmatch(r"[^\s@]+@[^\s@]+\.[^\s@]+", email):
+            flash("Enter a valid email address.", "error")
+        elif gstin and not re.fullmatch(r"[0-9A-Z]{15}", gstin):
+            flash("GSTIN must contain 15 letters or digits.", "error")
+        else:
+            try:
+                conn.execute(
+                    "INSERT INTO parties (owner_user_id, name, party_type, phone, email, gstin, address, notes) "
+                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                    (session["user_id"], name, party_type, phone or None, email or None,
+                     gstin or None, address or None, notes or None)
+                )
+                conn.commit()
+                flash(f"Party '{name}' added.", "success")
+            except sqlite3.IntegrityError:
+                flash("A party with this name already exists in your account.", "error")
+        conn.close()
+        return redirect(url_for("parties"))
+
+    where, params = _record_owner_filter("parties")
+    rows = conn.execute(
+        "SELECT p.party_id, p.name, p.party_type, p.phone, p.email, p.gstin, p.created_at, "
+        "COALESCE(SUM(CASE WHEN e.entry_type = 'Debit' THEN e.amount ELSE -e.amount END), 0) AS balance, "
+        "COUNT(e.entry_id) AS entry_count "
+        "FROM parties p LEFT JOIN party_ledger_entries e ON e.party_id = p.party_id "
+        f"WHERE {where.replace('parties.', 'p.')} "
+        "GROUP BY p.party_id ORDER BY p.name COLLATE NOCASE",
+        params
+    ).fetchall()
+    totals = conn.execute(
+        "SELECT COUNT(*) AS party_count, "
+        "COALESCE(SUM(CASE WHEN e.entry_type = 'Debit' THEN e.amount ELSE -e.amount END), 0) AS net_balance "
+        "FROM parties p LEFT JOIN party_ledger_entries e ON e.party_id = p.party_id "
+        f"WHERE {where.replace('parties.', 'p.')}",
+        params
+    ).fetchone()
+    conn.close()
+    return render_template(
+        "parties.html", parties=rows, totals=totals,
+        csrf_token=session["csrf_token"], today=date.today().isoformat(),
+        block_content="dashboard"
+    )
+
+
+@app.route("/parties/<int:party_id>", methods=["GET", "POST"])
+@access_required
+def party_ledger(party_id):
+    """Show one party's ledger and record debit/credit entries."""
+    session.setdefault("csrf_token", secrets.token_urlsafe(32))
+    conn = get_db()
+    party_scope, scope_params = _record_owner_filter("parties")
+    party = conn.execute(
+        "SELECT p.* FROM parties p WHERE p.party_id = ? AND "
+        + party_scope.replace("parties.", "p."),
+        [party_id] + scope_params
+    ).fetchone()
+    if party is None:
+        conn.close()
+        abort(404)
+
+    if request.method == "POST":
+        if not _valid_csrf_token():
+            conn.close()
+            flash("Your session token is invalid. Reload the page and try again.", "error")
+            return redirect(url_for("party_ledger", party_id=party_id))
+        entry_date = request.form.get("entry_date", "").strip()
+        entry_type = request.form.get("entry_type", "").strip()
+        amount_text = request.form.get("amount", "").strip()
+        reference = request.form.get("reference", "").strip()
+        description = request.form.get("description", "").strip()
+        try:
+            entry_date = date.fromisoformat(entry_date).isoformat()
+            amount = Decimal(amount_text).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+            if not amount.is_finite() or amount <= 0 or amount > Decimal("999999999999.99"):
+                raise ValueError
+            if entry_type not in ("Debit", "Credit"):
+                raise ValueError
+            if len(reference) > 120 or len(description) > 500:
+                raise ValueError
+        except (ValueError, InvalidOperation):
+            conn.close()
+            flash("Enter a valid date, Debit/Credit type, positive amount, and short reference/description.", "error")
+            return redirect(url_for("party_ledger", party_id=party_id))
+        conn.execute(
+            "INSERT INTO party_ledger_entries "
+            "(party_id, entry_date, entry_type, amount, reference, description, created_by) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?)",
+            (party_id, entry_date, entry_type, float(amount), reference or None,
+             description or None, session["user_id"])
+        )
+        conn.commit()
+        log_activity(session["user_id"], "Party Ledger Entry", 
+                     f"{entry_type} ₹{amount:.2f} for party #{party_id}", session["user_id"])
+        conn.close()
+        flash("Ledger entry recorded.", "success")
+        return redirect(url_for("party_ledger", party_id=party_id))
+
+    entries = conn.execute(
+        "SELECT entry_id, entry_date, entry_type, amount, reference, description, trip_id "
+        "FROM party_ledger_entries WHERE party_id = ? "
+        "ORDER BY entry_date DESC, entry_id DESC",
+        (party_id,)
+    ).fetchall()
+    balance = sum((Decimal(str(row["amount"])) * (1 if row["entry_type"] == "Debit" else -1)
+                   for row in entries), Decimal("0.00"))
+    debit_total = sum((Decimal(str(row["amount"])) for row in entries if row["entry_type"] == "Debit"), Decimal("0.00"))
+    credit_total = sum((Decimal(str(row["amount"])) for row in entries if row["entry_type"] == "Credit"), Decimal("0.00"))
+    conn.close()
+    return render_template(
+        "party_ledger.html", party=party, entries=entries, balance=balance,
+        debit_total=debit_total, credit_total=credit_total,
+        csrf_token=session["csrf_token"], today=date.today().isoformat(),
+        block_content="dashboard"
+    )
+
+
 @app.route("/trips")
 @access_required
 def trips():
