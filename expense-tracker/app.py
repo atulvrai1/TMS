@@ -3482,6 +3482,7 @@ def reports():
         category_labels=category_labels, category_values=category_values,
         status_labels=status_labels, status_values=status_values,
         top_trips=top_trips,
+        block_content="dashboard",
     )
 
 
