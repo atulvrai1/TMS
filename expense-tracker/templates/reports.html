@@ -130,7 +130,13 @@ document.addEventListener('DOMContentLoaded', function () {
     new Chart(document.getElementById('expenseChart'), {
       type:'bar',
       data:{labels:categoryLabels,datasets:[{label:'Approved expenses',data:{{ category_values|tojson }}}]},
-      options:{...commonOptions,indexAxis:categoryLabels.length>5?'y':'x',scales:{y:{beginAtZero:true,ticks:{callback:function(v){return currency.format(v)}}}}}
+      options:{
+        ...commonOptions,
+        indexAxis:categoryLabels.length>5?'y':'x',
+        scales:categoryLabels.length>5
+          ? {x:{beginAtZero:true,ticks:{callback:function(v){return currency.format(v)}}}}
+          : {y:{beginAtZero:true,ticks:{callback:function(v){return currency.format(v)}}}}
+      }
     });
   }
   new Chart(document.getElementById('statusChart'), {
