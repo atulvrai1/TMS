@@ -3503,7 +3503,7 @@ def reports(report_name=None):
     pnl_revenue_row = conn.execute(
         "SELECT COALESCE(SUM(t.freight_amount), 0) AS revenue, COUNT(*) AS trip_count "
         f"FROM trips t WHERE {trip_scope} AND t.status = 'Completed' "
-        "AND t.end_date IS NOT NULL AND t.end_date >= t.start_date "
+        "AND t.end_date IS NOT NULL "
         "AND t.end_date BETWEEN ? AND ?",
         [*trip_params, start_date, end_date]
     ).fetchone()
@@ -3511,8 +3511,7 @@ def reports(report_name=None):
     # All-time P&L totals power the Overall tab; date-filtered totals remain separate.
     pnl_all_revenue_row = conn.execute(
         "SELECT COALESCE(SUM(t.freight_amount), 0) AS revenue, COUNT(*) AS trip_count "
-        f"FROM trips t WHERE {trip_scope} AND t.status='Completed' "
-        "AND t.end_date IS NOT NULL AND t.end_date >= t.start_date",
+        f"FROM trips t WHERE {trip_scope} AND t.status='Completed'",
         trip_params
     ).fetchone()
     pnl_all_expenses_row = conn.execute(
@@ -3537,7 +3536,7 @@ def reports(report_name=None):
         "AND e.status='Approved'),0) AS costs "
         "FROM trips t LEFT JOIN trucks tr ON tr.truck_id=t.truck_id "
         f"WHERE {trip_scope} AND t.status='Completed' AND t.end_date IS NOT NULL "
-        "AND t.end_date >= t.start_date AND t.end_date BETWEEN ? AND ? "
+        "AND t.end_date BETWEEN ? AND ? "
         "ORDER BY t.end_date DESC, t.trip_id DESC",
         [*trip_params, start_date, end_date]
     ).fetchall()
@@ -3547,9 +3546,9 @@ def reports(report_name=None):
     truck_pnl_report = conn.execute(
         "SELECT tr.truck_id, tr.registration_number, "
         "COUNT(DISTINCT CASE WHEN t.status='Completed' AND t.end_date IS NOT NULL "
-        "AND t.end_date >= t.start_date AND t.end_date BETWEEN ? AND ? THEN t.trip_id END) AS trip_count, "
+        "AND t.end_date BETWEEN ? AND ? THEN t.trip_id END) AS trip_count, "
         "COALESCE(SUM(CASE WHEN t.status='Completed' AND t.end_date IS NOT NULL "
-        "AND t.end_date >= t.start_date AND t.end_date BETWEEN ? AND ? THEN t.freight_amount ELSE 0 END),0) AS revenue, "
+        "AND t.end_date BETWEEN ? AND ? THEN t.freight_amount ELSE 0 END),0) AS revenue, "
         "COALESCE((SELECT SUM(e.amount) FROM expenses e JOIN trips et ON et.trip_id=e.trip_id "
         "WHERE et.truck_id=tr.truck_id AND et.status='Completed' AND et.end_date IS NOT NULL "
         "AND et.end_date >= et.start_date AND et.end_date BETWEEN ? AND ? AND e.status='Approved'),0) AS costs, "
@@ -3820,7 +3819,7 @@ def export_reports_csv():
                 revenue = conn.execute(
                     "SELECT COALESCE(SUM(t.freight_amount),0) AS amount "
                     f"FROM trips t WHERE {trip_scope} AND t.status='Completed' "
-                    "AND t.end_date IS NOT NULL AND t.end_date >= t.start_date",
+                    "AND t.status='Completed'",
                     trip_params
                 ).fetchone()["amount"]
                 expenses = conn.execute(
@@ -3839,7 +3838,7 @@ def export_reports_csv():
                 revenue = conn.execute(
                     "SELECT COALESCE(SUM(t.freight_amount),0) AS amount "
                     f"FROM trips t WHERE {trip_scope} AND t.status='Completed' "
-                    "AND t.end_date IS NOT NULL AND t.end_date >= t.start_date "
+                    "AND t.end_date IS NOT NULL "
                     "AND t.end_date BETWEEN ? AND ?",
                     [*trip_params, start_date, end_date]
                 ).fetchone()["amount"]
