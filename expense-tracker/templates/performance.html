@@ -78,9 +78,9 @@
 
   <!-- Three dashboard-style panels from the selected design: operations, finances, and fleet shortcuts. -->
   <section class="visuals" aria-label="Performance dashboard charts">
-    <article class="visual-card"><h2>Trip activity</h2><p>Trip status breakdown for this period.</p><div class="chart"><canvas id="tripStatusChart" aria-label="Trip status chart"></canvas></div></article>
-    <article class="visual-card"><h2>Monthly business trend</h2><p>Freight, collections and expenses over time.</p><div class="chart"><canvas id="moneyTrendChart" aria-label="Monthly business trend chart"></canvas></div></article>
-    <article class="visual-card"><h2>Operating costs</h2><p>Approved expenses by category.</p><div class="chart"><canvas id="expenseCategoryChart" aria-label="Expense category chart"></canvas></div></article>
+    <article class="visual-card"><h2>Trip activity</h2><p>Choose a segment to inspect the trip-status mix.</p><div class="chart"><canvas id="tripStatusChart" aria-label="Trip status chart"></canvas></div><div class="chart-detail" id="tripStatusDetail" aria-live="polite">Select a chart segment to see its trip count and share.</div></article>
+    <article class="visual-card"><h2>Monthly business trend</h2><p>Compare freight, collections and approved expenses over time.</p><div class="chart-toolbar"><label for="trendWindow">Visible months <select id="trendWindow"><option value="3">Last 3 months</option><option value="6" selected>Last 6 months</option><option value="12">Last 12 months</option><option value="all">Entire selected period</option></select></label><button type="button" id="exportTrend">Export trend CSV</button></div><div class="chart"><canvas id="moneyTrendChart" aria-label="Monthly business trend chart"></canvas></div><div class="chart-detail" id="trendDetail" aria-live="polite">Use the legend to show or hide a series. Select a point for its monthly values.</div></article>
+    <article class="visual-card"><h2>Operating costs</h2><p>Select a category to inspect its approved spend.</p><div class="chart"><canvas id="expenseCategoryChart" aria-label="Expense category bar chart"></canvas></div><div class="chart-detail" id="expenseCategoryDetail" aria-live="polite">Select a bar to see the amount for that category.</div></article>
     <article class="visual-card"><h2>Fleet performance snapshot</h2><p>Quick access to the records that influence operational performance.</p>
       <div class="quick-links">
         <a href="{{ url_for('trips') }}"><span class="icon">🚚</span><span><strong>Trips & dispatch</strong><small>Review trip activity</small></span></a>
@@ -111,28 +111,49 @@
   const statusDetail = document.getElementById('tripStatusDetail');
   const trendDetail = document.getElementById('trendDetail');
   const categoryDetail = document.getElementById('expenseCategoryDetail');
-  const statusChart = new Chart(document.getElementById('tripStatusChart'),{
+  new Chart(document.getElementById('tripStatusChart'), {
     type:'doughnut',
     data:{labels:statusLabels,datasets:[{data:statusValues,backgroundColor:palette,borderWidth:3,borderColor:'#fff',hoverOffset:7}]},
-    options:{responsive:true,maintainAspectRatio:false,cutout:'66%',plugins:{legend:{position:'bottom',labels:{usePointStyle:true,padding:16}},tooltip:{callbacks:{label:c=>c.label+': '+c.raw+' trips ('+(statusTotal?((c.raw/statusTotal)*100).toFixed(1):'0.0')+'%)')}} ,
-    onClick:(event,elements,chart)=>{if(!elements.length)return;const i=elements[0].index;const count=Number(statusValues[i]||0);statusDetail.textContent=statusLabels[i]+': '+count+' trip(s) · '+(statusTotal?(count/statusTotal*100).toFixed(1):'0.0')+'% of trips in this period.'}
+    options:{
+      responsive:true,maintainAspectRatio:false,cutout:'66%',
+      plugins:{
+        legend:{position:'bottom',labels:{usePointStyle:true,padding:16}},
+        tooltip:{callbacks:{label:c=>c.label+': '+c.raw+' trips ('+(statusTotal?(c.raw/statusTotal*100).toFixed(1):'0.0')+'%)'}}
+      },
+      onClick:(event,elements)=>{
+        if(!elements.length)return;
+        const i=elements[0].index, count=Number(statusValues[i]||0);
+        statusDetail.textContent=statusLabels[i]+': '+count+' trip(s) · '+(statusTotal?(count/statusTotal*100).toFixed(1):'0.0')+'% of trips in this period.';
+      }
+    }
   });
-  const trendChart = new Chart(document.getElementById('moneyTrendChart'),{
+  const trendChart = new Chart(document.getElementById('moneyTrendChart'), {
     type:'line',
     data:{labels:labels,datasets:[
       {label:'Freight',data:freight,borderColor:'#2457c5',backgroundColor:'rgba(36,87,197,.10)',fill:true,tension:.3,pointRadius:3,pointHoverRadius:6},
       {label:'Collections',data:payments,borderColor:'#0d9488',backgroundColor:'rgba(13,148,136,.08)',fill:false,tension:.3,pointRadius:3,pointHoverRadius:6},
       {label:'Approved expenses',data:expenses,borderColor:'#d97706',backgroundColor:'rgba(217,119,6,.08)',fill:false,tension:.3,pointRadius:3,pointHoverRadius:6}
     ]},
-    options:{responsive:true,maintainAspectRatio:false,interaction:{mode:'index',intersect:false},scales:{y:{beginAtZero:true,ticks:{callback:money}}},plugins:{legend:{position:'bottom',labels:{usePointStyle:true,padding:15}},tooltip:{callbacks:{label:c=>c.dataset.label+': '+money(c.raw)}}},
-    onClick:(event,elements,chart)=>{if(!elements.length)return;const i=elements[0].index;trendDetail.textContent=labels[i]+': Freight '+money(freight[i])+' · Collections '+money(payments[i])+' · Approved expenses '+money(expenses[i])+'.'}
+    options:{
+      responsive:true,maintainAspectRatio:false,interaction:{mode:'index',intersect:false},
+      scales:{y:{beginAtZero:true,ticks:{callback:money}}},
+      plugins:{
+        legend:{position:'bottom',labels:{usePointStyle:true,padding:15}},
+        tooltip:{callbacks:{label:c=>c.dataset.label+': '+money(c.raw)}}
+      },
+      onClick:(event,elements)=>{
+        if(!elements.length)return;
+        const i=elements[0].index;
+        trendDetail.textContent=labels[i]+': Freight '+money(freight[i])+' · Collections '+money(payments[i])+' · Approved expenses '+money(expenses[i])+'.';
+      }
+    }
   });
   function applyTrendWindow(){
     const value=document.getElementById('trendWindow').value;
     const count=value==='all'?labels.length:Math.min(labels.length,Math.max(1,Number(value)||6));
-    const start=Math.max(0,labels.length-count);
-    trendChart.data.labels=labels.slice(start);
-    trendChart.data.datasets.forEach((dataset,index)=>dataset.data=[freight,payments,expenses][index].slice(start));
+    const from=Math.max(0,labels.length-count);
+    trendChart.data.labels=labels.slice(from);
+    trendChart.data.datasets.forEach((dataset,index)=>dataset.data=[freight,payments,expenses][index].slice(from));
     trendChart.update();
     trendDetail.textContent='Showing '+count+' of '+labels.length+' available month(s). Select a point for exact values.';
   }
@@ -142,14 +163,22 @@
     labels.forEach((label,i)=>rows.push([label,freight[i]??0,payments[i]??0,expenses[i]??0]));
     const csv=rows.map(row=>row.map(value=>'"'+String(value).replace(/"/g,'""')+'"').join(',')).join('\r\n');
     const blob=new Blob(['\ufeff'+csv],{type:'text/csv;charset=utf-8;'});
-    const url=URL.createObjectURL(blob);const link=document.createElement('a');
+    const url=URL.createObjectURL(blob), link=document.createElement('a');
     link.href=url;link.download='fleetflow-performance-trend.csv';document.body.appendChild(link);link.click();link.remove();URL.revokeObjectURL(url);
   });
-  const expenseChart = new Chart(document.getElementById('expenseCategoryChart'),{
+  new Chart(document.getElementById('expenseCategoryChart'), {
     type:'bar',
     data:{labels:categoryLabels,datasets:[{label:'Approved expenses',data:categoryValues,backgroundColor:categoryLabels.map((_,i)=>palette[i%palette.length]),borderRadius:6,borderSkipped:false}]},
-    options:{responsive:true,maintainAspectRatio:false,indexAxis:'y',scales:{x:{beginAtZero:true,ticks:{callback:money}}},plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>money(c.raw)}}},
-    onClick:(event,elements)=>{if(!elements.length)return;const i=elements[0].index;categoryDetail.textContent=categoryLabels[i]+': '+money(categoryValues[i])+' in approved expenses.'}
+    options:{
+      responsive:true,maintainAspectRatio:false,indexAxis:'y',
+      scales:{x:{beginAtZero:true,ticks:{callback:money}}},
+      plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>money(c.raw)}}},
+      onClick:(event,elements)=>{
+        if(!elements.length)return;
+        const i=elements[0].index;
+        categoryDetail.textContent=categoryLabels[i]+': '+money(categoryValues[i])+' in approved expenses.';
+      }
+    }
   });
   applyTrendWindow();
 })();
