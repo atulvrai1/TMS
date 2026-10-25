@@ -3397,29 +3397,33 @@ def transport_documents():
 def reports(report_name=None):
     """Scoped operational and financial analytics with date filters."""
     today = date.today()
-    period = request.args.get("period", "monthly").strip().lower()
-    if period not in {"monthly", "quarterly", "half-yearly", "yearly", "overall", "custom"}:
-        period = "monthly"
-    if period == "monthly":
-        period_start = today.replace(day=1)
-    elif period == "quarterly":
-        quarter_month = ((today.month - 1) // 3) * 3 + 1
-        period_start = date(today.year, quarter_month, 1)
-    elif period == "half-yearly":
-        period_start = date(today.year, 1 if today.month <= 6 else 7, 1)
-    elif period == "yearly":
-        period_start = date(today.year, 1, 1)
-    elif period == "overall":
-        period_start = date(2000, 1, 1)
+    if report_name == "performance":
+        period = request.args.get("period", "monthly").strip().lower()
+        if period not in {"monthly", "quarterly", "half-yearly", "yearly", "overall", "custom"}:
+            period = "monthly"
+        if period == "monthly":
+            period_start = today.replace(day=1)
+        elif period == "quarterly":
+            quarter_month = ((today.month - 1) // 3) * 3 + 1
+            period_start = date(today.year, quarter_month, 1)
+        elif period == "half-yearly":
+            period_start = date(today.year, 1 if today.month <= 6 else 7, 1)
+        elif period == "yearly":
+            period_start = date(today.year, 1, 1)
+        elif period == "overall":
+            period_start = date(1900, 1, 1)
+        else:
+            period_start = date(today.year - 1, today.month, min(today.day, 28))
+        default_start = period_start.isoformat()
+        start_date = request.args.get("start_date", default_start).strip()
+        end_date = request.args.get("end_date", today.isoformat()).strip()
+        if period != "custom" and request.args.get("start_date") is None:
+            start_date = default_start
     else:
-        period_start = date(today.year - 1, today.month, min(today.day, 28))
-    default_start = period_start.isoformat()
-    start_date = request.args.get("start_date", default_start).strip()
-    end_date = request.args.get("end_date", today.isoformat()).strip()
-    if period != "custom" and request.args.get("start_date") is None:
-        start_date = default_start
-    if period == "overall":
-        start_date = "1900-01-01"
+        period = "custom"
+        default_start = date(today.year - 1, today.month, min(today.day, 28)).isoformat()
+        start_date = request.args.get("start_date", default_start).strip()
+        end_date = request.args.get("end_date", today.isoformat()).strip()
     try:
         start_obj = datetime.strptime(start_date, "%Y-%m-%d").date()
         end_obj = datetime.strptime(end_date, "%Y-%m-%d").date()
