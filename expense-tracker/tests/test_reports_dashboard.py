@@ -88,6 +88,10 @@ with app.test_client() as client:
     assert row_newest < row_original < row_older
     assert b"Booked freight" in response.data
     assert b"Approved costs by category" in response.data
+    assert b"Related records &amp; workflows" in response.data or b"Related records & workflows" in response.data
+    assert b"Trips &amp; dispatch" in response.data or b"Trips & dispatch" in response.data
+    assert b"Parties &amp; ledger" in response.data or b"Parties & ledger" in response.data
+    assert b"Ask FleetFlow Assistant" in response.data
     assert b"50000.00" in response.data
     assert b"20000.00" in response.data
     assert b"7500.00" in response.data
