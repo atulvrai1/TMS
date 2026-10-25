@@ -3397,9 +3397,29 @@ def transport_documents():
 def reports(report_name=None):
     """Scoped operational and financial analytics with date filters."""
     today = date.today()
-    default_start = date(today.year - 1, today.month, min(today.day, 28)).isoformat()
+    period = request.args.get("period", "monthly").strip().lower()
+    if period not in {"monthly", "quarterly", "half-yearly", "yearly", "overall", "custom"}:
+        period = "monthly"
+    if period == "monthly":
+        period_start = today.replace(day=1)
+    elif period == "quarterly":
+        quarter_month = ((today.month - 1) // 3) * 3 + 1
+        period_start = date(today.year, quarter_month, 1)
+    elif period == "half-yearly":
+        period_start = date(today.year, 1 if today.month <= 6 else 7, 1)
+    elif period == "yearly":
+        period_start = date(today.year, 1, 1)
+    elif period == "overall":
+        period_start = date(2000, 1, 1)
+    else:
+        period_start = date(today.year - 1, today.month, min(today.day, 28))
+    default_start = period_start.isoformat()
     start_date = request.args.get("start_date", default_start).strip()
     end_date = request.args.get("end_date", today.isoformat()).strip()
+    if period != "custom" and request.args.get("start_date") is None:
+        start_date = default_start
+    if period == "overall":
+        start_date = "1900-01-01"
     try:
         start_obj = datetime.strptime(start_date, "%Y-%m-%d").date()
         end_obj = datetime.strptime(end_date, "%Y-%m-%d").date()
@@ -3735,8 +3755,10 @@ def reports(report_name=None):
         transaction_report=transaction_report,
         reconciliation_report=reconciliation_report,
         block_content="dashboard",
+        selected_period=period,
     )
     report_titles = {
+        "performance": "Performance Dashboard",
         "reconciliation": "Trip Financial Reconciliation",
         "profit-loss": "Profit / Loss",
         "truck-revenue": "Truck Revenue Report",
@@ -3748,6 +3770,8 @@ def reports(report_name=None):
     if report_name is not None:
         if report_name not in report_titles:
             abort(404)
+        if report_name == "performance":
+            return render_template("performance.html", **report_context)
         return render_template(
             "report_detail.html", **report_context,
             report_name=report_name, report_title=report_titles[report_name]
