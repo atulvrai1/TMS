@@ -3558,7 +3558,7 @@ def reports(report_name=None):
         "FROM trucks tr LEFT JOIN trips t ON t.truck_id=tr.truck_id "
         f"WHERE {truck_scope} "
         "GROUP BY tr.truck_id, tr.registration_number ORDER BY revenue DESC, tr.registration_number",
-        [start_date, end_date, start_date, end_date, start_date, end_date, *truck_params]
+        [start_date, end_date, start_date, end_date, start_date, end_date, start_date, end_date, *truck_params]
     ).fetchall()
     pnl_expenses_row = conn.execute(
         "SELECT COALESCE(SUM(e.amount), 0) AS amount, COUNT(*) AS count "
