@@ -50,7 +50,7 @@
     <form method="get" action="{{ url_for('reports', report_name=report_name) }}" class="filters">
       <div><label for="start_date">From</label><input type="date" id="start_date" name="start_date" value="{{ start_date }}" required></div>
       <div><label for="end_date">To</label><input type="date" id="end_date" name="end_date" value="{{ end_date }}" required></div>
-      <button type="submit">Apply date range</button>
+      <button type="submit">Show Profit / Loss for Date Range</button>
       <a class="button secondary" href="{{ url_for('export_reports_csv', report_name=report_name, start_date=start_date, end_date=end_date) }}">Export CSV</a>
     </form>
   </section>
@@ -83,7 +83,7 @@
 
   {% elif report_name == 'profit-loss' %}
   <section class="panel">
-    <p class="muted">Profit or loss for the selected period: completed-trip charges minus approved trip expenses and recorded truck maintenance.</p>
+    <p class="muted">Overall profit or loss for the selected date range: valid completed-trip charges minus approved trip expenses and recorded truck maintenance.</p>
     <div class="pnl-statement">
       <div class="pnl-statement-head"><div><h2>Profit or Loss Summary</h2><div class="pnl-period">For the period {{ start_date }} to {{ end_date }}</div></div><div class="pnl-period">{{ pnl_trip_count }} completed trips · {{ pnl_expense_count }} approved expense records · {{ pnl_maintenance_count }} maintenance records</div></div>
       <div class="table-wrap"><table class="pnl-table"><thead><tr><th>Account</th><th class="amount">Amount (₹)</th></tr></thead><tbody>
