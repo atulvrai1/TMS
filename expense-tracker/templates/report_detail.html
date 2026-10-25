@@ -1,0 +1,110 @@
+{% extends "base.html" %}
+{% block title %}{{ report_title }} — FleetFlow{% endblock %}
+{% block breadcrumb %}Reports / {{ report_title }}{% endblock %}
+{% block content_dashboard %}
+<style>
+.report-detail{max-width:1450px;margin:0 auto;color:var(--ink,#172033)}
+.report-detail .panel{background:var(--surface,#fff);border:1px solid var(--border,#e5e9f0);border-radius:14px;padding:1.1rem;margin:0 0 1rem;box-shadow:0 4px 18px rgba(20,35,60,.035);min-width:0}
+.report-detail .head{display:flex;justify-content:space-between;align-items:flex-start;gap:1rem;flex-wrap:wrap;margin-bottom:1rem}
+.report-detail h1{font-size:1.8rem;margin:0 0 .35rem}
+.report-detail .muted,.report-detail .note{color:var(--ink-muted,#6b7280)}
+.report-detail .note{font-size:.84rem;line-height:1.5;margin:.7rem 0 0}
+.report-detail .filters{display:flex;align-items:end;gap:.8rem;flex-wrap:wrap}
+.report-detail label{display:block;font-size:.8rem;font-weight:600;margin-bottom:.3rem}
+.report-detail input{border:1px solid var(--border,#dbe1ea);border-radius:8px;padding:.6rem;background:var(--surface,#fff);color:inherit}
+.report-detail button,.report-detail .button{border:0;border-radius:8px;background:var(--industry-blue,#2457c5);color:white;padding:.68rem .95rem;font-weight:600;cursor:pointer;text-decoration:none;display:inline-block}
+.report-detail .button.secondary{background:transparent;color:inherit;border:1px solid var(--border,#dbe1ea)}
+.report-detail .kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:.8rem;margin-bottom:1rem}
+.report-detail .kpi{background:var(--surface,#fff);border:1px solid var(--border,#e5e9f0);border-radius:12px;padding:1rem;min-width:0}
+.report-detail .kpi-label{font-size:.78rem;color:var(--ink-muted,#6b7280);margin-bottom:.45rem}
+.report-detail .kpi-value{font-size:clamp(1.05rem,1.8vw,1.55rem);font-weight:750;overflow-wrap:anywhere}
+.report-detail .table-wrap{overflow:auto}
+.report-detail table{width:100%;border-collapse:collapse;min-width:680px}
+.report-detail th,.report-detail td{padding:.7rem;text-align:left;border-bottom:1px solid var(--border,#e5e9f0);font-size:.88rem}
+.report-detail th{font-size:.75rem;text-transform:uppercase;letter-spacing:.04em;color:var(--ink-muted,#6b7280)}
+.report-detail .empty{padding:1.2rem;text-align:center;color:var(--ink-muted,#6b7280)}
+@media(max-width:760px){.report-detail .kpis{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:480px){.report-detail .kpis{grid-template-columns:1fr}}
+</style>
+<div class="report-detail">
+  <header class="head">
+    <div>
+      <h1>{{ report_title }}</h1>
+      <div class="muted">Fleet &amp; Business Intelligence · {{ start_date }} to {{ end_date }}</div>
+    </div>
+    <a class="button secondary" href="{{ url_for('reports', start_date=start_date, end_date=end_date) }}">← Back to Fleet &amp; Business Intelligence</a>
+  </header>
+  <section class="panel">
+    <form method="get" action="{{ url_for('reports', report_name=report_name) }}" class="filters">
+      <div><label for="start_date">From</label><input type="date" id="start_date" name="start_date" value="{{ start_date }}" required></div>
+      <div><label for="end_date">To</label><input type="date" id="end_date" name="end_date" value="{{ end_date }}" required></div>
+      <button type="submit">Apply date range</button>
+      <a class="button secondary" href="{{ url_for('export_reports_csv', start_date=start_date, end_date=end_date) }}">Export CSV</a>
+    </form>
+  </section>
+
+  {% if report_name == 'profit-loss' %}
+  <section class="panel">
+    <p class="muted">Operating profit is calculated from completed-trip freight revenue less approved trip expenses and recorded maintenance in the selected period.</p>
+    <div class="kpis">
+      <div class="kpi"><div class="kpi-label">Freight revenue (completed trips)</div><div class="kpi-value">₹{{ "%.2f"|format(pnl_revenue) }}</div><div class="note">{{ pnl_trip_count }} completed trips</div></div>
+      <div class="kpi"><div class="kpi-label">Approved trip expenses</div><div class="kpi-value">₹{{ "%.2f"|format(pnl_expenses) }}</div><div class="note">{{ pnl_expense_count }} records</div></div>
+      <div class="kpi"><div class="kpi-label">Maintenance costs</div><div class="kpi-value">₹{{ "%.2f"|format(pnl_maintenance) }}</div><div class="note">{{ pnl_maintenance_count }} service records</div></div>
+      <div class="kpi"><div class="kpi-label">Net operating result</div><div class="kpi-value">₹{{ "%.2f"|format(pnl_operating_profit) }}</div><div class="note">Revenue less listed operating costs</div></div>
+    </div>
+    <div class="table-wrap"><table><thead><tr><th>Profit &amp; Loss line item</th><th>Amount (₹)</th></tr></thead><tbody>
+      <tr><td>Operating revenue — completed-trip freight</td><td>₹{{ "%.2f"|format(pnl_revenue) }}</td></tr>
+      <tr><td>Less: approved trip expenses</td><td>− ₹{{ "%.2f"|format(pnl_expenses) }}</td></tr>
+      <tr><td>Less: recorded maintenance costs</td><td>− ₹{{ "%.2f"|format(pnl_maintenance) }}</td></tr>
+      <tr><th>Net operating profit / (loss)</th><th>₹{{ "%.2f"|format(pnl_operating_profit) }}</th></tr>
+    </tbody></table></div>
+    <p class="note">This is an operational P&amp;L from currently recorded data, not a statutory or fully reconciled accounting statement. It excludes overheads not recorded in these categories, depreciation, tax, interest and supplier bills not recorded as approved trip expenses or maintenance. Collections are cash receipts and are not counted as revenue again.</p>
+  </section>
+
+  {% elif report_name == 'truck-revenue' %}
+  <section class="panel"><h2>Revenue and operating cost by truck</h2>
+    <div class="table-wrap"><table><thead><tr><th>Truck</th><th>Trips in period</th><th>Completed freight revenue</th><th>Collections</th><th>Approved trip costs</th><th>Revenue less trip costs</th></tr></thead><tbody>
+    {% for row in truck_report %}<tr><td>{{ row.registration_number }}</td><td>{{ row.trip_count }}</td><td>₹{{ "%.2f"|format(row.revenue or 0) }}</td><td>₹{{ "%.2f"|format(row.collections or 0) }}</td><td>₹{{ "%.2f"|format(row.costs or 0) }}</td><td>₹{{ "%.2f"|format((row.revenue or 0)-(row.costs or 0)) }}</td></tr>
+    {% else %}<tr><td colspan="6" class="empty">No truck activity in this date range.</td></tr>{% endfor %}
+    </tbody></table></div>
+    <p class="note">Maintenance is not allocated to individual trucks in this report; it is included in the overall P&amp;L where recorded.</p>
+  </section>
+
+  {% elif report_name == 'party-revenue' %}
+  <section class="panel"><h2>Freight and collections by party</h2>
+    <div class="table-wrap"><table><thead><tr><th>Customer / Party</th><th>Completed trips</th><th>Freight revenue</th><th>Collections</th><th>Period freight less collections*</th></tr></thead><tbody>
+    {% for row in party_revenue_report %}<tr><td>{{ row.party_name or "Party not assigned" }}</td><td>{{ row.trip_count }}</td><td>₹{{ "%.2f"|format(row.freight or 0) }}</td><td>₹{{ "%.2f"|format(row.collections or 0) }}</td><td>₹{{ "%.2f"|format((row.freight or 0)-(row.collections or 0)) }}</td></tr>
+    {% else %}<tr><td colspan="5" class="empty">No party revenue in this date range.</td></tr>{% endfor %}
+    </tbody></table></div>
+    <p class="note">*Period freight less collections is an indicator, not a full outstanding balance. For the account balance, use Party Balance Report.</p>
+  </section>
+
+  {% elif report_name == 'supplier-balance' %}
+  <section class="panel"><h2>Supplier ledger balances</h2>
+    <div class="table-wrap"><table><thead><tr><th>Supplier</th><th>Opening balance</th><th>Period debits</th><th>Period credits</th><th>Closing balance</th></tr></thead><tbody>
+    {% for row in supplier_balance_report %}<tr><td>{{ row.name }}</td><td>₹{{ "%.2f"|format(row.opening_balance or 0) }}</td><td>₹{{ "%.2f"|format(row.period_debits or 0) }}</td><td>₹{{ "%.2f"|format(row.period_credits or 0) }}</td><td>₹{{ "%.2f"|format(row.closing_balance or 0) }}</td></tr>
+    {% else %}<tr><td colspan="5" class="empty">No supplier parties or ledger entries found.</td></tr>{% endfor %}
+    </tbody></table></div>
+    <p class="note">Balances are calculated from party-ledger entries. Debit increases the balance and credit reduces it. An expense alone does not create a supplier ledger entry.</p>
+  </section>
+
+  {% elif report_name == 'party-balance' %}
+  <section class="panel"><h2>Party opening, period and closing balances</h2>
+    <div class="table-wrap"><table><thead><tr><th>Party</th><th>Type</th><th>Opening balance</th><th>Period debits</th><th>Period credits</th><th>Closing balance</th></tr></thead><tbody>
+    {% for row in party_balance_report %}<tr><td>{{ row.name }}</td><td>{{ row.party_type }}</td><td>₹{{ "%.2f"|format(row.opening_balance or 0) }}</td><td>₹{{ "%.2f"|format(row.period_debits or 0) }}</td><td>₹{{ "%.2f"|format(row.period_credits or 0) }}</td><td>₹{{ "%.2f"|format(row.closing_balance or 0) }}</td></tr>
+    {% else %}<tr><td colspan="6" class="empty">No parties found for this account.</td></tr>{% endfor %}
+    </tbody></table></div>
+    <p class="note">Balances use party-ledger entries. Freight and trip receipts appear here only if they are posted to the party ledger.</p>
+  </section>
+
+  {% elif report_name == 'transactions' %}
+  <section class="panel"><h2>Itemized transactions</h2>
+    <p class="muted">Up to 1,000 payment, approved-expense and maintenance records within the selected date range.</p>
+    <div class="table-wrap"><table><thead><tr><th>Date</th><th>Type</th><th>Source ID</th><th>Trip</th><th>Description</th><th>Reference</th><th>Direction</th><th>Amount</th></tr></thead><tbody>
+    {% for row in transaction_report %}<tr><td>{{ row.transaction_date }}</td><td>{{ row.transaction_type }}</td><td>#{{ row.record_id }}</td><td>{% if row.trip_id %}#{{ row.trip_id }}{% else %}—{% endif %}</td><td>{{ row.description or "—" }}</td><td>{{ row.reference or "—" }}</td><td>{{ row.direction }}</td><td>₹{{ "%.2f"|format(row.amount or 0) }}</td></tr>
+    {% else %}<tr><td colspan="8" class="empty">No transactions in this date range.</td></tr>{% endfor %}
+    </tbody></table></div>
+  </section>
+  {% endif %}
+</div>
+{% endblock %}
