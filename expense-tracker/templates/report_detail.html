@@ -72,7 +72,7 @@
         <td>₹{{ "%.2f"|format(row.overpayment or 0) }}</td>
         <td>₹{{ "%.2f"|format(row.approved_costs or 0) }}</td>
         <td>₹{{ "%.2f"|format(row.pending_costs or 0) }}</td>
-        <td>₹{{ "%.2f"|format(row.operating_margin or 0) }}</td>
+        <td>{% if (row.operating_margin or 0) > 0 %}Profit: ₹{{ "%.2f"|format(row.operating_margin) }}{% elif (row.operating_margin or 0) < 0 %}Loss: ₹{{ "%.2f"|format((row.operating_margin or 0)|abs) }}{% else %}No Profit, No Loss{% endif %}</td>
       </tr>
     {% else %}
       <tr><td colspan="10" class="empty">No completed trips in this completion-date range.</td></tr>
@@ -94,7 +94,7 @@
         <tr><td>Approved Trip Expenses</td><td class="amount">₹{{ "%.2f"|format(pnl_expenses) }}</td></tr>
         <tr><td>Truck Repair and Service Costs</td><td class="amount">₹{{ "%.2f"|format(pnl_maintenance) }}</td></tr>
         <tr class="subtotal"><td>Total Expenses</td><td class="amount">₹{{ "%.2f"|format(pnl_expenses + pnl_maintenance) }}</td></tr>
-        <tr class="net-result"><td>{% if pnl_operating_profit > 0 %}Profit After Expenses{% elif pnl_operating_profit < 0 %}Loss After Expenses{% else %}No Profit, No Loss{% endif %}</td><td class="amount">₹{{ "%.2f"|format(pnl_operating_profit) }}</td></tr>
+        <tr class="net-result"><td>{% if pnl_operating_profit > 0 %}Profit After Expenses{% elif pnl_operating_profit < 0 %}Loss After Expenses{% else %}No Profit, No Loss{% endif %}</td><td class="amount">{% if pnl_operating_profit > 0 %}Profit: ₹{{ "%.2f"|format(pnl_operating_profit) }}{% elif pnl_operating_profit < 0 %}Loss: ₹{{ "%.2f"|format(pnl_operating_profit|abs) }}{% else %}No Profit, No Loss{% endif %}</td></tr>
       </tbody></table></div>
     </div>
     <p class="note">This summary uses the information currently recorded in FleetFlow. It may not include other business costs, taxes, loan interest or depreciation. Money received is shown separately and is not counted as earnings a second time. It excludes overheads not recorded in these categories, depreciation, tax, interest and supplier bills not recorded as approved trip expenses or maintenance. Collections are cash receipts and are not counted as revenue again.</p>
