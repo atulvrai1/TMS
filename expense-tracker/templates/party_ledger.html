@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% block title %}{{ party.name }} Ledger · FleetFlow{% endblock %}
+{% block breadcrumb %}<a href="{{ url_for('parties') }}">Parties</a> / {{ party.name }}{% endblock %}
+{% block content_dashboard %}
+<style>
+.pl-page{max-width:1150px;margin:0 auto}.pl-head{display:flex;justify-content:space-between;gap:1rem;flex-wrap:wrap;align-items:flex-start;margin-bottom:1rem}.pl-head h1{margin:0 0 .4rem}.pl-muted{color:var(--ink-muted,#687386)}.pl-cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(175px,1fr));gap:.8rem;margin:1rem 0}.pl-card,.pl-panel{background:var(--surface,#fff);border:1px solid var(--border,#e5e9f0);border-radius:13px;padding:1rem}.pl-card strong{display:block;font-size:1.35rem;margin-top:.35rem}.pl-layout{display:grid;grid-template-columns:minmax(0,1fr) minmax(260px,.6fr);gap:1rem}.pl-panel h2{margin:0 0 1rem;font-size:1.05rem}.pl-form{display:grid;gap:.75rem}.pl-form label{display:block;font-size:.84rem;font-weight:600;margin-bottom:.3rem}.pl-form input,.pl-form select,.pl-form textarea{width:100%;box-sizing:border-box;padding:.65rem;border:1px solid var(--border,#dbe1ea);border-radius:8px;background:var(--surface,#fff);color:inherit;font:inherit}.pl-form button{padding:.7rem 1rem;border:0;border-radius:8px;background:var(--industry-blue,#2457c5);color:#fff;font-weight:600}.pl-table-wrap{overflow:auto}.pl-table{width:100%;min-width:600px;border-collapse:collapse}.pl-table th,.pl-table td{text-align:left;padding:.75rem .6rem;border-bottom:1px solid var(--border,#e5e9f0);font-size:.88rem}.pl-table th{font-size:.76rem;text-transform:uppercase;color:var(--ink-muted,#687386)}@media(max-width:800px){.pl-layout{grid-template-columns:1fr}}
+</style>
+<div class="pl-page">
+ <div class="pl-head"><div><h1>{{ party.name }}</h1><div class="pl-muted">{{ party.party_type }}{% if party.phone %} · {{ party.phone }}{% endif %}{% if party.gstin %} · GSTIN {{ party.gstin }}{% endif %}</div><div class="pl-muted">{{ party.address or "" }}</div></div><a href="{{ url_for('parties') }}">← Back to parties</a></div>
+ <div class="pl-cards"><div class="pl-card"><span class="pl-muted">Debit total</span><strong>₹{{ "%.2f"|format(debit_total) }}</strong></div><div class="pl-card"><span class="pl-muted">Credit total</span><strong>₹{{ "%.2f"|format(credit_total) }}</strong></div><div class="pl-card"><span class="pl-muted">Net balance (debit − credit)</span><strong>₹{{ "%.2f"|format(balance) }}</strong></div></div>
+ <div class="pl-layout">
+  <section class="pl-panel"><h2>Ledger history</h2><div class="pl-table-wrap"><table class="pl-table"><thead><tr><th>Date</th><th>Type</th><th>Amount</th><th>Reference</th><th>Description</th></tr></thead><tbody>
+  {% for e in entries %}<tr><td>{{ e.entry_date }}</td><td>{{ e.entry_type }}</td><td>₹{{ "%.2f"|format(e.amount) }}</td><td>{{ e.reference or "—" }}</td><td>{{ e.description or "—" }}</td></tr>{% else %}<tr><td colspan="5" class="pl-muted">No ledger entries yet.</td></tr>{% endfor %}
+  </tbody></table></div></section>
+  <section class="pl-panel"><h2>Record ledger entry</h2><p class="pl-muted">Use Debit to increase the ledger balance and Credit to reduce it. This entry is an internal record; it does not move money or create a tax invoice.</p>
+   <form class="pl-form" method="post">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <div><label for="entry-date">Date *</label><input id="entry-date" type="date" name="entry_date" value="{{ today }}" required></div>
+    <div><label for="entry-type">Entry type *</label><select id="entry-type" name="entry_type" required><option value="Debit">Debit</option><option value="Credit">Credit</option></select></div>
+    <div><label for="entry-amount">Amount (₹) *</label><input id="entry-amount" type="number" name="amount" min="0.01" max="999999999999.99" step="0.01" required></div>
+    <div><label for="entry-reference">Reference</label><input id="entry-reference" name="reference" maxlength="120" placeholder="Receipt / voucher / note no."></div>
+    <div><label for="entry-description">Description</label><textarea id="entry-description" name="description" rows="3" maxlength="500"></textarea></div>
+    <button type="submit">Save ledger entry</button>
+   </form>
+  </section>
+ </div>
+</div>
+{% endblock %}
