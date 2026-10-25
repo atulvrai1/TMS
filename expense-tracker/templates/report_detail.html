@@ -39,28 +39,33 @@
 @media(max-width:760px){.report-detail .pnl-table th,.report-detail .pnl-table td{padding:.65rem .5rem;font-size:.82rem}.report-detail .pnl-table .net-result td.amount{font-size:1rem}.report-detail .pnl-result strong{font-size:1.05rem}}
 </style>
 <div class="report-detail">
+  {% set pnl_tab = request.args.get('tab', 'overall') %}
   <header class="head">
     <div>
       <h1>{{ report_title }}</h1>
-      <div class="muted">Fleet &amp; Business Intelligence · {{ start_date }} to {{ end_date }}</div>
+      <div class="muted">Fleet &amp; Business Intelligence · {% if report_name == 'profit-loss' and pnl_tab == 'overall' %}All recorded dates{% else %}{{ start_date }} to {{ end_date }}{% endif %}</div>
     </div>
     <a class="button secondary" href="{{ url_for('reports', start_date=start_date, end_date=end_date) }}">← Back to Fleet &amp; Business Intelligence</a>
   </header>
+  {% if not (report_name == 'profit-loss' and pnl_tab == 'overall') %}
   <section class="panel">
     <form method="get" action="{{ url_for('reports', report_name=report_name) }}" class="filters">
-      {% if report_name == 'profit-loss' %}<input type="hidden" name="tab" value="{{ request.args.get('tab', 'overall') }}">{% endif %}
+      {% if report_name == 'profit-loss' %}<input type="hidden" name="tab" value="{{ pnl_tab }}">{% endif %}
       <div><label for="start_date">From</label><input type="date" id="start_date" name="start_date" value="{{ start_date }}" required></div>
       <div><label for="end_date">To</label><input type="date" id="end_date" name="end_date" value="{{ end_date }}" required></div>
       <button type="submit">Apply Date Range</button>
-      <a class="button secondary" href="{{ url_for('export_reports_csv', report_name=report_name, tab=request.args.get('tab', 'overall'), start_date=start_date, end_date=end_date) }}">Export CSV</a>
+      <a class="button secondary" href="{{ url_for('export_reports_csv', report_name=report_name, tab=pnl_tab, start_date=start_date, end_date=end_date) }}">Export CSV</a>
     </form>
   </section>
+  {% else %}
+  <div class="pnl-total"><a class="button secondary" href="{{ url_for('export_reports_csv', report_name=report_name, tab=pnl_tab) }}">Export All-Time CSV</a></div>
+  {% endif %}
 
 
   {% if report_name == 'profit-loss' %}
   {% set pnl_tab = request.args.get('tab', 'overall') %}
   <nav class="pnl-tabs" aria-label="Profit and loss reports">
-    <a class="{% if pnl_tab == 'overall' %}active{% endif %}" href="{{ url_for('reports', report_name='profit-loss', tab='overall', start_date=start_date, end_date=end_date) }}">Overall Profit / Loss</a>
+    <a class="{% if pnl_tab == 'overall' %}active{% endif %}" href="{{ url_for('reports', report_name='profit-loss', tab='overall') }}">Overall Profit / Loss</a>
     <a class="{% if pnl_tab == 'date-range' %}active{% endif %}" href="{{ url_for('reports', report_name='profit-loss', tab='date-range', start_date=start_date, end_date=end_date) }}">Date-Range Profit / Loss</a>
     <a class="{% if pnl_tab == 'trip' %}active{% endif %}" href="{{ url_for('reports', report_name='profit-loss', tab='trip', start_date=start_date, end_date=end_date) }}">Trip-Based Profit / Loss</a>
     <a class="{% if pnl_tab == 'truck' %}active{% endif %}" href="{{ url_for('reports', report_name='profit-loss', tab='truck', start_date=start_date, end_date=end_date) }}">Truck-Based Profit / Loss</a>
