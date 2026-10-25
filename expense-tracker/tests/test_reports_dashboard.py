@@ -95,6 +95,24 @@ with app.test_client() as client:
     assert b"50000.00" in response.data
     assert b"20000.00" in response.data
     assert b"7500.00" in response.data
+
+    reconciliation = client.get(
+        "/reports/reconciliation?start_date=" + (date.today() - timedelta(days=1)).isoformat() +
+        "&end_date=" + date.today().isoformat()
+    )
+    assert reconciliation.status_code == 200, reconciliation.status_code
+    assert b"Trip Financial Reconciliation" in reconciliation.data
+    assert b"Outstanding" in reconciliation.data
+    assert b"30000.00" in reconciliation.data  # freight less lifetime receipts for the older trip
+    assert b"50000.00" in reconciliation.data  # freight for the current trip
+
+    exported = client.get(
+        "/reports/export.csv?report_name=reconciliation&start_date=" +
+        (date.today() - timedelta(days=1)).isoformat() + "&end_date=" + date.today().isoformat()
+    )
+    assert exported.status_code == 200, exported.status_code
+    assert b"Outstanding INR" in exported.data
+    assert b"Overpayment INR" in exported.data
 """
     result = subprocess.run(
         [sys.executable, "-c", code],
