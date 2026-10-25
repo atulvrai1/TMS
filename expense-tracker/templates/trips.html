@@ -24,6 +24,7 @@ body.trip-drawer-open{overflow:hidden}
 @keyframes tripDrawerIn{from{transform:translateX(24px);opacity:.8}to{transform:translateX(0);opacity:1}}
 @media(max-width:640px){.trip-create-toolbar{align-items:flex-start;flex-direction:column}.trip-create-trigger{width:100%}.trip-drawer{width:100vw;max-width:100vw}.trip-drawer-header,.trip-drawer-body{padding-left:1rem;padding-right:1rem}.trip-drawer-form{grid-template-columns:minmax(0,1fr);gap:.85rem}.trip-drawer-form .form-group{grid-column:1/-1}.trip-drawer-footer{padding:.8rem 1rem}}
 @media(prefers-reduced-motion:reduce){.trip-drawer{animation:none}}
+.party-field-heading{display:flex;align-items:center;justify-content:space-between;gap:.75rem}.party-field-heading label{margin-bottom:.35rem}.quick-party-trigger{border:0;background:transparent;color:var(--industry-blue,#2457c5);font:inherit;font-size:.85rem;font-weight:700;cursor:pointer;padding:.25rem}.quick-party-panel{margin:.8rem 0;padding:1rem;border:1px solid var(--border,#dbe1ea);border-radius:12px;background:var(--surface,#fff)}.quick-party-panel h3{margin:0 0 .25rem}.quick-party-panel label{display:block;font-size:.83rem;font-weight:600;margin:.55rem 0 .3rem}.quick-party-panel .form-input{width:100%;box-sizing:border-box;min-height:42px}.quick-party-fields{display:grid;grid-template-columns:1fr 1fr;gap:.75rem}.quick-party-actions{display:flex;justify-content:flex-end;gap:.6rem;margin-top:1rem}.quick-party-message{font-size:.86rem;margin-top:.4rem}.quick-party-message:empty{display:none}.quick-party-message.error{color:#b42318}.quick-party-message.success{color:#137547}@media(max-width:640px){.quick-party-fields{grid-template-columns:1fr}.quick-party-actions button{flex:1}}
 </style>
 <div class="dashboard-page">
     <div class="panel-header">
@@ -47,6 +48,17 @@ body.trip-drawer-open{overflow:hidden}
             <div class="trip-drawer-body">
                 <h3>Trip Details</h3>
                 <p class="account-help">Choose the customer, route, vehicle, driver, and agreed freight charge. Required fields are marked.</p>
+            <div class="quick-party-message" id="quick-party-message" role="status" aria-live="polite"></div>
+            <section class="quick-party-panel" id="quick-party-panel" hidden aria-labelledby="quick-party-title">
+                <h3 id="quick-party-title">Add party</h3><p class="account-help">Only the essentials are needed. Add more contact details later under Parties &amp; Ledger.</p>
+                <form id="quick-party-form">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                    <label for="quick-party-name">Party / business name *</label><input class="form-input" id="quick-party-name" name="name" maxlength="160" required autocomplete="organization" placeholder="Enter customer or supplier name">
+                    <div class="quick-party-fields"><div><label for="quick-party-type">Account type *</label><select class="form-input" id="quick-party-type" name="party_type" required><option value="Customer">Customer</option><option value="Supplier">Supplier</option><option value="Both">Both</option></select></div>
+                    <div><label for="quick-party-phone">Phone (optional)</label><input class="form-input" id="quick-party-phone" name="phone" maxlength="40" inputmode="tel" placeholder="Mobile number"></div></div>
+                    <div class="quick-party-actions"><button type="button" class="btn-ghost" id="cancel-quick-party">Cancel</button><button type="submit" class="btn-primary" id="save-quick-party">Save &amp; select party</button></div>
+                </form>
+            </section>
     {% if available_trucks and available_drivers %}
     <form id="fleetflow-add-trip-form" action="{{ url_for('create_trip') }}" method="POST" class="dispatch-form trip-drawer-form" data-disable-on-submit>
         <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
@@ -67,7 +79,7 @@ body.trip-drawer-open{overflow:hidden}
         </div>
         {% endif %}
         <div class="form-group trip-field-party">
-            <label for="party_id">Customer / party (optional)</label>
+            <div class="party-field-heading"><label for="party_id">Customer / party (optional)</label><button type="button" class="quick-party-trigger" id="open-quick-party">＋ Add party</button></div>
             <select class="form-input" id="party_id" name="party_id">
                 <option value="">No party linked</option>
                 {% for party in available_parties %}
@@ -255,6 +267,24 @@ body.trip-drawer-open{overflow:hidden}
 {% endblock %}
 
 {% block scripts %}
+<script>
+    const quickPartyPanel=document.getElementById("quick-party-panel"), quickPartyForm=document.getElementById("quick-party-form"), quickPartySelect=document.getElementById("party_id"), quickPartyMessage=document.getElementById("quick-party-message"), quickPartyName=document.getElementById("quick-party-name");
+    const quickPartyOpen=document.getElementById("open-quick-party"), quickPartyCancel=document.getElementById("cancel-quick-party");
+    if(quickPartyOpen&&quickPartyPanel) quickPartyOpen.addEventListener("click",()=>{quickPartyPanel.hidden=false;if(quickPartyName)quickPartyName.focus();});
+    if(quickPartyCancel&&quickPartyPanel) quickPartyCancel.addEventListener("click",()=>{quickPartyPanel.hidden=true;quickPartyMessage.textContent="";quickPartyMessage.className="quick-party-message";});
+    if(quickPartyForm) quickPartyForm.addEventListener("submit",async(event)=>{
+      event.preventDefault();const submit=document.getElementById("save-quick-party"),data=new FormData(quickPartyForm),owner=document.getElementById("owner_user_id");
+      if(owner&&owner.value)data.set("owner_user_id",owner.value);submit.disabled=true;submit.textContent="Saving…";quickPartyMessage.textContent="";quickPartyMessage.className="quick-party-message";
+      try{const response=await fetch("{{ url_for('quick_create_party') }}",{method:"POST",body:data,headers:{"X-Requested-With":"XMLHttpRequest"}}),payload=await response.json();
+        if(!response.ok||!payload.ok)throw new Error(payload.error||"Could not save this party.");const party=payload.party;
+        let option=Array.from(quickPartySelect.options).find(item=>item.value===String(party.party_id));
+        if(!option){option=new Option(party.name+" · "+party.party_type,String(party.party_id));option.dataset.ownerId=owner&&owner.value?owner.value:"";quickPartySelect.add(option);}
+        quickPartySelect.value=String(party.party_id);quickPartyPanel.hidden=true;quickPartyForm.reset();quickPartyMessage.textContent=payload.existing?"Party already exists; selected it.":"Party added and selected.";quickPartyMessage.className="quick-party-message success";
+      }catch(error){quickPartyMessage.textContent=error.message||"Could not save this party.";quickPartyMessage.className="quick-party-message error";}
+      finally{submit.disabled=false;submit.textContent="Save & select party";}
+    });
+
+</script>
 <script>
     const tripBackdrop = document.getElementById("trip-drawer-backdrop");
     const tripDrawer = document.getElementById("trip-drawer");
