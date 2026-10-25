@@ -51,7 +51,7 @@
       <div><label for="start_date">From</label><input type="date" id="start_date" name="start_date" value="{{ start_date }}" required></div>
       <div><label for="end_date">To</label><input type="date" id="end_date" name="end_date" value="{{ end_date }}" required></div>
       <button type="submit">Apply date range</button>
-      <a class="button secondary" href="{{ url_for('export_reports_csv', start_date=start_date, end_date=end_date) }}">Export CSV</a>
+      <a class="button secondary" href="{{ url_for('export_reports_csv', report_name=report_name, start_date=start_date, end_date=end_date) }}">Export CSV</a>
     </form>
   </section>
 
