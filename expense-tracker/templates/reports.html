@@ -57,13 +57,13 @@
   </section>
 
   <section aria-label="Reports"><div class="report-catalog">
-<a href="{{ url_for('reports', report_name='reconciliation', start_date=start_date, end_date=end_date) }}"><span class="report-icon" aria-hidden="true">🧾</span><span><strong>Trip Financial Reconciliation</strong><small>Completed-trip freight, lifetime receipts, outstanding balances, overpayments and costs</small></span></a>
-<a href="{{ url_for('reports', report_name='profit-loss', start_date=start_date, end_date=end_date) }}"><span class="report-icon" aria-hidden="true">⚖️</span><span><strong>Profit &amp; Loss Report</strong><small>Completed-trip revenue less approved trip costs and maintenance</small></span></a>
-<a href="{{ url_for('reports', report_name='truck-revenue', start_date=start_date, end_date=end_date) }}"><span class="report-icon" aria-hidden="true">🚚</span><span><strong>Truck Revenue Report</strong><small>Trip performance and operating costs</small></span></a>
-<a href="{{ url_for('reports', report_name='party-revenue', start_date=start_date, end_date=end_date) }}"><span class="report-icon" aria-hidden="true">🧑‍💼</span><span><strong>Party Revenue Report</strong><small>Freight and collections overview</small></span></a>
-<a href="{{ url_for('reports', report_name='supplier-balance', start_date=start_date, end_date=end_date) }}"><span class="report-icon" aria-hidden="true">💰</span><span><strong>Supplier Balance Report</strong><small>Supplier ledger debits, credits and closing balance</small></span></a>
-<a href="{{ url_for('reports', report_name='party-balance', start_date=start_date, end_date=end_date) }}"><span class="report-icon" aria-hidden="true">💵</span><span><strong>Party Balance Report</strong><small>Opening balance, period activity and closing ledger balance</small></span></a>
-<a href="{{ url_for('reports', report_name='transactions', start_date=start_date, end_date=end_date) }}"><span class="report-icon" aria-hidden="true">📑</span><span><strong>Transaction Report</strong><small>Itemized payments, approved expenses and maintenance</small></span></a>
+<a href="{{ url_for('reports', report_name='reconciliation', start_date=start_date, end_date=end_date) }}"><span class="report-icon" aria-hidden="true">🧾</span><span><strong>Trip Money Check</strong><small>Trip charges, money received, money still to receive and trip expenses</small></span></a>
+<a href="{{ url_for('reports', report_name='profit-loss', start_date=start_date, end_date=end_date) }}"><span class="report-icon" aria-hidden="true">⚖️</span><span><strong>Profit or Loss Report</strong><small>Shows whether completed trips made a profit or a loss after recorded expenses and maintenance</small></span></a>
+<a href="{{ url_for('reports', report_name='truck-revenue', start_date=start_date, end_date=end_date) }}"><span class="report-icon" aria-hidden="true">🚚</span><span><strong>Truck Earnings Report</strong><small>Trip charges and recorded truck costs</small></span></a>
+<a href="{{ url_for('reports', report_name='party-revenue', start_date=start_date, end_date=end_date) }}"><span class="report-icon" aria-hidden="true">🧑‍💼</span><span><strong>Customer Trip Charges and Payments</strong><small>Trip charges and money received from customers</small></span></a>
+<a href="{{ url_for('reports', report_name='supplier-balance', start_date=start_date, end_date=end_date) }}"><span class="report-icon" aria-hidden="true">💰</span><span><strong>Money to Pay Suppliers</strong><small>Supplier balances and payment records</small></span></a>
+<a href="{{ url_for('reports', report_name='party-balance', start_date=start_date, end_date=end_date) }}"><span class="report-icon" aria-hidden="true">💵</span><span><strong>Customer and Supplier Balances</strong><small>Starting balance, changes and current balance</small></span></a>
+<a href="{{ url_for('reports', report_name='transactions', start_date=start_date, end_date=end_date) }}"><span class="report-icon" aria-hidden="true">📑</span><span><strong>Money In and Out Report</strong><small>List of recorded payments, approved expenses and truck servicing</small></span></a>
 </div></section>
   <nav class="report-jump-links" aria-label="Report sections">
     <a href="#business-summary">Business summary</a>
@@ -80,8 +80,8 @@
     <div class="kpi"><div class="kpi-label">Approved expenses</div><div class="kpi-value">₹{{ "%.2f"|format(approved_expenses) }}</div></div>
   </div>
   <div class="kpis" id="party-balance-report">
-    <div class="kpi"><div class="kpi-label">Estimated trip margin</div><div class="kpi-value">₹{{ "%.2f"|format(estimated_trip_margin) }}</div><div class="note">Booked freight less approved costs.</div></div>
-    <div class="kpi"><div class="kpi-label">Freight not yet collected*</div><div class="kpi-value">₹{{ "%.2f"|format(collection_gap) }}</div><div class="note">Freight less recorded receipts; negative values mean receipts exceed freight in this period.</div></div>
+    <div class="kpi"><div class="kpi-label">Estimated Profit or Loss</div><div class="kpi-value">₹{{ "%.2f"|format(estimated_trip_margin) }}</div><div class="note">Trip charges minus approved trip expenses. Truck servicing and other costs may be excluded.</div></div>
+    <div class="kpi"><div class="kpi-label">Money Yet to Receive*</div><div class="kpi-value">₹{{ "%.2f"|format(collection_gap) }}</div><div class="note">Trip charges minus recorded payments for this period. A negative amount means more money was received than the charges shown for this period.</div></div>
     <div class="kpi"><div class="kpi-label">Expense records</div><div class="kpi-value">{{ expense_summary.expense_count }}</div></div>
     <div class="kpi"><div class="kpi-label">Payment records</div><div class="kpi-value">{{ payment_summary.payment_count }}</div></div>
     <div class="kpi"><div class="kpi-label">Active trips</div><div class="kpi-value">{{ trip_summary.active_count }}</div></div>
@@ -107,7 +107,7 @@
       <h2 style="margin-top:0">Latest freight trips</h2>
       <div class="table-wrap">
         <table>
-          <thead><tr><th>Trip</th><th>Route</th><th>Status</th><th>Freight</th><th>Received*</th><th>Approved costs*</th><th>Freight less costs</th></tr></thead>
+          <thead><tr><th>Trip</th><th>Route</th><th>Status</th><th>Trip Charges</th><th>Money Received*</th><th>Approved Trip Expenses*</th><th>Charges After Expenses</th></tr></thead>
           <tbody>
           {% for trip in top_trips %}
             <tr>
