@@ -1,0 +1,140 @@
+{% extends "base.html" %}
+{% block title %}Analytics & Reports — FleetFlow{% endblock %}
+{% block breadcrumb %}Management / Analytics & Reports{% endblock %}
+{% block content_dashboard %}
+<style>
+.analytics-page{max-width:1500px;margin:0 auto;color:var(--ink,#172033)}
+.analytics-page .head{display:flex;align-items:flex-start;justify-content:space-between;gap:1rem;flex-wrap:wrap;margin-bottom:1rem}
+.analytics-page h1{margin:0 0 .35rem;font-size:1.8rem}
+.analytics-page .muted{color:var(--ink-muted,#6b7280)}
+.analytics-page .panel{background:var(--surface,#fff);border:1px solid var(--border,#e5e9f0);border-radius:14px;padding:1.1rem;margin-bottom:1rem;box-shadow:0 4px 18px rgba(20,35,60,.035);min-width:0}
+.analytics-page .filters{display:flex;align-items:end;gap:.8rem;flex-wrap:wrap}
+.analytics-page label{display:block;font-size:.8rem;font-weight:600;margin-bottom:.3rem}
+.analytics-page input{border:1px solid var(--border,#dbe1ea);border-radius:8px;padding:.6rem;background:var(--surface,#fff);color:inherit}
+.analytics-page button{border:0;border-radius:8px;background:var(--industry-blue,#2457c5);color:white;padding:.68rem .95rem;font-weight:600;cursor:pointer}
+.analytics-page .kpis{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:.8rem;margin-bottom:1rem}
+.analytics-page .kpi{background:var(--surface,#fff);border:1px solid var(--border,#e5e9f0);border-radius:12px;padding:1rem;min-width:0}
+.analytics-page .kpi-label{font-size:.78rem;color:var(--ink-muted,#6b7280);margin-bottom:.45rem}
+.analytics-page .kpi-value{font-size:clamp(1.05rem,1.8vw,1.55rem);font-weight:750;overflow-wrap:anywhere}
+.analytics-page .grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:1rem}
+.analytics-page .chart-box{height:310px;position:relative}
+.analytics-page .table-wrap{overflow:auto}
+.analytics-page table{width:100%;border-collapse:collapse;min-width:680px}
+.analytics-page th,.analytics-page td{padding:.7rem;text-align:left;border-bottom:1px solid var(--border,#e5e9f0);font-size:.88rem}
+.analytics-page th{font-size:.75rem;text-transform:uppercase;letter-spacing:.04em;color:var(--ink-muted,#6b7280)}
+.analytics-page .empty{padding:1.2rem;text-align:center;color:var(--ink-muted,#6b7280)}
+.analytics-page .note{font-size:.82rem;color:var(--ink-muted,#6b7280);margin:.5rem 0 0}
+@media(max-width:1100px){.analytics-page .kpis{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media(max-width:760px){.analytics-page .grid{grid-template-columns:1fr}.analytics-page .kpis{grid-template-columns:repeat(2,minmax(0,1fr))}.analytics-page .chart-box{height:270px}}
+</style>
+<div class="analytics-page">
+  <div class="head">
+    <div>
+      <h1>Fleet & Business Intelligence</h1>
+      <div class="muted">One view of trip volume, freight, collections and approved operating costs.</div>
+    </div>
+  </div>
+  <section class="panel">
+    <form method="get" action="{{ url_for('reports') }}" class="filters">
+      <div><label for="start_date">From</label><input type="date" id="start_date" name="start_date" value="{{ start_date }}" required></div>
+      <div><label for="end_date">To</label><input type="date" id="end_date" name="end_date" value="{{ end_date }}" required></div>
+      <button type="submit">Apply date range</button>
+    </form>
+    <p class="note">Trip and freight figures use trip start date. Collections use payment date; costs use expense date. Only approved expenses are counted. Cancelled trips remain visible in operational status totals.</p>
+  </section>
+
+  <div class="kpis">
+    <div class="kpi"><div class="kpi-label">Trips</div><div class="kpi-value">{{ trip_summary.trip_count }}</div></div>
+    <div class="kpi"><div class="kpi-label">Completed</div><div class="kpi-value">{{ trip_summary.completed_count }}</div></div>
+    <div class="kpi"><div class="kpi-label">Booked freight</div><div class="kpi-value">₹{{ "%.2f"|format(freight_total) }}</div></div>
+    <div class="kpi"><div class="kpi-label">Collections received</div><div class="kpi-value">₹{{ "%.2f"|format(receipts) }}</div></div>
+    <div class="kpi"><div class="kpi-label">Approved expenses</div><div class="kpi-value">₹{{ "%.2f"|format(approved_expenses) }}</div></div>
+  </div>
+  <div class="kpis">
+    <div class="kpi"><div class="kpi-label">Estimated trip margin</div><div class="kpi-value">₹{{ "%.2f"|format(estimated_trip_margin) }}</div><div class="note">Booked freight less approved costs.</div></div>
+    <div class="kpi"><div class="kpi-label">Freight not yet collected*</div><div class="kpi-value">₹{{ "%.2f"|format(collection_gap) }}</div><div class="note">Freight less recorded receipts; negative values mean receipts exceed freight in this period.</div></div>
+    <div class="kpi"><div class="kpi-label">Expense records</div><div class="kpi-value">{{ expense_summary.expense_count }}</div></div>
+    <div class="kpi"><div class="kpi-label">Payment records</div><div class="kpi-value">{{ payment_summary.payment_count }}</div></div>
+    <div class="kpi"><div class="kpi-label">Active trips</div><div class="kpi-value">{{ trip_summary.active_count }}</div></div>
+  </div>
+
+  <div class="grid">
+    <section class="panel">
+      <h2 style="margin-top:0">Monthly business trend</h2>
+      <div class="chart-box"><canvas id="monthlyChart" aria-label="Monthly freight, collections and approved expenses chart"></canvas></div>
+      {% if not month_labels %}<div class="empty">No trip, collection or expense activity in this date range.</div>{% endif %}
+    </section>
+    <section class="panel">
+      <h2 style="margin-top:0">Approved costs by category</h2>
+      <div class="chart-box"><canvas id="expenseChart" aria-label="Approved expenses by category chart"></canvas></div>
+      {% if not category_labels %}<div class="empty">No approved expense records in this date range.</div>{% endif %}
+    </section>
+    <section class="panel">
+      <h2 style="margin-top:0">Trip status mix</h2>
+      <div class="chart-box"><canvas id="statusChart" aria-label="Trip status distribution chart"></canvas></div>
+    </section>
+    <section class="panel">
+      <h2 style="margin-top:0">Top freight trips</h2>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Trip</th><th>Route</th><th>Status</th><th>Freight</th><th>Received*</th><th>Approved costs*</th><th>Freight less costs</th></tr></thead>
+          <tbody>
+          {% for trip in top_trips %}
+            <tr>
+              <td>#{{ trip.trip_id }}<br><span class="muted">{{ trip.start_date }}</span></td>
+              <td>{{ trip.route_from }} → {{ trip.route_to }}</td>
+              <td>{{ trip.status }}</td>
+              <td>₹{{ "%.2f"|format(trip.freight or 0) }}</td>
+              <td>₹{{ "%.2f"|format(trip.received or 0) }}</td>
+              <td>₹{{ "%.2f"|format(trip.costs or 0) }}</td>
+              <td>₹{{ "%.2f"|format((trip.freight or 0) - (trip.costs or 0)) }}</td>
+            </tr>
+          {% else %}
+            <tr><td colspan="7" class="empty">No trips found for this date range.</td></tr>
+          {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      <p class="note">*Per-trip receipts and costs are filtered by the selected payment/expense dates, while the freight column is the full booked freight for the trip.</p>
+    </section>
+  </div>
+</div>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.8/dist/chart.umd.min.js" defer></script>
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+  if (!window.Chart) {
+    document.querySelectorAll('.chart-box').forEach(function(box) {
+      box.insertAdjacentHTML('beforeend', '<p class="muted">Charts could not load. Check network access to the chart library CDN.</p>');
+    });
+    return;
+  }
+  const labels = {{ month_labels|tojson }};
+  const currency = new Intl.NumberFormat('en-IN', {style:'currency',currency:'INR',maximumFractionDigits:0});
+  const commonOptions = {responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom'}}};
+  if (labels.length) {
+    new Chart(document.getElementById('monthlyChart'), {
+      type:'line',
+      data:{labels:labels,datasets:[
+        {label:'Booked freight',data:{{ monthly_freight|tojson }},tension:.25},
+        {label:'Collections',data:{{ monthly_payments|tojson }},tension:.25},
+        {label:'Approved expenses',data:{{ monthly_expenses|tojson }},tension:.25}
+      ]},
+      options:{...commonOptions,scales:{y:{beginAtZero:true,ticks:{callback:function(v){return currency.format(v)}}}}}
+    });
+  }
+  const categoryLabels = {{ category_labels|tojson }};
+  if (categoryLabels.length) {
+    new Chart(document.getElementById('expenseChart'), {
+      type:'bar',
+      data:{labels:categoryLabels,datasets:[{label:'Approved expenses',data:{{ category_values|tojson }}}]},
+      options:{...commonOptions,indexAxis:categoryLabels.length>5?'y':'x',scales:{y:{beginAtZero:true,ticks:{callback:function(v){return currency.format(v)}}}}}
+    });
+  }
+  new Chart(document.getElementById('statusChart'), {
+    type:'doughnut',
+    data:{labels:{{ status_labels|tojson }},datasets:[{label:'Trips',data:{{ status_values|tojson }}}]},
+    options:{...commonOptions}
+  });
+});
+</script>
+{% endblock %}
