@@ -14,10 +14,18 @@
 .report-detail input{border:1px solid var(--border,#dbe1ea);border-radius:8px;padding:.6rem;background:var(--surface,#fff);color:inherit}
 .report-detail button,.report-detail .button{border:0;border-radius:8px;background:var(--industry-blue,#2457c5);color:white;padding:.68rem .95rem;font-weight:600;cursor:pointer;text-decoration:none;display:inline-block}
 .report-detail .button.secondary{background:transparent;color:inherit;border:1px solid var(--border,#dbe1ea)}
-.report-detail .kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:.8rem;margin-bottom:1rem}
-.report-detail .kpi{background:var(--surface,#fff);border:1px solid var(--border,#e5e9f0);border-radius:12px;padding:1rem;min-width:0}
-.report-detail .kpi-label{font-size:.78rem;color:var(--ink-muted,#6b7280);margin-bottom:.45rem}
-.report-detail .kpi-value{font-size:clamp(1.05rem,1.8vw,1.55rem);font-weight:750;overflow-wrap:anywhere}
+.report-detail .pnl-statement{max-width:1050px;margin:0 auto}
+.report-detail .pnl-statement-head{display:flex;justify-content:space-between;align-items:flex-end;gap:1rem;flex-wrap:wrap;border-bottom:2px solid var(--border,#e5e9f0);padding-bottom:1rem;margin-bottom:1rem}
+.report-detail .pnl-statement-head h2{font-size:1.25rem;margin:0 0 .25rem}
+.report-detail .pnl-period{font-size:.85rem;color:var(--ink-muted,#6b7280)}
+.report-detail .pnl-table{min-width:0}
+.report-detail .pnl-table th.amount,.report-detail .pnl-table td.amount{text-align:right;width:30%;font-variant-numeric:tabular-nums;white-space:nowrap}
+.report-detail .pnl-table .section-row td{background:var(--surface-muted,#f6f8fb);font-weight:700;color:var(--ink,#172033);border-bottom:1px solid var(--border,#e5e9f0)}
+.report-detail .pnl-table .subtotal td{font-weight:700;border-top:1px solid var(--border,#d7deea)}
+.report-detail .pnl-table .net-result td{font-weight:800;font-size:1rem;border-top:2px solid var(--border,#cbd5e1);border-bottom:2px solid var(--border,#cbd5e1);background:var(--surface-muted,#f6f8fb);padding-top:1rem;padding-bottom:1rem}
+.report-detail .pnl-table .net-result td.amount{font-size:1.2rem}
+.report-detail .pnl-result{display:flex;justify-content:flex-end;margin-top:1rem}
+.report-detail .pnl-result strong{font-size:1.2rem;font-variant-numeric:tabular-nums}
 .report-detail .table-wrap{overflow:auto}
 .report-detail table{width:100%;border-collapse:collapse;min-width:680px}
 .report-detail th,.report-detail td{padding:.7rem;text-align:left;border-bottom:1px solid var(--border,#e5e9f0);font-size:.88rem}
@@ -28,8 +36,7 @@
 .report-detail .pnl-total-value{font-size:clamp(1.5rem,2.5vw,2rem);font-weight:800;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
 .report-detail th{font-size:.75rem;text-transform:uppercase;letter-spacing:.04em;color:var(--ink-muted,#6b7280)}
 .report-detail .empty{padding:1.2rem;text-align:center;color:var(--ink-muted,#6b7280)}
-@media(max-width:760px){.report-detail .kpis{grid-template-columns:repeat(2,minmax(0,1fr))}}
-@media(max-width:480px){.report-detail .kpis{grid-template-columns:1fr}}
+@media(max-width:760px){.report-detail .pnl-table th,.report-detail .pnl-table td{padding:.65rem .5rem;font-size:.82rem}.report-detail .pnl-table .net-result td.amount{font-size:1rem}.report-detail .pnl-result strong{font-size:1.05rem}}
 </style>
 <div class="report-detail">
   <header class="head">
@@ -50,20 +57,19 @@
 
   {% if report_name == 'profit-loss' %}
   <section class="panel">
-    <p class="muted">Operating profit is calculated from completed-trip freight revenue less approved trip expenses and recorded maintenance in the selected period.</p>
-    <div class="pnl-total"><div class="pnl-total-card"><div class="pnl-total-label">Total Net Profit / (Loss)</div><div class="pnl-total-value">₹{{ "%.2f"|format(pnl_operating_profit) }}</div></div></div>
-    <div class="kpis">
-      <div class="kpi"><div class="kpi-label">Freight revenue (completed trips)</div><div class="kpi-value">₹{{ "%.2f"|format(pnl_revenue) }}</div><div class="note">{{ pnl_trip_count }} completed trips</div></div>
-      <div class="kpi"><div class="kpi-label">Approved trip expenses</div><div class="kpi-value">₹{{ "%.2f"|format(pnl_expenses) }}</div><div class="note">{{ pnl_expense_count }} records</div></div>
-      <div class="kpi"><div class="kpi-label">Maintenance costs</div><div class="kpi-value">₹{{ "%.2f"|format(pnl_maintenance) }}</div><div class="note">{{ pnl_maintenance_count }} service records</div></div>
-      <div class="kpi"><div class="kpi-label">Net operating result</div><div class="kpi-value">₹{{ "%.2f"|format(pnl_operating_profit) }}</div><div class="note">Revenue less listed operating costs</div></div>
-    </div>
-    <div class="table-wrap"><table><thead><tr><th>Profit &amp; Loss line item</th><th>Amount (₹)</th></tr></thead><tbody>
-      <tr><td>Operating revenue — completed-trip freight</td><td class="amount">₹{{ "%.2f"|format(pnl_revenue) }}</td></tr>
-      <tr><td>Less: approved trip expenses</td><td class="amount">− ₹{{ "%.2f"|format(pnl_expenses) }}</td></tr>
-      <tr><td>Less: recorded maintenance costs</td><td class="amount">− ₹{{ "%.2f"|format(pnl_maintenance) }}</td></tr>
-      <tr><th>Net operating profit / (loss)</th><th class="amount">₹{{ "%.2f"|format(pnl_operating_profit) }}</th></tr>
-    </tbody></table></div>
+    <div class="pnl-statement">
+      <div class="pnl-statement-head"><div><h2>Profit &amp; Loss Statement</h2><div class="pnl-period">For the period {{ start_date }} to {{ end_date }}</div></div><div class="pnl-period">{{ pnl_trip_count }} completed trips · {{ pnl_expense_count }} approved expense records · {{ pnl_maintenance_count }} maintenance records</div></div>
+      <div class="table-wrap"><table class="pnl-table"><thead><tr><th>Account</th><th class="amount">Amount (₹)</th></tr></thead><tbody>
+        <tr class="section-row"><td colspan="2">Income</td></tr>
+        <tr><td>Freight revenue — completed trips</td><td class="amount">₹{{ "%.2f"|format(pnl_revenue) }}</td></tr>
+        <tr class="subtotal"><td>Total Income</td><td class="amount">₹{{ "%.2f"|format(pnl_revenue) }}</td></tr>
+        <tr class="section-row"><td colspan="2">Operating Expenses</td></tr>
+        <tr><td>Approved trip expenses</td><td class="amount">₹{{ "%.2f"|format(pnl_expenses) }}</td></tr>
+        <tr><td>Recorded maintenance costs</td><td class="amount">₹{{ "%.2f"|format(pnl_maintenance) }}</td></tr>
+        <tr class="subtotal"><td>Total Operating Expenses</td><td class="amount">₹{{ "%.2f"|format(pnl_expenses + pnl_maintenance) }}</td></tr>
+        <tr class="net-result"><td>Net Operating Profit / (Loss)</td><td class="amount">₹{{ "%.2f"|format(pnl_operating_profit) }}</td></tr>
+      </tbody></table></div>
+      <div class="pnl-result"><strong>Total P&amp;L: ₹{{ "%.2f"|format(pnl_operating_profit) }}</strong></div>
     <p class="note">This is an operational P&amp;L from currently recorded data, not a statutory or fully reconciled accounting statement. It excludes overheads not recorded in these categories, depreciation, tax, interest and supplier bills not recorded as approved trip expenses or maintenance. Collections are cash receipts and are not counted as revenue again.</p>
   </section>
 
