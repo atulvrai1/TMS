@@ -3436,7 +3436,7 @@ def reports():
         "AND p.payment_date BETWEEN ? AND ?), 0) AS received, "
         "COALESCE((SELECT SUM(e.amount) FROM expenses e WHERE e.trip_id=t.trip_id "
         "AND e.status='Approved' AND e.date BETWEEN ? AND ?), 0) AS costs "
-        f"FROM trips t WHERE {trip_where} ORDER BY freight DESC, t.trip_id DESC LIMIT 10",
+        f"FROM trips t WHERE {trip_where} ORDER BY t.start_date DESC, t.trip_id DESC LIMIT 10",
         [start_date, end_date, start_date, end_date, *trip_args]
     ).fetchall()
     conn.close()
