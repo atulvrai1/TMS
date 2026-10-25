@@ -142,7 +142,7 @@
   </section>
   {% elif pnl_tab == 'trip' %}
   <section class="panel">
-    <h2>Trip-Based Profit / Loss</h2><p class="muted">Completed trips with a recorded completion date within {{ start_date }} to {{ end_date }}. Trips are included by completion date even if that date is earlier than the recorded start date; correct those date inconsistencies in the trip record. Trips without a completion date cannot be assigned to a date range.</p>
+    <h2>Trip-Based Profit / Loss</h2><p class="muted">Completed trips reported within {{ start_date }} to {{ end_date }}. If a completed trip has no completion date, its start date is used as a reporting fallback (the trip record itself is not changed). If a completion date is earlier than the start date, the recorded completion date is used; correct inconsistent dates in the trip record.</p>
     <div class="table-wrap"><table><thead><tr><th>Trip</th><th>Route</th><th>Completion Date</th><th>Truck</th><th>Freight Revenue</th><th>Approved Expenses</th><th>Net Profit / Loss</th></tr></thead><tbody>
     {% for row in trip_pnl_report %}
       <tr><td>#{{ row.trip_id }}</td><td>{{ row.route_from }} → {{ row.route_to }}</td><td>{{ row.end_date }}</td><td>{{ row.truck }}</td><td>₹{{ "%.2f"|format(row.revenue or 0) }}</td><td>₹{{ "%.2f"|format(row.costs or 0) }}</td><td>₹{{ "%.2f"|format((row.revenue or 0)-(row.costs or 0)) }}</td></tr>
