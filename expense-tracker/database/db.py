@@ -181,6 +181,46 @@ def init_db():
             "ON driver_documents(driver_id, uploaded_at DESC, document_id DESC)"
         )
 
+        # Party master and ledger (additive migration; existing records remain untouched).
+        conn.execute('''
+            CREATE TABLE IF NOT EXISTS parties (
+                party_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                owner_user_id INTEGER NOT NULL REFERENCES users(user_id),
+                name TEXT NOT NULL,
+                party_type TEXT NOT NULL DEFAULT 'Customer'
+                    CHECK(party_type IN ('Customer', 'Supplier', 'Both')),
+                phone TEXT,
+                email TEXT,
+                gstin TEXT,
+                address TEXT,
+                notes TEXT,
+                created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(owner_user_id, name)
+            )
+        ''')
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_parties_owner_name "
+            "ON parties(owner_user_id, name COLLATE NOCASE)"
+        )
+        conn.execute('''
+            CREATE TABLE IF NOT EXISTS party_ledger_entries (
+                entry_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                party_id INTEGER NOT NULL REFERENCES parties(party_id) ON DELETE CASCADE,
+                entry_date DATE NOT NULL,
+                entry_type TEXT NOT NULL CHECK(entry_type IN ('Debit', 'Credit')),
+                amount REAL NOT NULL CHECK(amount > 0),
+                reference TEXT,
+                description TEXT,
+                trip_id INTEGER REFERENCES trips(trip_id),
+                created_by INTEGER REFERENCES users(user_id),
+                created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_party_ledger_party_date "
+            "ON party_ledger_entries(party_id, entry_date DESC, entry_id DESC)"
+        )
+
         # Trips Table
         conn.execute('''
             CREATE TABLE IF NOT EXISTS trips (
