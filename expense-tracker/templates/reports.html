@@ -53,7 +53,7 @@
       <button type="submit">Apply date range</button>
       <a href="{{ url_for('export_reports_csv', report_name='overview', start_date=start_date, end_date=end_date) }}" style="display:inline-block;border:1px solid var(--border,#dbe1ea);border-radius:8px;padding:.62rem .85rem;text-decoration:none;color:inherit;font-weight:600">Export CSV</a>
     </form>
-    <p class="note">Revenue is recognized on completed-trip end date (or start date when no end date exists); approved trip expenses use expense date; maintenance uses service date. Other operational summaries use trip start date. Cancelled trips are excluded from the P&L revenue calculation.</p>
+    <p class="note">P&amp;L freight revenue includes only completed trips with a recorded end date on or after the start date. Trips missing a completion date or with invalid date order are excluded from P&amp;L revenue until corrected. Approved trip expenses use expense date; maintenance uses service date. Other operational summaries use trip start date.</p>
   </section>
 
   <section aria-label="Reports"><div class="report-catalog">
