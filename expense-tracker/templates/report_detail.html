@@ -26,8 +26,15 @@
 .report-detail .pnl-table .net-result td.amount{font-size:1.2rem}
 .report-detail .pnl-result{display:flex;justify-content:flex-end;margin-top:1rem}
 .report-detail .pnl-result strong{font-size:1.2rem;font-variant-numeric:tabular-nums}
-.report-detail .table-wrap{overflow:auto}
+.report-detail .table-wrap{width:100%;max-width:100%;overflow-x:auto;overflow-y:hidden;-webkit-overflow-scrolling:touch;overscroll-behavior-x:contain;border-radius:8px}
 .report-detail table{width:100%;border-collapse:collapse;min-width:680px}
+.report-detail .table-wrap:focus{outline:2px solid var(--industry-blue,#2457c5);outline-offset:2px}
+.report-detail .filters>div{min-width:0}
+.report-detail input[type="date"]{max-width:100%;min-height:42px}
+.report-detail .muted,.report-detail .note{overflow-wrap:anywhere}
+.report-detail td,.report-detail th{overflow-wrap:anywhere}
+.report-detail td.amount,.report-detail th.amount{overflow-wrap:normal}
+.report-detail .button{max-width:100%;white-space:normal;text-align:center}
 .report-detail th,.report-detail td{padding:.7rem;text-align:left;border-bottom:1px solid var(--border,#e5e9f0);font-size:.88rem}
 .report-detail td.amount,.report-detail th.amount{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
 .report-detail .pnl-total{display:flex;justify-content:flex-end;margin:0 0 1rem}
@@ -36,7 +43,32 @@
 .report-detail .pnl-total-value{font-size:clamp(1.5rem,2.5vw,2rem);font-weight:800;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
 .report-detail th{font-size:.75rem;text-transform:uppercase;letter-spacing:.04em;color:var(--ink-muted,#6b7280)}
 .report-detail .empty{padding:1.2rem;text-align:center;color:var(--ink-muted,#6b7280)}
-@media(max-width:760px){.report-detail .pnl-table th,.report-detail .pnl-table td{padding:.65rem .5rem;font-size:.82rem}.report-detail .pnl-table .net-result td.amount{font-size:1rem}.report-detail .pnl-result strong{font-size:1.05rem}}
+@media(max-width:760px){
+  .report-detail{width:100%;max-width:100%}
+  .report-detail .panel{padding:.8rem;border-radius:11px}
+  .report-detail .head{display:flex;flex-direction:column;align-items:stretch;gap:.75rem}
+  .report-detail h1{font-size:clamp(1.35rem,5vw,1.7rem);overflow-wrap:anywhere}
+  .report-detail .head>.button{align-self:flex-start}
+  .report-detail .filters{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));align-items:stretch;gap:.65rem}
+  .report-detail .filters>div{min-width:0}
+  .report-detail .filters input[type="date"]{width:100%;min-width:0;font-size:.9rem}
+  .report-detail .filters button,.report-detail .filters .button{width:100%;min-height:42px}
+  .report-detail .filters button{grid-column:1/-1}
+  .report-detail .pnl-table th,.report-detail .pnl-table td{padding:.65rem .5rem;font-size:.82rem}
+  .report-detail .pnl-table .net-result td.amount{font-size:1rem}
+  .report-detail .pnl-result strong{font-size:1.05rem}
+  .report-detail .table-wrap table{min-width:680px}
+  .report-detail th,.report-detail td{padding:.6rem .5rem;font-size:.82rem}
+  .report-detail .pnl-statement-head{align-items:flex-start}
+}
+@media(max-width:420px){
+  .report-detail .panel{padding:.65rem}
+  .report-detail .filters{grid-template-columns:minmax(0,1fr)}
+  .report-detail .filters button{grid-column:auto}
+  .report-detail .pnl-table th,.report-detail .pnl-table td{font-size:.78rem;padding:.55rem .4rem}
+  .report-detail .pnl-total-card{width:100%;min-width:0}
+  .report-detail .pnl-total{justify-content:stretch}
+}
 </style>
 <div class="report-detail">
   {% set pnl_tab = request.args.get('tab', 'overall') %}
