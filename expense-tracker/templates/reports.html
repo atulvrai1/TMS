@@ -46,13 +46,23 @@
       <div class="muted">One view of trip volume, freight, collections and approved operating costs.</div>
     </div>
   </div>
+  <section class="panel">
+    <form method="get" action="{{ url_for('reports') }}" class="filters">
+      <div><label for="start_date">From</label><input type="date" id="start_date" name="start_date" value="{{ start_date }}" required></div>
+      <div><label for="end_date">To</label><input type="date" id="end_date" name="end_date" value="{{ end_date }}" required></div>
+      <button type="submit">Apply date range</button>
+      <a href="{{ url_for('export_reports_csv', start_date=start_date, end_date=end_date) }}" style="display:inline-block;border:1px solid var(--border,#dbe1ea);border-radius:8px;padding:.62rem .85rem;text-decoration:none;color:inherit;font-weight:600">Export CSV</a>
+    </form>
+    <p class="note">Revenue is recognized on completed-trip end date (or start date when no end date exists); approved trip expenses use expense date; maintenance uses service date. Other operational summaries use trip start date. Cancelled trips are excluded from the P&L revenue calculation.</p>
+  </section>
+
   <section aria-label="Reports"><div class="report-catalog">
-<a href="#profit-loss-report"><span class="report-icon" aria-hidden="true">⚖️</span><span><strong>Profit &amp; Loss Report</strong><small>Freight, approved costs and estimated trip margin</small></span></a>
+<a href="#profit-loss-report"><span class="report-icon" aria-hidden="true">⚖️</span><span><strong>Profit &amp; Loss Report</strong><small>Completed-trip revenue less approved trip costs and maintenance</small></span></a>
 <a href="#truck-revenue-detail"><span class="report-icon" aria-hidden="true">🚚</span><span><strong>Truck Revenue Report</strong><small>Trip performance and operating costs</small></span></a>
 <a href="#party-revenue-detail"><span class="report-icon" aria-hidden="true">🧑‍💼</span><span><strong>Party Revenue Report</strong><small>Freight and collections overview</small></span></a>
-<a href="#supplier-balance-detail"><span class="report-icon" aria-hidden="true">💰</span><span><strong>Supplier Balance Report</strong><small>Supplier-related operating costs</small></span></a>
-<a href="#party-balance-detail"><span class="report-icon" aria-hidden="true">💵</span><span><strong>Party Balance Report</strong><small>Collections and recorded freight gap</small></span></a>
-<a href="#transaction-detail"><span class="report-icon" aria-hidden="true">📑</span><span><strong>Transaction Report</strong><small>Recent freight trip and payment records</small></span></a>
+<a href="#supplier-balance-detail"><span class="report-icon" aria-hidden="true">💰</span><span><strong>Supplier Balance Report</strong><small>Supplier ledger debits, credits and closing balance</small></span></a>
+<a href="#party-balance-detail"><span class="report-icon" aria-hidden="true">💵</span><span><strong>Party Balance Report</strong><small>Opening balance, period activity and closing ledger balance</small></span></a>
+<a href="#transaction-detail"><span class="report-icon" aria-hidden="true">📑</span><span><strong>Transaction Report</strong><small>Itemized payments, approved expenses and maintenance</small></span></a>
 </div></section>
   <section class="panel" id="profit-loss-report">
     <h2 style="margin-top:0">Profit &amp; Loss Report</h2>
@@ -117,15 +127,7 @@
     </tbody></table></div>
   </section>
 
-  <section class="panel">
-    <form method="get" action="{{ url_for('reports') }}" class="filters">
-      <div><label for="start_date">From</label><input type="date" id="start_date" name="start_date" value="{{ start_date }}" required></div>
-      <div><label for="end_date">To</label><input type="date" id="end_date" name="end_date" value="{{ end_date }}" required></div>
-      <button type="submit">Apply date range</button>
-      <a href="{{ url_for('export_reports_csv', start_date=start_date, end_date=end_date) }}" style="display:inline-block;border:1px solid var(--border,#dbe1ea);border-radius:8px;padding:.62rem .85rem;text-decoration:none;color:inherit;font-weight:600">Export CSV</a>
-    </form>
-    <p class="note">Trip and freight figures use trip start date. Collections use payment date; costs use expense date. Only approved expenses are counted. Cancelled trips remain visible in operational status totals.</p>
-  </section>
+
 
   <nav class="report-jump-links" aria-label="Report sections">
     <a href="#business-summary">Business summary</a>
