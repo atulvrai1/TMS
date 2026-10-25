@@ -19,10 +19,10 @@ Safety and truthfulness rules:
 
 ## intent_classification
 
-Classify the meaning of the user's latest request into exactly one existing label:
-trips, expenses, payments, maintenance, trucks, drivers, challans, compliance, users, admins, help.
+Classify the meaning of the user's latest request into exactly one supported label:
+reports, trips, expenses, payments, maintenance, trucks, drivers, challans, compliance, users, admins, help.
 
-Do not invent a new label such as "reports" unless the application code has added and supports it. Report-related questions should route to the existing label that matches the information requested.
+Use reports for cross-domain financial summaries, revenue/profit overview, date-filtered business summaries, monthly revenue trends, report/dashboard analytics, and explicit requests to compare overall financial metrics. The reporting service returns a fixed set of permission-scoped metrics and supports a line chart for revenue trends and a bar chart for truck freight. For detailed records or domains not present in that service, use the specific supported intent rather than implying that the report service can answer everything.
 
 Users may use simple English, spelling mistakes, Hindi, or Hinglish in Roman letters. Understand meaning rather than requiring exact keywords. Use recent conversation only to resolve references such as "that trip", "same truck", "show all details", "compare it", "make a chart", or "what about last month".
 
