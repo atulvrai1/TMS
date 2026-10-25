@@ -3586,6 +3586,28 @@ def reports(report_name=None):
         [*trip_params, start_date, end_date, *trip_params, start_date, end_date,
          *trip_params, start_date, end_date, *maintenance_params, start_date, end_date]
     ).fetchall()
+    reconciliation_report = conn.execute(
+        "SELECT t.trip_id, t.start_date, COALESCE(t.end_date, t.start_date) AS completion_date, "
+        "t.route_from, t.route_to, t.status, COALESCE(tr.registration_number, '') AS truck, "
+        "COALESCE(t.freight_amount, 0) AS freight, "
+        "COALESCE((SELECT SUM(p.amount) FROM trip_payments p WHERE p.trip_id=t.trip_id), 0) AS received, "
+        "COALESCE((SELECT SUM(e.amount) FROM expenses e WHERE e.trip_id=t.trip_id AND e.status='Approved'), 0) AS approved_costs, "
+        "COALESCE((SELECT SUM(e.amount) FROM expenses e WHERE e.trip_id=t.trip_id AND e.status='Pending'), 0) AS pending_costs "
+        "FROM trips t LEFT JOIN trucks tr ON tr.truck_id=t.truck_id "
+        f"WHERE {trip_scope} AND t.status='Completed' "
+        "AND COALESCE(t.end_date, t.start_date) BETWEEN ? AND ? "
+        "ORDER BY completion_date DESC, t.trip_id DESC",
+        [*trip_params, start_date, end_date]
+    ).fetchall()
+    reconciliation_report = [
+        {
+            **dict(row),
+            "outstanding": max(float(row["freight"] or 0) - float(row["received"] or 0), 0),
+            "overpayment": max(float(row["received"] or 0) - float(row["freight"] or 0), 0),
+            "operating_margin": float(row["freight"] or 0) - float(row["approved_costs"] or 0),
+        }
+        for row in reconciliation_report
+    ]
     conn.close()
 
     months = sorted(
@@ -3642,9 +3664,11 @@ def reports(report_name=None):
         party_balance_report=party_balance_report,
         supplier_balance_report=supplier_balance_report,
         transaction_report=transaction_report,
+        reconciliation_report=reconciliation_report,
         block_content="dashboard",
     )
     report_titles = {
+        "reconciliation": "Trip Financial Reconciliation",
         "profit-loss": "Profit & Loss Report",
         "truck-revenue": "Truck Revenue Report",
         "party-revenue": "Party Revenue Report",
@@ -3670,7 +3694,7 @@ def export_reports_csv():
     end_date = request.args.get("end_date", "").strip()
     report_name = request.args.get("report_name", "overview").strip()
     allowed_reports = {
-        "overview", "profit-loss", "truck-revenue", "party-revenue",
+        "overview", "reconciliation", "profit-loss", "truck-revenue", "party-revenue",
         "supplier-balance", "party-balance", "transactions"
     }
     if report_name not in allowed_reports:
@@ -3691,7 +3715,38 @@ def export_reports_csv():
     headers = []
     rows = []
     try:
-        if report_name == "profit-loss":
+        if report_name == "reconciliation":
+            data = conn.execute(
+                "SELECT t.trip_id, COALESCE(t.end_date,t.start_date) AS completion_date, "
+                "t.route_from, t.route_to, COALESCE(tr.registration_number,'') AS truck, "
+                "COALESCE(t.freight_amount,0) AS freight, "
+                "COALESCE((SELECT SUM(p.amount) FROM trip_payments p WHERE p.trip_id=t.trip_id),0) AS received, "
+                "COALESCE((SELECT SUM(e.amount) FROM expenses e WHERE e.trip_id=t.trip_id AND e.status='Approved'),0) AS approved_costs, "
+                "COALESCE((SELECT SUM(e.amount) FROM expenses e WHERE e.trip_id=t.trip_id AND e.status='Pending'),0) AS pending_costs "
+                "FROM trips t LEFT JOIN trucks tr ON tr.truck_id=t.truck_id "
+                f"WHERE {trip_scope} AND t.status='Completed' "
+                "AND COALESCE(t.end_date,t.start_date) BETWEEN ? AND ? "
+                "ORDER BY completion_date DESC,t.trip_id DESC",
+                [*trip_params,start_date,end_date]
+            ).fetchall()
+            headers = [
+                "Trip ID", "Completion Date", "Origin", "Destination", "Truck",
+                "Freight INR", "Payments Received INR", "Outstanding INR",
+                "Overpayment INR", "Approved Costs INR", "Pending Costs INR",
+                "Operating Margin INR"
+            ]
+            rows = [
+                (
+                    r["trip_id"], r["completion_date"], r["route_from"], r["route_to"],
+                    r["truck"], r["freight"], r["received"],
+                    max(float(r["freight"] or 0)-float(r["received"] or 0), 0),
+                    max(float(r["received"] or 0)-float(r["freight"] or 0), 0),
+                    r["approved_costs"], r["pending_costs"],
+                    float(r["freight"] or 0)-float(r["approved_costs"] or 0)
+                )
+                for r in data
+            ]
+        elif report_name == "profit-loss":
             revenue = conn.execute(
                 "SELECT COALESCE(SUM(t.freight_amount),0) AS amount "
                 f"FROM trips t WHERE {trip_scope} AND t.status='Completed' "
