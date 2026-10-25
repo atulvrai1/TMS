@@ -1374,19 +1374,22 @@ def _get_trip_financials(conn, owner_user_id=None):
         trip = dict(row)
         for key in ("freight_amount", "amount_received", "approved_expenses", "pending_expenses"):
             trip[key] = Decimal(str(trip[key] or 0)).quantize(Decimal("0.01"))
+        # Revenue is recognized only for completed trips. Costs and cash receipts
+        # remain visible even when a trip is still active or was later cancelled.
+        recognized_freight = trip["freight_amount"] if trip["status"] == "Completed" else zero
         trip["balance_due"] = max(trip["freight_amount"] - trip["amount_received"], zero)
-        trip["profit_loss"] = trip["freight_amount"] - trip["approved_expenses"]
+        trip["recognized_freight"] = recognized_freight
+        trip["profit_loss"] = recognized_freight - trip["approved_expenses"]
         trip["cash_profit_loss"] = trip["amount_received"] - trip["approved_expenses"]
-        # Recognize fleet freight revenue only after a trip is completed, matching
-        # the Profit & Loss Report. Keep the trip-level breakdown for all statuses.
+
+        summary["freight_total"] += recognized_freight
+        summary["received_total"] += trip["amount_received"]
         if trip["status"] == "Completed":
-            summary["freight_total"] += trip["freight_amount"]
-            summary["received_total"] += trip["amount_received"]
             summary["balance_due_total"] += trip["balance_due"]
-            summary["approved_expenses_total"] += trip["approved_expenses"]
-            summary["pending_expenses_total"] += trip["pending_expenses"]
-            summary["profit_loss_total"] += trip["profit_loss"]
-            summary["cash_profit_loss_total"] += trip["cash_profit_loss"]
+        summary["approved_expenses_total"] += trip["approved_expenses"]
+        summary["pending_expenses_total"] += trip["pending_expenses"]
+        summary["profit_loss_total"] += trip["profit_loss"]
+        summary["cash_profit_loss_total"] += trip["cash_profit_loss"]
         trip_finances.append(trip)
 
     return summary, trip_finances
