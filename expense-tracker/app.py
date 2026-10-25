@@ -3657,9 +3657,16 @@ def reports(report_name=None):
 @app.route("/reports/export.csv", methods=["GET"])
 @access_required
 def export_reports_csv():
-    """Download a scoped, date-filtered trip-level finance report."""
+    """Export the selected report using the same date and record visibility rules."""
     start_date = request.args.get("start_date", "").strip()
     end_date = request.args.get("end_date", "").strip()
+    report_name = request.args.get("report_name", "overview").strip()
+    allowed_reports = {
+        "overview", "profit-loss", "truck-revenue", "party-revenue",
+        "supplier-balance", "party-balance", "transactions"
+    }
+    if report_name not in allowed_reports:
+        abort(404)
     try:
         start_obj = datetime.strptime(start_date, "%Y-%m-%d").date()
         end_obj = datetime.strptime(end_date, "%Y-%m-%d").date()
@@ -3671,42 +3678,128 @@ def export_reports_csv():
 
     conn = get_db()
     trip_scope, trip_params = _record_owner_filter("t")
-    rows = conn.execute(
-        "SELECT t.trip_id, t.start_date, t.route_from, t.route_to, t.status, "
-        "COALESCE(tr.registration_number, '') AS truck, COALESCE(dr.name, '') AS driver, "
-        "COALESCE(t.freight_amount, 0) AS freight, "
-        "COALESCE((SELECT SUM(p.amount) FROM trip_payments p WHERE p.trip_id=t.trip_id "
-        "AND p.payment_date BETWEEN ? AND ?), 0) AS received, "
-        "COALESCE((SELECT SUM(e.amount) FROM expenses e WHERE e.trip_id=t.trip_id "
-        "AND e.status='Approved' AND e.date BETWEEN ? AND ?), 0) AS approved_expenses "
-        "FROM trips t LEFT JOIN trucks tr ON tr.truck_id=t.truck_id "
-        "LEFT JOIN drivers dr ON dr.driver_id=t.driver_id "
-        f"WHERE {trip_scope} AND t.start_date BETWEEN ? AND ? "
-        "ORDER BY t.start_date DESC, t.trip_id DESC",
-        [start_date, end_date, start_date, end_date, *trip_params, start_date, end_date]
-    ).fetchall()
-    conn.close()
+    maintenance_scope, maintenance_params = _record_owner_filter("m")
+    party_scope, party_params = _record_owner_filter("p")
+    headers = []
+    rows = []
+    try:
+        if report_name == "profit-loss":
+            revenue = conn.execute(
+                "SELECT COALESCE(SUM(t.freight_amount),0) AS amount "
+                f"FROM trips t WHERE {trip_scope} AND t.status='Completed' "
+                "AND COALESCE(t.end_date,t.start_date) BETWEEN ? AND ?",
+                [*trip_params, start_date, end_date]
+            ).fetchone()["amount"]
+            expenses = conn.execute(
+                "SELECT COALESCE(SUM(e.amount),0) AS amount "
+                "FROM expenses e JOIN trips t ON t.trip_id=e.trip_id "
+                f"WHERE {trip_scope} AND e.status='Approved' AND e.date BETWEEN ? AND ?",
+                [*trip_params, start_date, end_date]
+            ).fetchone()["amount"]
+            maintenance = conn.execute(
+                "SELECT COALESCE(SUM(m.cost),0) AS amount FROM maintenance m "
+                f"WHERE {maintenance_scope} AND m.service_date BETWEEN ? AND ?",
+                [*maintenance_params, start_date, end_date]
+            ).fetchone()["amount"]
+            headers = ["Profit & Loss Line Item", "Amount INR"]
+            rows = [
+                ("Freight revenue - completed trips", revenue),
+                ("Approved trip expenses", -float(expenses or 0)),
+                ("Recorded maintenance costs", -float(maintenance or 0)),
+                ("Net operating profit / (loss)", float(revenue or 0)-float(expenses or 0)-float(maintenance or 0)),
+            ]
+        elif report_name == "transactions":
+            rows = conn.execute(
+                "SELECT * FROM ("
+                "SELECT 'Payment' AS type,p.payment_date AS date,p.payment_id AS id,t.trip_id,"
+                "'Trip receipt' AS description,COALESCE(p.reference,'') AS reference,p.amount,'Inflow' AS direction "
+                "FROM trip_payments p JOIN trips t ON t.trip_id=p.trip_id "
+                f"WHERE {trip_scope} AND p.payment_date BETWEEN ? AND ? "
+                "UNION ALL "
+                "SELECT 'Approved Expense',e.date,e.expense_id,t.trip_id,e.category,COALESCE(e.description,''),e.amount,'Outflow' "
+                "FROM expenses e JOIN trips t ON t.trip_id=e.trip_id "
+                f"WHERE {trip_scope} AND e.status='Approved' AND e.date BETWEEN ? AND ? "
+                "UNION ALL "
+                "SELECT 'Freight Revenue',COALESCE(t.end_date,t.start_date),t.trip_id,t.trip_id,"
+                "(t.route_from || ' -> ' || t.route_to),'',t.freight_amount,'Inflow' "
+                "FROM trips t WHERE " + trip_scope + " AND t.status='Completed' "
+                "AND COALESCE(t.end_date,t.start_date) BETWEEN ? AND ? "
+                "UNION ALL "
+                "SELECT 'Maintenance',m.service_date,m.maintenance_id,NULL,m.service_type,COALESCE(m.notes,''),m.cost,'Outflow' "
+                "FROM maintenance m WHERE " + maintenance_scope + " AND m.service_date BETWEEN ? AND ?"
+                ") ORDER BY date DESC,id DESC LIMIT 1000",
+                [*trip_params,start_date,end_date,*trip_params,start_date,end_date,
+                 *trip_params,start_date,end_date,*maintenance_params,start_date,end_date]
+            ).fetchall()
+            headers = ["Type","Date","Record ID","Trip ID","Description","Reference","Amount INR","Direction"]
+            rows = [(r["type"],r["date"],r["id"],r["trip_id"] or "",r["description"],r["reference"],r["amount"],r["direction"]) for r in rows]
+        elif report_name in ("party-balance", "supplier-balance"):
+            data = conn.execute(
+                "SELECT p.name,p.party_type,"
+                "COALESCE(SUM(CASE WHEN le.entry_type='Debit' AND le.entry_date < ? THEN le.amount "
+                "WHEN le.entry_type='Credit' AND le.entry_date < ? THEN -le.amount ELSE 0 END),0) opening_balance,"
+                "COALESCE(SUM(CASE WHEN le.entry_type='Debit' AND le.entry_date BETWEEN ? AND ? THEN le.amount ELSE 0 END),0) period_debits,"
+                "COALESCE(SUM(CASE WHEN le.entry_type='Credit' AND le.entry_date BETWEEN ? AND ? THEN le.amount ELSE 0 END),0) period_credits,"
+                "COALESCE(SUM(CASE WHEN le.entry_type='Debit' AND le.entry_date <= ? THEN le.amount "
+                "WHEN le.entry_type='Credit' AND le.entry_date <= ? THEN -le.amount ELSE 0 END),0) closing_balance "
+                "FROM parties p LEFT JOIN party_ledger_entries le ON le.party_id=p.party_id "
+                f"WHERE {party_scope} GROUP BY p.party_id,p.name,p.party_type ORDER BY p.name COLLATE NOCASE",
+                [start_date,start_date,start_date,end_date,start_date,end_date,end_date,end_date,*party_params]
+            ).fetchall()
+            if report_name == "supplier-balance":
+                data = [r for r in data if str(r["party_type"] or "").lower() in ("supplier","both")]
+            headers = ["Party / Supplier","Type","Opening Balance INR","Period Debits INR","Period Credits INR","Closing Balance INR"]
+            rows = [(r["name"],r["party_type"],r["opening_balance"],r["period_debits"],r["period_credits"],r["closing_balance"]) for r in data]
+        elif report_name == "truck-revenue":
+            data = conn.execute(
+                "SELECT tr.registration_number,COUNT(t.trip_id) trip_count,"
+                "COALESCE(SUM(CASE WHEN t.status='Completed' THEN t.freight_amount ELSE 0 END),0) revenue,"
+                "COALESCE(SUM((SELECT SUM(p.amount) FROM trip_payments p WHERE p.trip_id=t.trip_id AND p.payment_date BETWEEN ? AND ?)),0) collections,"
+                "COALESCE(SUM((SELECT SUM(e.amount) FROM expenses e WHERE e.trip_id=t.trip_id AND e.status='Approved' AND e.date BETWEEN ? AND ?)),0) costs "
+                "FROM trips t JOIN trucks tr ON tr.truck_id=t.truck_id "
+                f"WHERE {trip_scope} AND t.start_date BETWEEN ? AND ? "
+                "GROUP BY tr.truck_id,tr.registration_number ORDER BY revenue DESC,tr.registration_number",
+                [start_date,end_date,start_date,end_date,*trip_params,start_date,end_date]
+            ).fetchall()
+            headers = ["Truck","Trip Count","Completed Freight Revenue INR","Collections INR","Approved Trip Costs INR","Revenue Less Trip Costs INR"]
+            rows = [(r["registration_number"],r["trip_count"],r["revenue"],r["collections"],r["costs"],float(r["revenue"] or 0)-float(r["costs"] or 0)) for r in data]
+        elif report_name == "party-revenue":
+            data = conn.execute(
+                "SELECT COALESCE(p.name,'Party not assigned') party_name,"
+                "COUNT(CASE WHEN t.status='Completed' THEN 1 END) trip_count,"
+                "COALESCE(SUM(CASE WHEN t.status='Completed' THEN t.freight_amount ELSE 0 END),0) freight,"
+                "COALESCE(SUM((SELECT SUM(tp.amount) FROM trip_payments tp WHERE tp.trip_id=t.trip_id AND tp.payment_date BETWEEN ? AND ?)),0) collections "
+                "FROM trips t LEFT JOIN parties p ON p.party_id=t.party_id "
+                f"WHERE {trip_scope} AND t.start_date BETWEEN ? AND ? GROUP BY p.party_id,p.name ORDER BY freight DESC,party_name",
+                [start_date,end_date,*trip_params,start_date,end_date]
+            ).fetchall()
+            headers = ["Party","Completed Trips","Freight Revenue INR","Collections INR","Period Freight Less Collections INR"]
+            rows = [(r["party_name"],r["trip_count"],r["freight"],r["collections"],float(r["freight"] or 0)-float(r["collections"] or 0)) for r in data]
+        else:
+            data = conn.execute(
+                "SELECT t.trip_id,t.start_date,t.route_from,t.route_to,t.status,"
+                "COALESCE(tr.registration_number,'') truck,COALESCE(dr.name,'') driver,"
+                "COALESCE(t.freight_amount,0) freight,"
+                "COALESCE((SELECT SUM(p.amount) FROM trip_payments p WHERE p.trip_id=t.trip_id AND p.payment_date BETWEEN ? AND ?),0) received,"
+                "COALESCE((SELECT SUM(e.amount) FROM expenses e WHERE e.trip_id=t.trip_id AND e.status='Approved' AND e.date BETWEEN ? AND ?),0) approved_expenses "
+                "FROM trips t LEFT JOIN trucks tr ON tr.truck_id=t.truck_id LEFT JOIN drivers dr ON dr.driver_id=t.driver_id "
+                f"WHERE {trip_scope} AND t.start_date BETWEEN ? AND ? ORDER BY t.start_date DESC,t.trip_id DESC",
+                [start_date,end_date,start_date,end_date,*trip_params,start_date,end_date]
+            ).fetchall()
+            headers = ["Trip ID","Trip Date","Origin","Destination","Status","Truck","Driver","Booked Freight INR","Collections INR","Approved Trip Expenses INR","Freight Less Approved Expenses INR"]
+            rows = [(r["trip_id"],r["start_date"],r["route_from"],r["route_to"],r["status"],r["truck"],r["driver"],r["freight"],r["received"],r["approved_expenses"],float(r["freight"] or 0)-float(r["approved_expenses"] or 0)) for r in data]
+    finally:
+        conn.close()
 
     output = io.StringIO()
     writer = csv.writer(output)
-    writer.writerow([
-        "Trip ID", "Trip Date", "Origin", "Destination", "Status", "Truck", "Driver",
-        "Booked Freight INR", "Collections INR", "Approved Trip Expenses INR",
-        "Freight Less Approved Expenses INR"
-    ])
-    for row in rows:
-        freight = float(row["freight"] or 0)
-        costs = float(row["approved_expenses"] or 0)
-        writer.writerow([
-            row["trip_id"], row["start_date"], row["route_from"], row["route_to"],
-            row["status"], row["truck"], row["driver"], f"{freight:.2f}",
-            f"{float(row['received'] or 0):.2f}", f"{costs:.2f}", f"{freight-costs:.2f}"
-        ])
+    writer.writerow(headers)
+    writer.writerows(rows)
     response_data = io.BytesIO(output.getvalue().encode("utf-8-sig"))
     response_data.seek(0)
     return send_file(
         response_data, mimetype="text/csv", as_attachment=True,
-        download_name=f"fleetflow-report-{start_date}-to-{end_date}.csv"
+        download_name=f"fleetflow-{report_name}-report-{start_date}-to-{end_date}.csv"
     )
 
 if __name__ == "__main__":
