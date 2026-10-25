@@ -48,6 +48,7 @@
   </header>
   <section class="panel">
     <form method="get" action="{{ url_for('reports', report_name=report_name) }}" class="filters">
+      {% if report_name == 'profit-loss' %}<input type="hidden" name="tab" value="{{ request.args.get('tab', 'overall') }}">{% endif %}
       <div><label for="start_date">From</label><input type="date" id="start_date" name="start_date" value="{{ start_date }}" required></div>
       <div><label for="end_date">To</label><input type="date" id="end_date" name="end_date" value="{{ end_date }}" required></div>
       <button type="submit">Apply Date Range</button>
