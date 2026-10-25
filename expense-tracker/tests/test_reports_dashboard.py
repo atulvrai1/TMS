@@ -74,7 +74,7 @@ with app.test_client() as client:
         session["csrf_token"] = "analytics-test-csrf"
 
     response = client.get(
-        "/reports?start_date=" + date.today().isoformat() +
+        "/reports?start_date=" + (date.today() - timedelta(days=1)).isoformat() +
         "&end_date=" + date.today().isoformat()
     )
     assert response.status_code == 200, response.status_code
