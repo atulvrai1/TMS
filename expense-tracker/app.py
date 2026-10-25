@@ -3534,12 +3534,12 @@ def reports(report_name=None):
         "COALESCE(tr.registration_number, 'Not assigned') AS truck, "
         "COALESCE(t.freight_amount,0) AS revenue, "
         "COALESCE((SELECT SUM(e.amount) FROM expenses e WHERE e.trip_id=t.trip_id "
-        "AND e.status='Approved' AND e.date BETWEEN ? AND ?),0) AS costs "
+        "AND e.status='Approved'),0) AS costs "
         "FROM trips t LEFT JOIN trucks tr ON tr.truck_id=t.truck_id "
         f"WHERE {trip_scope} AND t.status='Completed' AND t.end_date IS NOT NULL "
         "AND t.end_date >= t.start_date AND t.end_date BETWEEN ? AND ? "
         "ORDER BY t.end_date DESC, t.trip_id DESC",
-        [start_date, end_date, *trip_params, start_date, end_date]
+        [*trip_params, start_date, end_date]
     ).fetchall()
 
     # Truck P&L uses the same truck visibility rules as other operational pages.
@@ -3551,13 +3551,14 @@ def reports(report_name=None):
         "COALESCE(SUM(CASE WHEN t.status='Completed' AND t.end_date IS NOT NULL "
         "AND t.end_date >= t.start_date AND t.end_date BETWEEN ? AND ? THEN t.freight_amount ELSE 0 END),0) AS revenue, "
         "COALESCE((SELECT SUM(e.amount) FROM expenses e JOIN trips et ON et.trip_id=e.trip_id "
-        "WHERE et.truck_id=tr.truck_id AND e.status='Approved' AND e.date BETWEEN ? AND ?),0) AS costs, "
+        "WHERE et.truck_id=tr.truck_id AND et.status='Completed' AND et.end_date IS NOT NULL "
+        "AND et.end_date >= et.start_date AND et.end_date BETWEEN ? AND ? AND e.status='Approved'),0) AS costs, "
         "COALESCE((SELECT SUM(m.cost) FROM maintenance m WHERE m.truck_id=tr.truck_id "
         "AND m.service_date BETWEEN ? AND ?),0) AS maintenance_cost "
         "FROM trucks tr LEFT JOIN trips t ON t.truck_id=tr.truck_id "
         f"WHERE {truck_scope} "
         "GROUP BY tr.truck_id, tr.registration_number ORDER BY revenue DESC, tr.registration_number",
-        [start_date, end_date, start_date, end_date, start_date, end_date, start_date, end_date, *truck_params]
+        [start_date, end_date, start_date, end_date, start_date, end_date, *truck_params]
     ).fetchall()
     pnl_expenses_row = conn.execute(
         "SELECT COALESCE(SUM(e.amount), 0) AS amount, COUNT(*) AS count "
