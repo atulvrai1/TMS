@@ -1185,6 +1185,10 @@ def trips():
         if row['driver_id'] not in active_driver_ids
     ]
     assignable_users = _load_assignable_users(conn) if _is_admin_user() else []
+    available_parties = conn.execute(
+        "SELECT party_id, owner_user_id, name, party_type FROM parties "
+        "ORDER BY name COLLATE NOCASE"
+    ).fetchall() if _is_admin_user() else []
     conn.close()
     return render_template(
         "trips.html",
@@ -1193,6 +1197,7 @@ def trips():
         available_trucks=available_trucks,
         available_drivers=available_drivers,
         assignable_users=assignable_users,
+        available_parties=available_parties,
         current_user_id=session["user_id"],
         has_driver_link=bool(session.get("driver_id") or _is_admin_user()),
         today=date.today().isoformat(),
@@ -1763,7 +1768,13 @@ def create_trip():
     truck_id = request.form.get("truck_id", "").strip()
     driver_id = request.form.get("driver_id", "").strip()
     trip_owner_id = request.form.get("owner_user_id", str(session["user_id"]))
+    raw_party_id = request.form.get("party_id", "").strip()
     raw_freight_amount = request.form.get("freight_amount", "").strip()
+    try:
+        party_id = int(raw_party_id) if raw_party_id else None
+    except ValueError:
+        flash("Choose a valid party.", "error")
+        return redirect(url_for("trips"))
 
     try:
         truck_id = int(truck_id)
@@ -1805,6 +1816,17 @@ def create_trip():
             conn.rollback()
             flash("A Driver account can only be assigned trips for its linked driver record.", "error")
             return redirect(url_for("trips"))
+        if party_id is not None:
+            party = conn.execute(
+                "SELECT party_id, owner_user_id, name FROM parties WHERE party_id = ?",
+                (party_id,)
+            ).fetchone()
+            if not party or party["owner_user_id"] != trip_owner_id:
+                conn.rollback()
+                flash("Choose a party belonging to the selected trip account.", "error")
+                return redirect(url_for("trips"))
+        else:
+            party = None
         truck = conn.execute(
             "SELECT registration_number FROM trucks "
             "WHERE truck_id = ? AND status = 'Available'",
@@ -1827,11 +1849,19 @@ def create_trip():
 
         cursor = conn.execute(
             "INSERT INTO trips "
-            "(truck_id, driver_id, start_date, route_from, route_to, freight_amount, status, owner_user_id) "
-            "VALUES (?, ?, ?, ?, ?, ?, 'Scheduled', ?)",
-            (truck_id, driver_id, start_date, route_from, route_to, float(freight_amount), trip_owner_id)
+            "(truck_id, driver_id, start_date, route_from, route_to, freight_amount, status, owner_user_id, party_id) "
+            "VALUES (?, ?, ?, ?, ?, ?, 'Scheduled', ?, ?)",
+            (truck_id, driver_id, start_date, route_from, route_to, float(freight_amount), trip_owner_id, party_id)
         )
         trip_id = cursor.lastrowid
+        if party is not None:
+            conn.execute(
+                "INSERT INTO party_ledger_entries "
+                "(party_id, entry_date, entry_type, amount, reference, description, trip_id, created_by) "
+                "VALUES (?, ?, 'Debit', ?, ?, ?, ?, ?)",
+                (party_id, start_date, float(freight_amount), f"TRIP-{trip_id}",
+                 f"Freight billed for Trip #{trip_id}", trip_id, session["user_id"])
+            )
         _log_trip_action(
             conn,
             "Trip Scheduled",
