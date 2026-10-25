@@ -154,9 +154,10 @@ def _record_owner_filter(alias, owner_column="owner_user_id"):
         # Admins can review records across the FleetFlow workspace, including
         # records created by other administrators. Non-admin users remain scoped.
         return "1 = 1", []
-    if alias == "trips":
+    if alias in ("trips", "t"):
         # Drivers should access trips assigned to their linked driver record,
-        # even when an administrator owns/created the trip.
+        # even when an administrator owns/created the trip. Support the common
+        # short alias used by analytics queries as well as the table name.
         return (
             f"{alias}.driver_id = (SELECT driver_id FROM users WHERE user_id = ?)",
             [session["user_id"]]
