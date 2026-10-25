@@ -4,7 +4,7 @@ import pytest
 from flask import Flask, jsonify, session
 
 import database.db as database
-from controller.access_controller import UserAccessController, admin_required
+from controller.access_controller import SUPER_ADMIN_EMAIL, UserAccessController, admin_required
 
 
 @pytest.fixture
@@ -54,7 +54,7 @@ def make_app():
 
 def test_super_admin_email_comparison_ignores_case_and_outer_spaces():
     controller = UserAccessController(sqlite3.connect(":memory:"))
-    assert controller.is_super_admin(" ATULV.11239@GMAIL.COM ")
+    assert controller.is_super_admin(f" {SUPER_ADMIN_EMAIL.upper()} ")
     assert not controller.is_super_admin("someone-else@example.com")
 
 
