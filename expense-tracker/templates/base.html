@@ -37,7 +37,7 @@
                 <a href="{{ url_for('roadside_compliance') }}" class="nav-item{% if request.endpoint and request.endpoint.startswith('compliance_') or request.endpoint == 'roadside_compliance' %} active{% endif %}"><span>🛡</span> Roadside Compliance</a>
                 <a href="{{ url_for('trips') }}" class="nav-item{% if request.endpoint in ('trips', 'create_trip', 'update_trip_status', 'update_trip_freight', 'record_trip_payment') %} active{% endif %}"><span>↗</span> Trips & Dispatch</a>
                 <a href="{{ url_for('parties') }}" class="nav-item{% if request.endpoint in ('parties', 'party_ledger') %} active{% endif %}"><span>♧</span> Parties & Ledger</a>
-                <a href="{{ url_for('reports') }}" class="nav-item{% if request.endpoint == 'reports' %} active{% endif %}"><span>📊</span> Analytics & Reports</a>
+                <a href="{{ url_for('reports') }}" class="nav-item{% if request.endpoint == 'reports' %} active{% endif %}"><span>📊</span> Reports</a>
                 <a href="{{ url_for('transport_documents') }}" class="nav-item{% if request.endpoint == 'transport_documents' %} active{% endif %}"><span>🧾</span> Loading Slips & POD</a>
                 <a href="{{ url_for('admin_notifications') }}" class="nav-item{% if request.endpoint in ('admin_notifications', 'admin_notification_count') %} active{% endif %}">
                     <span>🔔</span> Notifications
