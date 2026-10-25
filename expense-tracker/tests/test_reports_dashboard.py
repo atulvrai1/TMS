@@ -82,9 +82,9 @@ with app.test_client() as client:
     assert b"Latest freight trips" in response.data
     assert b"Top freight trips" not in response.data
     # Latest trip date first; for equal dates, the larger trip ID comes first.
-    row_newest = response.data.index(f"#{newer_same_day_trip_id}".encode())
-    row_original = response.data.index(f"#{trip_id}".encode())
-    row_older = response.data.index(f"#{older_trip_id}".encode())
+    row_newest = response.data.index("Patna → Ranchi".encode())
+    row_original = response.data.index("Patna → Indore".encode())
+    row_older = response.data.index("Patna → Delhi".encode())
     assert row_newest < row_original < row_older
     assert b"Booked freight" in response.data
     assert b"Approved costs by category" in response.data
