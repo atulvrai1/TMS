@@ -3176,6 +3176,165 @@ from controller.ai_assistant import assistant_bp
 app.register_blueprint(assistant_bp)
 
 
+
+@app.route("/transport-documents", methods=["GET", "POST"])
+@access_required
+def transport_documents():
+    """Manage loading slips and POD references against existing trips."""
+    if request.method == "POST":
+        if not _valid_csrf_token():
+            flash("Your session token is invalid. Reload this page and try again.", "error")
+            return redirect(url_for("transport_documents"))
+
+        action = request.form.get("action", "create").strip()
+        conn = get_db()
+        try:
+            if action == "create":
+                try:
+                    trip_id = int(request.form.get("trip_id", ""))
+                    document_date = request.form.get("document_date", "").strip()
+                    datetime.strptime(document_date, "%Y-%m-%d")
+                except (TypeError, ValueError):
+                    flash("Choose a valid trip and document date.", "error")
+                    return redirect(url_for("transport_documents"))
+
+                document_type = request.form.get("document_type", "Loading Slip").strip()
+                document_number = request.form.get("document_number", "").strip()
+                cargo_description = request.form.get("cargo_description", "").strip()
+                quantity = request.form.get("quantity", "").strip()
+                notes = request.form.get("notes", "").strip()
+                if document_type not in {"Loading Slip", "POD"}:
+                    flash("Choose Loading Slip or POD.", "error")
+                    return redirect(url_for("transport_documents"))
+                if not document_number or len(document_number) > 80:
+                    flash("Enter a document number up to 80 characters.", "error")
+                    return redirect(url_for("transport_documents"))
+                if len(cargo_description) > 300 or len(quantity) > 80 or len(notes) > 1000:
+                    flash("Cargo, quantity, or notes exceed the allowed length.", "error")
+                    return redirect(url_for("transport_documents"))
+
+                trip_scope, trip_params = _record_owner_filter("trips")
+                trip = conn.execute(
+                    "SELECT trips.trip_id, trips.owner_user_id FROM trips "
+                    f"WHERE trips.trip_id = ? AND trips.status != 'Cancelled' AND {trip_scope}",
+                    [trip_id, *trip_params]
+                ).fetchone()
+                if not trip:
+                    flash("Choose a trip you are allowed to access.", "error")
+                    return redirect(url_for("transport_documents"))
+                try:
+                    cursor = conn.execute(
+                        "INSERT INTO transport_documents "
+                        "(trip_id, document_type, document_number, document_date, cargo_description, "
+                        "quantity, status, pod_reference, notes, created_by) "
+                        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                        (
+                            trip_id, document_type, document_number, document_date,
+                            cargo_description, quantity,
+                            "POD Received" if document_type == "POD" else "Draft",
+                            document_number if document_type == "POD" else None,
+                            notes, session["user_id"]
+                        )
+                    )
+                except sqlite3.IntegrityError:
+                    flash("That document number already exists for this trip and document type.", "error")
+                    return redirect(url_for("transport_documents"))
+                document_id = cursor.lastrowid
+                conn.execute(
+                    "INSERT INTO user_logs (user_id, action, details, actor_user_id) "
+                    "VALUES (?, 'Transport Document Created', ?, ?)",
+                    (
+                        trip["owner_user_id"],
+                        f"{document_type} {document_number} created for Trip #{trip_id}.",
+                        session["user_id"]
+                    )
+                )
+                conn.commit()
+                flash(f"{document_type} {document_number} saved for Trip #{trip_id}.", "success")
+                return redirect(url_for("transport_documents"))
+
+            if action == "update_status":
+                try:
+                    document_id = int(request.form.get("document_id", ""))
+                except (TypeError, ValueError):
+                    flash("Choose a valid transport document.", "error")
+                    return redirect(url_for("transport_documents"))
+                new_status = request.form.get("status", "").strip()
+                allowed_statuses = {
+                    "Draft", "Ready for Loading", "Loaded", "In Transit",
+                    "Delivered", "POD Received", "Cancelled"
+                }
+                if new_status not in allowed_statuses:
+                    flash("Choose a valid document status.", "error")
+                    return redirect(url_for("transport_documents"))
+                pod_reference = request.form.get("pod_reference", "").strip()
+                if len(pod_reference) > 120:
+                    flash("POD reference must be 120 characters or fewer.", "error")
+                    return redirect(url_for("transport_documents"))
+                if new_status == "POD Received" and not pod_reference:
+                    flash("Enter the POD reference before marking POD Received.", "error")
+                    return redirect(url_for("transport_documents"))
+                trip_scope, trip_params = _record_owner_filter("trips")
+                existing = conn.execute(
+                    "SELECT d.document_id, d.trip_id, d.document_type, d.document_number, "
+                    "t.owner_user_id FROM transport_documents d JOIN trips t ON t.trip_id = d.trip_id "
+                    f"WHERE d.document_id = ? AND {trip_scope}",
+                    [document_id, *trip_params]
+                ).fetchone()
+                if not existing:
+                    flash("Document not found or you do not have access.", "error")
+                    return redirect(url_for("transport_documents"))
+                conn.execute(
+                    "UPDATE transport_documents SET status = ?, "
+                    "pod_reference = CASE WHEN ? != '' THEN ? ELSE pod_reference END, "
+                    "updated_at = CURRENT_TIMESTAMP WHERE document_id = ?",
+                    (new_status, pod_reference, pod_reference, document_id)
+                )
+                conn.execute(
+                    "INSERT INTO user_logs (user_id, action, details, actor_user_id) "
+                    "VALUES (?, 'Transport Document Status Updated', ?, ?)",
+                    (
+                        existing["owner_user_id"],
+                        f"{existing['document_type']} {existing['document_number']} "
+                        f"for Trip #{existing['trip_id']} changed to {new_status}.",
+                        session["user_id"]
+                    )
+                )
+                conn.commit()
+                flash("Transport document status updated.", "success")
+                return redirect(url_for("transport_documents"))
+
+            flash("Unsupported document action.", "error")
+            return redirect(url_for("transport_documents"))
+        finally:
+            conn.close()
+
+    conn = get_db()
+    trip_scope, trip_params = _record_owner_filter("trips")
+    trips = conn.execute(
+        "SELECT trips.trip_id, trips.start_date, trips.route_from, trips.route_to, "
+        "trucks.registration_number, drivers.name AS driver_name "
+        "FROM trips LEFT JOIN trucks ON trucks.truck_id = trips.truck_id "
+        "LEFT JOIN drivers ON drivers.driver_id = trips.driver_id "
+        f"WHERE trips.status != 'Cancelled' AND {trip_scope} ORDER BY trips.trip_id DESC",
+        trip_params
+    ).fetchall()
+    documents = conn.execute(
+        "SELECT d.*, t.route_from, t.route_to, t.start_date, "
+        "tr.registration_number, dr.name AS driver_name "
+        "FROM transport_documents d JOIN trips t ON t.trip_id = d.trip_id "
+        "LEFT JOIN trucks tr ON tr.truck_id = t.truck_id "
+        "LEFT JOIN drivers dr ON dr.driver_id = t.driver_id "
+        f"WHERE {trip_scope.replace('trips.', 't.')} "
+        "ORDER BY d.updated_at DESC, d.document_id DESC LIMIT 500",
+        trip_params
+    ).fetchall()
+    conn.close()
+    return render_template(
+        "transport_documents.html", trips=trips, documents=documents,
+        csrf_token=session.get("csrf_token", ""), block_content="dashboard"
+    )
+
 if __name__ == "__main__":
     # Never enable the interactive debugger by default.
     app.run(debug=False, host=os.environ.get("FLASK_HOST", "127.0.0.1"), port=int(os.environ.get("PORT", "5001")))
