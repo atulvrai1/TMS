@@ -2064,8 +2064,8 @@ def correct_payment_amount(id):
     try:
         conn.execute("BEGIN IMMEDIATE")
         payment = conn.execute(
-            "SELECT trip_payments.trip_id, trip_payments.amount, trips.freight_amount, "
-            "trips.owner_user_id "
+            "SELECT trip_payments.payment_id, trip_payments.trip_id, trip_payments.amount, "
+            "trips.freight_amount, trips.owner_user_id "
             "FROM trip_payments JOIN trips ON trips.trip_id = trip_payments.trip_id "
             "WHERE trip_payments.payment_id = ? AND " + _record_owner_filter("trips")[0],
             [id, *_record_owner_filter("trips")[1]]
@@ -2100,6 +2100,12 @@ def correct_payment_amount(id):
         conn.execute(
             "UPDATE trip_payments SET amount = ? WHERE payment_id = ?",
             (float(new_amount), id)
+        )
+        conn.execute(
+            "UPDATE party_ledger_entries SET amount = ?, description = ? "
+            "WHERE reference = ? AND entry_type = 'Credit' AND trip_id = ?",
+            (float(new_amount), f"Payment received for Trip #{payment['trip_id']} (corrected)",
+             f"PAY-{id}", payment["trip_id"])
         )
         conn.execute(
             "INSERT INTO user_logs (user_id, action, details, actor_user_id) "
