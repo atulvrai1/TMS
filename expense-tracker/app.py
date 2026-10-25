@@ -3390,6 +3390,18 @@ def reports():
         [*payment_params, start_date, end_date, start_date, end_date]
     ).fetchone()
 
+    maintenance_scope, maintenance_params = _record_owner_filter("m")
+    maintenance_summary = conn.execute(
+        "SELECT COALESCE(SUM(m.cost), 0) AS maintenance_cost, COUNT(*) AS service_count "
+        f"FROM maintenance m WHERE {maintenance_scope} AND m.service_date BETWEEN ? AND ?",
+        [*maintenance_params, start_date, end_date]
+    ).fetchone()
+    monthly_maintenance = conn.execute(
+        "SELECT strftime('%Y-%m', m.service_date) AS month, COALESCE(SUM(m.cost), 0) AS amount "
+        f"FROM maintenance m WHERE {maintenance_scope} AND m.service_date BETWEEN ? AND ? "
+        "GROUP BY month ORDER BY month",
+        [*maintenance_params, start_date, end_date]
+    ).fetchall()
     monthly_trips = conn.execute(
         "SELECT strftime('%Y-%m', t.start_date) AS month, COUNT(*) AS trips, "
         "COALESCE(SUM(t.freight_amount), 0) AS freight "
@@ -3431,11 +3443,14 @@ def reports():
         {row["month"] for row in monthly_trips}
         | {row["month"] for row in monthly_expenses}
         | {row["month"] for row in monthly_payments}
+        | {row["month"] for row in monthly_maintenance}
     )
     month_labels = [datetime.strptime(m, "%Y-%m").strftime("%b %Y") for m in months]
     trip_by_month = {row["month"]: row for row in monthly_trips}
     expense_by_month = {row["month"]: float(row["amount"] or 0) for row in monthly_expenses}
     payment_by_month = {row["month"]: float(row["amount"] or 0) for row in monthly_payments}
+    maintenance_by_month = {row["month"]: float(row["amount"] or 0) for row in monthly_maintenance}
+    monthly_maintenance_values = [round(maintenance_by_month.get(m, 0), 2) for m in months]
     monthly_freight = [round(float(trip_by_month[m]["freight"] or 0), 2) if m in trip_by_month else 0 for m in months]
     monthly_expense_values = [round(expense_by_month.get(m, 0), 2) for m in months]
     monthly_payment_values = [round(payment_by_month.get(m, 0), 2) for m in months]
@@ -3455,6 +3470,8 @@ def reports():
         start_date=start_date, end_date=end_date,
         trip_summary=trip_summary, expense_summary=expense_summary,
         payment_summary=payment_summary,
+        maintenance_summary=maintenance_summary,
+        monthly_maintenance=monthly_maintenance_values,
         freight_total=freight_total, approved_expenses=approved_expenses,
         receipts=receipts, estimated_trip_margin=freight_total-approved_expenses,
         collection_gap=freight_total-receipts,
