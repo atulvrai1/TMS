@@ -57,6 +57,7 @@
 
   {% if report_name == 'profit-loss' %}
   <section class="panel">
+    <p class="muted">Operating result for the selected period, based on completed-trip freight revenue less approved trip expenses and recorded maintenance.</p>
     <div class="pnl-statement">
       <div class="pnl-statement-head"><div><h2>Profit &amp; Loss Statement</h2><div class="pnl-period">For the period {{ start_date }} to {{ end_date }}</div></div><div class="pnl-period">{{ pnl_trip_count }} completed trips · {{ pnl_expense_count }} approved expense records · {{ pnl_maintenance_count }} maintenance records</div></div>
       <div class="table-wrap"><table class="pnl-table"><thead><tr><th>Account</th><th class="amount">Amount (₹)</th></tr></thead><tbody>
@@ -69,7 +70,7 @@
         <tr class="subtotal"><td>Total Operating Expenses</td><td class="amount">₹{{ "%.2f"|format(pnl_expenses + pnl_maintenance) }}</td></tr>
         <tr class="net-result"><td>Net Operating Profit / (Loss)</td><td class="amount">₹{{ "%.2f"|format(pnl_operating_profit) }}</td></tr>
       </tbody></table></div>
-      <div class="pnl-result"><strong>Total P&amp;L: ₹{{ "%.2f"|format(pnl_operating_profit) }}</strong></div>
+    </div>
     <p class="note">This is an operational P&amp;L from currently recorded data, not a statutory or fully reconciled accounting statement. It excludes overheads not recorded in these categories, depreciation, tax, interest and supplier bills not recorded as approved trip expenses or maintenance. Collections are cash receipts and are not counted as revenue again.</p>
   </section>
 
