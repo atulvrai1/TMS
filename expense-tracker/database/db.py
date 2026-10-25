@@ -401,6 +401,33 @@ def init_db():
         if "owner_user_id" not in maintenance_columns:
             conn.execute("ALTER TABLE maintenance ADD COLUMN owner_user_id INTEGER REFERENCES users(user_id)")
 
+        # Transport documents: loading slips and POD lifecycle, linked to trips.
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS transport_documents (
+                document_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                trip_id INTEGER NOT NULL,
+                document_type TEXT NOT NULL DEFAULT 'Loading Slip'
+                    CHECK(document_type IN ('Loading Slip', 'POD')),
+                document_number TEXT NOT NULL,
+                document_date DATE NOT NULL,
+                cargo_description TEXT,
+                quantity TEXT,
+                status TEXT NOT NULL DEFAULT 'Draft'
+                    CHECK(status IN ('Draft', 'Ready for Loading', 'Loaded', 'In Transit', 'Delivered', 'POD Received', 'Cancelled')),
+                pod_reference TEXT,
+                notes TEXT,
+                created_by INTEGER REFERENCES users(user_id),
+                created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (trip_id) REFERENCES trips(trip_id),
+                UNIQUE (trip_id, document_type, document_number)
+            )
+        """)
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_transport_documents_trip_status "
+            "ON transport_documents(trip_id, status, document_date DESC)"
+        )
+
         super_admin = conn.execute(
             "SELECT user_id FROM users WHERE lower(email) = lower(?)",
             (SUPER_ADMIN_EMAIL,)
