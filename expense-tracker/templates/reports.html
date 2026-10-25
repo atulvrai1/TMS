@@ -47,13 +47,76 @@
     </div>
   </div>
   <section aria-label="Reports"><div class="report-catalog">
-<a href="#business-summary"><span class="report-icon" aria-hidden="true">⚖️</span><span><strong>Profit &amp; Loss Report</strong><small>Freight, approved costs and estimated trip margin</small></span></a>
-<a href="#truck-revenue-report"><span class="report-icon" aria-hidden="true">🚚</span><span><strong>Truck Revenue Report</strong><small>Trip performance and operating costs</small></span></a>
-<a href="#party-revenue-report"><span class="report-icon" aria-hidden="true">🧑‍💼</span><span><strong>Party Revenue Report</strong><small>Freight and collections overview</small></span></a>
-<a href="#supplier-balance-report"><span class="report-icon" aria-hidden="true">💰</span><span><strong>Supplier Balance Report</strong><small>Supplier-related operating costs</small></span></a>
-<a href="#party-balance-report"><span class="report-icon" aria-hidden="true">💵</span><span><strong>Party Balance Report</strong><small>Collections and recorded freight gap</small></span></a>
-<a href="#transaction-report"><span class="report-icon" aria-hidden="true">📑</span><span><strong>Transaction Report</strong><small>Recent freight trip and payment records</small></span></a>
+<a href="#profit-loss-report"><span class="report-icon" aria-hidden="true">⚖️</span><span><strong>Profit &amp; Loss Report</strong><small>Freight, approved costs and estimated trip margin</small></span></a>
+<a href="#truck-revenue-detail"><span class="report-icon" aria-hidden="true">🚚</span><span><strong>Truck Revenue Report</strong><small>Trip performance and operating costs</small></span></a>
+<a href="#party-revenue-detail"><span class="report-icon" aria-hidden="true">🧑‍💼</span><span><strong>Party Revenue Report</strong><small>Freight and collections overview</small></span></a>
+<a href="#supplier-balance-detail"><span class="report-icon" aria-hidden="true">💰</span><span><strong>Supplier Balance Report</strong><small>Supplier-related operating costs</small></span></a>
+<a href="#party-balance-detail"><span class="report-icon" aria-hidden="true">💵</span><span><strong>Party Balance Report</strong><small>Collections and recorded freight gap</small></span></a>
+<a href="#transaction-detail"><span class="report-icon" aria-hidden="true">📑</span><span><strong>Transaction Report</strong><small>Recent freight trip and payment records</small></span></a>
 </div></section>
+  <section class="panel" id="profit-loss-report">
+    <h2 style="margin-top:0">Profit &amp; Loss Report</h2>
+    <p class="muted">Accrual-style operating view for the selected period. Revenue includes completed trips only; costs include approved trip expenses and recorded maintenance.</p>
+    <div class="kpis">
+      <div class="kpi"><div class="kpi-label">Completed-trip freight revenue</div><div class="kpi-value">₹{{ "%.2f"|format(pnl_revenue) }}</div><div class="note">{{ pnl_trip_count }} completed trips</div></div>
+      <div class="kpi"><div class="kpi-label">Approved trip expenses</div><div class="kpi-value">₹{{ "%.2f"|format(pnl_expenses) }}</div><div class="note">{{ pnl_expense_count }} approved records</div></div>
+      <div class="kpi"><div class="kpi-label">Maintenance costs</div><div class="kpi-value">₹{{ "%.2f"|format(pnl_maintenance) }}</div><div class="note">{{ pnl_maintenance_count }} service records</div></div>
+      <div class="kpi"><div class="kpi-label">Net operating result</div><div class="kpi-value">₹{{ "%.2f"|format(pnl_operating_profit) }}</div><div class="note">Revenue − approved trip expenses − maintenance</div></div>
+    </div>
+    <div class="table-wrap"><table><thead><tr><th>Line item</th><th>Amount (₹)</th></tr></thead><tbody>
+      <tr><td>Completed-trip freight revenue</td><td>₹{{ "%.2f"|format(pnl_revenue) }}</td></tr>
+      <tr><td>Less: approved trip expenses</td><td>− ₹{{ "%.2f"|format(pnl_expenses) }}</td></tr>
+      <tr><td>Less: recorded maintenance costs</td><td>− ₹{{ "%.2f"|format(pnl_maintenance) }}</td></tr>
+      <tr><th>Net operating result (before other overheads, tax and depreciation)</th><th>₹{{ "%.2f"|format(pnl_operating_profit) }}</th></tr>
+    </tbody></table></div>
+    <p class="note">This is the best P&amp;L available from currently recorded FleetFlow data, not a statutory or fully reconciled accounting statement. It excludes unrecorded overheads, depreciation, tax, and supplier bills not entered as approved trip expenses or maintenance.</p>
+  </section>
+
+  <section class="panel" id="truck-revenue-detail">
+    <h2 style="margin-top:0">Truck Revenue Report</h2>
+    <div class="table-wrap"><table><thead><tr><th>Truck</th><th>Trips</th><th>Completed freight revenue</th><th>Collections in period</th><th>Approved trip costs</th><th>Revenue less trip costs</th></tr></thead><tbody>
+    {% for row in truck_report %}<tr><td>{{ row.registration_number }}</td><td>{{ row.trip_count }}</td><td>₹{{ "%.2f"|format(row.revenue or 0) }}</td><td>₹{{ "%.2f"|format(row.collections or 0) }}</td><td>₹{{ "%.2f"|format(row.costs or 0) }}</td><td>₹{{ "%.2f"|format((row.revenue or 0)-(row.costs or 0)) }}</td></tr>
+    {% else %}<tr><td colspan="6" class="empty">No truck activity for this period.</td></tr>{% endfor %}
+    </tbody></table></div>
+    <p class="note">Maintenance is reported separately in the P&amp;L and transaction reports; it is not allocated to trucks until each maintenance record has a reliable truck association in this report query.</p>
+  </section>
+
+  <section class="panel" id="party-revenue-detail">
+    <h2 style="margin-top:0">Party Revenue Report</h2>
+    <div class="table-wrap"><table><thead><tr><th>Customer / Party</th><th>Trips</th><th>Freight</th><th>Collections in period</th><th>Freight less collections*</th></tr></thead><tbody>
+    {% for row in party_revenue_report %}<tr><td>{{ row.party_name or "Party not assigned" }}</td><td>{{ row.trip_count }}</td><td>₹{{ "%.2f"|format(row.freight or 0) }}</td><td>₹{{ "%.2f"|format(row.collections or 0) }}</td><td>₹{{ "%.2f"|format((row.freight or 0)-(row.collections or 0)) }}</td></tr>
+    {% else %}<tr><td colspan="5" class="empty">No party revenue records for this period.</td></tr>{% endfor %}
+    </tbody></table></div>
+    <p class="note">*This is a period freight-versus-collections comparison, not the party's full ledger balance. Trips without a linked party are grouped as “Party not assigned”.</p>
+  </section>
+
+  <section class="panel" id="supplier-balance-detail">
+    <h2 style="margin-top:0">Supplier Balance Report</h2>
+    <div class="table-wrap"><table><thead><tr><th>Supplier</th><th>Opening balance</th><th>Period debits</th><th>Period credits</th><th>Closing balance</th></tr></thead><tbody>
+    {% for row in supplier_balance_report %}<tr><td>{{ row.name }}</td><td>₹{{ "%.2f"|format(row.opening_balance or 0) }}</td><td>₹{{ "%.2f"|format(row.period_debits or 0) }}</td><td>₹{{ "%.2f"|format(row.period_credits or 0) }}</td><td>₹{{ "%.2f"|format(row.closing_balance or 0) }}</td></tr>
+    {% else %}<tr><td colspan="5" class="empty">No supplier ledger entries or supplier parties found.</td></tr>{% endfor %}
+    </tbody></table></div>
+    <p class="note">Balances use party-ledger entries (Debit increases the balance; Credit reduces it). Supplier costs recorded only as trip expenses are not automatically supplier ledger entries.</p>
+  </section>
+
+  <section class="panel" id="party-balance-detail">
+    <h2 style="margin-top:0">Party Balance Report</h2>
+    <div class="table-wrap"><table><thead><tr><th>Party</th><th>Type</th><th>Opening balance</th><th>Period debits</th><th>Period credits</th><th>Closing balance</th></tr></thead><tbody>
+    {% for row in party_balance_report %}<tr><td>{{ row.name }}</td><td>{{ row.party_type }}</td><td>₹{{ "%.2f"|format(row.opening_balance or 0) }}</td><td>₹{{ "%.2f"|format(row.period_debits or 0) }}</td><td>₹{{ "%.2f"|format(row.period_credits or 0) }}</td><td>₹{{ "%.2f"|format(row.closing_balance or 0) }}</td></tr>
+    {% else %}<tr><td colspan="6" class="empty">No parties found for this account.</td></tr>{% endfor %}
+    </tbody></table></div>
+    <p class="note">Party balances are ledger-based. Freight and payments are shown separately in Party Revenue unless the corresponding entries are posted to the party ledger.</p>
+  </section>
+
+  <section class="panel" id="transaction-detail">
+    <h2 style="margin-top:0">Transaction Report</h2>
+    <p class="muted">Latest 1,000 payment, approved-expense and maintenance records in the selected date range.</p>
+    <div class="table-wrap"><table><thead><tr><th>Date</th><th>Type</th><th>Source ID</th><th>Trip</th><th>Description</th><th>Reference</th><th>Direction</th><th>Amount</th></tr></thead><tbody>
+    {% for row in transaction_report %}<tr><td>{{ row.transaction_date }}</td><td>{{ row.transaction_type }}</td><td>#{{ row.record_id }}</td><td>{% if row.trip_id %}#{{ row.trip_id }}{% else %}—{% endif %}</td><td>{{ row.description or "—" }}</td><td>{{ row.reference or "—" }}</td><td>{{ row.direction }}</td><td>₹{{ "%.2f"|format(row.amount or 0) }}</td></tr>
+    {% else %}<tr><td colspan="8" class="empty">No transactions for this period.</td></tr>{% endfor %}
+    </tbody></table></div>
+  </section>
+
   <section class="panel">
     <form method="get" action="{{ url_for('reports') }}" class="filters">
       <div><label for="start_date">From</label><input type="date" id="start_date" name="start_date" value="{{ start_date }}" required></div>
