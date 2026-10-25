@@ -3563,13 +3563,20 @@ def reports(report_name=None):
         "FROM expenses e JOIN trips t ON t.trip_id=e.trip_id "
         f"WHERE {trip_scope} AND e.status='Approved' AND e.date BETWEEN ? AND ? "
         "UNION ALL "
+        "SELECT 'Freight Revenue' AS transaction_type, COALESCE(t.end_date, t.start_date) AS transaction_date, "
+        "t.trip_id AS record_id, t.trip_id, (t.route_from || ' → ' || t.route_to) AS description, "
+        "NULL AS reference, t.freight_amount AS amount, 'Inflow' AS direction "
+        "FROM trips t "
+        f"WHERE {trip_scope} AND t.status='Completed' "
+        "AND COALESCE(t.end_date, t.start_date) BETWEEN ? AND ? "
+        "UNION ALL "
         "SELECT 'Maintenance' AS transaction_type, m.service_date AS transaction_date, "
         "m.maintenance_id AS record_id, NULL AS trip_id, m.service_type AS description, "
         "m.notes AS reference, m.cost AS amount, 'Outflow' AS direction "
         f"FROM maintenance m WHERE {maintenance_scope} AND m.service_date BETWEEN ? AND ?"
         ") ORDER BY transaction_date DESC, record_id DESC LIMIT 1000",
         [*trip_params, start_date, end_date, *trip_params, start_date, end_date,
-         *maintenance_params, start_date, end_date]
+         *trip_params, start_date, end_date, *maintenance_params, start_date, end_date]
     ).fetchall()
     conn.close()
 
