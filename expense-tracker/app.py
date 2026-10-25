@@ -1983,7 +1983,7 @@ def record_trip_payment(id):
     try:
         conn.execute("BEGIN IMMEDIATE")
         trip = conn.execute(
-            "SELECT freight_amount, route_from, route_to, owner_user_id FROM trips "
+            "SELECT freight_amount, route_from, route_to, owner_user_id, party_id FROM trips "
             "WHERE trip_id = ? AND " + _record_owner_filter("trips")[0],
             [id, *_record_owner_filter("trips")[1]]
         ).fetchone()
