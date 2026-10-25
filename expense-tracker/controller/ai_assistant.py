@@ -20,6 +20,7 @@ from langgraph.graph import END, START, StateGraph
 
 from controller.access_controller import SUPER_ADMIN_EMAIL, access_required
 from database.db import get_db
+from controller.reporting_service import build_report
 
 assistant_bp = Blueprint("fleetflow_assistant", __name__)
 
@@ -44,7 +45,7 @@ def _load_prompt_section(section: str) -> str:
 
 
 MAX_QUESTION_LENGTH = 500
-INTENTS = {"trips", "expenses", "payments", "maintenance", "trucks", "drivers", "challans", "compliance", "users", "admins", "help"}
+INTENTS = {"reports", "trips", "expenses", "payments", "maintenance", "trucks", "drivers", "challans", "compliance", "users", "admins", "help"}
 
 
 class AssistantState(TypedDict, total=False):
@@ -55,6 +56,7 @@ class AssistantState(TypedDict, total=False):
     role: str
     driver_id: int | None
     answer: str
+    chart_data: dict | None
     routing_question: str
     conversation_history: list
     long_term_memories: list
@@ -334,6 +336,10 @@ def _detect_intent(question: str) -> str:
     """
     text = " ".join((question or "").lower().replace("₹", " rupees ").split())
 
+    # Reports and analytics should be routed before individual record categories.
+    if re.search(r"\b(report|reports|dashboard|revenue trend|monthly revenue|profit and loss|p&l|financial summary|business overview|compare .*month|chart|graph|analytics|performance report|truck performance|driver performance)\b", text):
+        return "reports"
+
     # Admin and account-directory questions.
     if re.search(r"\b(admin|admins|administrator|administrators|super admin)\b", text) and re.search(
         r"\b(show|list|all|total|count|who|find|search|view|kitne|kaun)\b", text
@@ -531,6 +537,13 @@ def _query_records(state: AssistantState) -> AssistantState:
     intent = state.get("intent", "help")
     conn = get_db()
     try:
+        if intent == "reports":
+            question = state.get("routing_question", state.get("question", ""))
+            def report_scope(alias, owner_column, report_state):
+                scope, params = _owner_scope("trips" if alias == "t" else alias, owner_column, report_state)
+                return scope.replace("trips.", alias + "."), params
+            report = build_report(conn, state, question, report_scope)
+            return {"answer": report["answer"], "chart_data": report.get("chart")}
         if intent == "compliance":
             question = state.get("routing_question", state.get("question", ""))
             inspection_question = bool(re.search(
@@ -1471,13 +1484,16 @@ def ask_fleetflow_assistant():
         )
         answer = result.get("answer")
         if isinstance(answer, str) and answer.strip():
-            answer = _format_answer_for_user(question.strip(), answer, state.get('long_term_memories', []))
-            # Enforce structured record tables after optional language rewriting.
-            answer = _format_record_tables(answer, result.get("intent", "help"))
+            # Preserve report arithmetic exactly; language-model rewriting must not alter metrics.
+            if result.get("intent") != "reports":
+                answer = _format_answer_for_user(question.strip(), answer, state.get('long_term_memories', []))
+                answer = _format_record_tables(answer, result.get("intent", "help"))
         if not isinstance(answer, str) or not answer.strip():
             current_app.logger.error("FleetFlow assistant graph returned an empty answer")
             return jsonify(error="The assistant returned an empty response. Please try again."), 503
-        return jsonify(answer=answer), 200
+        response = jsonify(answer=answer, chart=result.get("chart_data") if result.get("intent") == "reports" else None)
+        response.headers["Cache-Control"] = "no-store"
+        return response, 200
     except Exception:
         current_app.logger.exception("FleetFlow assistant request failed")
         return jsonify(error="The assistant couldn't answer right now. Please try again later."), 503
