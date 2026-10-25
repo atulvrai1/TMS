@@ -247,6 +247,13 @@ def init_db():
             )
         if "owner_user_id" not in trip_columns:
             conn.execute("ALTER TABLE trips ADD COLUMN owner_user_id INTEGER REFERENCES users(user_id)")
+        # Older installations may have a trips table created before trip status
+        # tracking was introduced. Add the column in-place so existing trip data
+        # is preserved and reports can safely filter by status.
+        if "status" not in trip_columns:
+            conn.execute(
+                "ALTER TABLE trips ADD COLUMN status TEXT NOT NULL DEFAULT 'Scheduled'"
+            )
         if "party_id" not in trip_columns:
             conn.execute("ALTER TABLE trips ADD COLUMN party_id INTEGER REFERENCES parties(party_id)")
         conn.execute(
