@@ -47,6 +47,11 @@ older_trip_id = conn.execute(
     "VALUES (?, ?, 30000, ?, 'Patna', 'Delhi', 'Completed', ?)",
     (truck_id, driver_id, (date.today() - timedelta(days=1)).isoformat(), user_id),
 ).lastrowid
+historical_trip_id = conn.execute(
+    "INSERT INTO trips (truck_id, driver_id, freight_amount, start_date, route_from, route_to, status, owner_user_id) "
+    "VALUES (?, ?, 25000, ?, 'Patna', 'Jaipur', 'Completed', ?)",
+    (truck_id, driver_id, (date.today() - timedelta(days=30)).isoformat(), user_id),
+).lastrowid
 newer_same_day_trip_id = conn.execute(
     "INSERT INTO trips (truck_id, driver_id, freight_amount, start_date, route_from, route_to, status, owner_user_id) "
     "VALUES (?, ?, 60000, ?, 'Patna', 'Ranchi', 'Completed', ?)",
@@ -61,6 +66,18 @@ conn.execute(
     "INSERT INTO trip_payments (trip_id, amount, payment_date, reference, recorded_by) "
     "VALUES (?, 20000, ?, 'RCPT-ANALYTICS-1', ?)",
     (trip_id, date.today().isoformat(), user_id),
+)
+# These transactions fall inside the selected period although their trip began
+# before it. The overview must include them because transaction dates drive totals.
+conn.execute(
+    "INSERT INTO expenses (trip_id, category, amount, date, description, created_by, status) "
+    "VALUES (?, 'Toll', 1000, ?, 'Historical trip toll recorded today', ?, 'Approved')",
+    (historical_trip_id, date.today().isoformat(), user_id),
+)
+conn.execute(
+    "INSERT INTO trip_payments (trip_id, amount, payment_date, reference, recorded_by) "
+    "VALUES (?, 2000, ?, 'RCPT-HISTORICAL-TRIP', ?)",
+    (historical_trip_id, date.today().isoformat(), user_id),
 )
 conn.commit()
 conn.close()
@@ -95,6 +112,9 @@ with app.test_client() as client:
     assert b"50000.00" in response.data
     assert b"20000.00" in response.data
     assert b"7500.00" in response.data
+    # Payments and expenses use their own dates, not the linked trip's start date.
+    assert b"22000.00" in response.data
+    assert b"8500.00" in response.data
 
     reconciliation = client.get(
         "/reports/reconciliation?start_date=" + (date.today() - timedelta(days=1)).isoformat() +
