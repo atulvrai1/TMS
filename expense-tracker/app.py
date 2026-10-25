@@ -3521,8 +3521,9 @@ def reports(report_name=None):
     ).fetchall()
 
     party_revenue_report = conn.execute(
-        "SELECT p.party_id, p.name AS party_name, COUNT(t.trip_id) AS trip_count, "
-        "COALESCE(SUM(t.freight_amount),0) AS freight, "
+        "SELECT p.party_id, p.name AS party_name, "
+        "COUNT(CASE WHEN t.status='Completed' THEN 1 END) AS trip_count, "
+        "COALESCE(SUM(CASE WHEN t.status='Completed' THEN t.freight_amount ELSE 0 END),0) AS freight, "
         "COALESCE(SUM((SELECT SUM(tp.amount) FROM trip_payments tp WHERE tp.trip_id=t.trip_id "
         "AND tp.payment_date BETWEEN ? AND ?)),0) AS collections "
         "FROM trips t LEFT JOIN parties p ON p.party_id=t.party_id "
