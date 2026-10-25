@@ -21,6 +21,11 @@
 .report-detail .table-wrap{overflow:auto}
 .report-detail table{width:100%;border-collapse:collapse;min-width:680px}
 .report-detail th,.report-detail td{padding:.7rem;text-align:left;border-bottom:1px solid var(--border,#e5e9f0);font-size:.88rem}
+.report-detail td.amount,.report-detail th.amount{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+.report-detail .pnl-total{display:flex;justify-content:flex-end;margin:0 0 1rem}
+.report-detail .pnl-total-card{min-width:min(100%,300px);text-align:right;border:1px solid var(--border,#e5e9f0);border-right:4px solid var(--industry-blue,#2457c5);border-radius:12px;padding:1rem 1.2rem;background:var(--surface,#fff)}
+.report-detail .pnl-total-label{font-size:.8rem;color:var(--ink-muted,#6b7280);margin-bottom:.35rem}
+.report-detail .pnl-total-value{font-size:clamp(1.5rem,2.5vw,2rem);font-weight:800;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
 .report-detail th{font-size:.75rem;text-transform:uppercase;letter-spacing:.04em;color:var(--ink-muted,#6b7280)}
 .report-detail .empty{padding:1.2rem;text-align:center;color:var(--ink-muted,#6b7280)}
 @media(max-width:760px){.report-detail .kpis{grid-template-columns:repeat(2,minmax(0,1fr))}}
@@ -46,6 +51,7 @@
   {% if report_name == 'profit-loss' %}
   <section class="panel">
     <p class="muted">Operating profit is calculated from completed-trip freight revenue less approved trip expenses and recorded maintenance in the selected period.</p>
+    <div class="pnl-total"><div class="pnl-total-card"><div class="pnl-total-label">Total Net Profit / (Loss)</div><div class="pnl-total-value">₹{{ "%.2f"|format(pnl_operating_profit) }}</div></div></div>
     <div class="kpis">
       <div class="kpi"><div class="kpi-label">Freight revenue (completed trips)</div><div class="kpi-value">₹{{ "%.2f"|format(pnl_revenue) }}</div><div class="note">{{ pnl_trip_count }} completed trips</div></div>
       <div class="kpi"><div class="kpi-label">Approved trip expenses</div><div class="kpi-value">₹{{ "%.2f"|format(pnl_expenses) }}</div><div class="note">{{ pnl_expense_count }} records</div></div>
@@ -53,10 +59,10 @@
       <div class="kpi"><div class="kpi-label">Net operating result</div><div class="kpi-value">₹{{ "%.2f"|format(pnl_operating_profit) }}</div><div class="note">Revenue less listed operating costs</div></div>
     </div>
     <div class="table-wrap"><table><thead><tr><th>Profit &amp; Loss line item</th><th>Amount (₹)</th></tr></thead><tbody>
-      <tr><td>Operating revenue — completed-trip freight</td><td>₹{{ "%.2f"|format(pnl_revenue) }}</td></tr>
-      <tr><td>Less: approved trip expenses</td><td>− ₹{{ "%.2f"|format(pnl_expenses) }}</td></tr>
-      <tr><td>Less: recorded maintenance costs</td><td>− ₹{{ "%.2f"|format(pnl_maintenance) }}</td></tr>
-      <tr><th>Net operating profit / (loss)</th><th>₹{{ "%.2f"|format(pnl_operating_profit) }}</th></tr>
+      <tr><td>Operating revenue — completed-trip freight</td><td class="amount">₹{{ "%.2f"|format(pnl_revenue) }}</td></tr>
+      <tr><td>Less: approved trip expenses</td><td class="amount">− ₹{{ "%.2f"|format(pnl_expenses) }}</td></tr>
+      <tr><td>Less: recorded maintenance costs</td><td class="amount">− ₹{{ "%.2f"|format(pnl_maintenance) }}</td></tr>
+      <tr><th>Net operating profit / (loss)</th><th class="amount">₹{{ "%.2f"|format(pnl_operating_profit) }}</th></tr>
     </tbody></table></div>
     <p class="note">This is an operational P&amp;L from currently recorded data, not a statutory or fully reconciled accounting statement. It excludes overheads not recorded in these categories, depreciation, tax, interest and supplier bills not recorded as approved trip expenses or maintenance. Collections are cash receipts and are not counted as revenue again.</p>
   </section>
