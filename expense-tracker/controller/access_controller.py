@@ -199,9 +199,19 @@ def admin_required(f):
         conn = get_db()
         controller = UserAccessController(conn)
         is_authorized = controller.is_authorized(session['user_id'])
-        is_admin = is_authorized and (
-            controller.is_admin(session['user_id'])
-            or controller.is_super_admin(session.get('email'))
+        # Read the identity and role from the database. Session values may be
+        # stale after an account change and must not grant administrator access.
+        user = conn.execute(
+            "SELECT email, role FROM users WHERE user_id = ?",
+            (session['user_id'],)
+        ).fetchone()
+        is_admin = bool(
+            is_authorized
+            and user
+            and (
+                user['role'] == 'Admin'
+                or controller.is_super_admin(user['email'])
+            )
         )
         conn.close()
 
