@@ -3542,8 +3542,8 @@ def reports(report_name=None):
         [start_date, end_date, *trip_params, start_date, end_date]
     ).fetchall()
 
-    # Truck P&L uses valid completed freight, approved trip expenses and
-    # maintenance recorded for that truck during the selected service-date range.
+    # Truck P&L uses the same truck visibility rules as other operational pages.
+    truck_scope, truck_params = _record_owner_filter("tr")
     truck_pnl_report = conn.execute(
         "SELECT tr.truck_id, tr.registration_number, "
         "COUNT(DISTINCT CASE WHEN t.status='Completed' AND t.end_date IS NOT NULL "
@@ -3554,9 +3554,9 @@ def reports(report_name=None):
         "WHERE et.truck_id=tr.truck_id AND e.status='Approved' AND e.date BETWEEN ? AND ?),0) AS costs, "
         "COALESCE((SELECT SUM(m.cost) FROM maintenance m WHERE m.truck_id=tr.truck_id "
         "AND m.service_date BETWEEN ? AND ?),0) AS maintenance_cost "
-        "FROM trucks tr WHERE 1=1 "
+        f"FROM trucks tr WHERE {truck_scope} "
         "GROUP BY tr.truck_id, tr.registration_number ORDER BY revenue DESC, tr.registration_number",
-        [start_date, end_date, start_date, end_date, start_date, end_date, start_date, end_date]
+        [start_date, end_date, start_date, end_date, start_date, end_date, start_date, end_date, *truck_params]
     ).fetchall()
     pnl_expenses_row = conn.execute(
         "SELECT COALESCE(SUM(e.amount), 0) AS amount, COUNT(*) AS count "
