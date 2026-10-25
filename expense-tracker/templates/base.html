@@ -56,6 +56,7 @@
                 <a href="{{ url_for('fleetflow_assistant.assistant_page') }}" class="nav-item assistant-nav-item{% if request.endpoint == 'fleetflow_assistant.assistant_page' %} active{% endif %}" aria-label="Open FleetFlow Assistant"><span class="assistant-nav-icon" aria-hidden="true">✦</span> Assistant</a>
                 <a href="{{ url_for('trips') }}" class="nav-item{% if request.endpoint == 'trips' %} active{% endif %}"><span>↗</span> Trips</a>
                 <a href="{{ url_for('parties') }}" class="nav-item{% if request.endpoint in ('parties', 'party_ledger') %} active{% endif %}"><span>♧</span> Parties & Ledger</a>
+                <a href="{{ url_for('reports') }}" class="nav-item{% if request.endpoint == 'reports' %} active{% endif %}"><span>📊</span> Reports</a>
                 <a href="{{ url_for('expenses') }}" class="nav-item{% if request.endpoint in ('expenses', 'review_expense', 'correct_expense_amount') %} active{% endif %}"><span>₹</span> Expenses</a>
                 {% endif %}
             </nav>
