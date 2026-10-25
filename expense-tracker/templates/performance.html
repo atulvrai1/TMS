@@ -4,6 +4,21 @@
 {% block content_dashboard %}
 <style>
 .performance-page{max-width:1500px;margin:0 auto;color:var(--ink,#172033)}
+.performance-page .hero{padding:1.35rem 1.4rem;border-radius:18px;background:linear-gradient(120deg,#12233f,#2457c5);color:#fff;display:flex;align-items:center;justify-content:space-between;gap:1rem;flex-wrap:wrap;margin-bottom:1rem;box-shadow:0 12px 30px rgba(36,87,197,.16)}
+.performance-page .hero .muted{color:#dce7ff}.performance-page .hero h1{font-size:clamp(1.55rem,3vw,2.1rem);letter-spacing:-.035em}.performance-page .hero .eyebrow{text-transform:uppercase;letter-spacing:.12em;font-size:.72rem;font-weight:800;opacity:.8;margin-bottom:.4rem}
+.performance-page .hero .back{color:#fff;border-color:rgba(255,255,255,.35);background:rgba(255,255,255,.08)}
+.performance-page .metric{position:relative;overflow:hidden;border-radius:15px;transition:transform .18s ease,border-color .18s ease;box-shadow:0 7px 24px rgba(20,35,60,.055)}
+.performance-page .metric:before{content:"";position:absolute;left:0;top:0;bottom:0;width:4px;background:var(--metric-accent,#2457c5)}
+.performance-page .metric:nth-child(2){--metric-accent:#0d9488}.performance-page .metric:nth-child(3){--metric-accent:#d97706}.performance-page .metric:nth-child(4){--metric-accent:#7c3aed}
+.performance-page .metric .metric-icon{width:38px;height:38px;display:grid;place-items:center;border-radius:11px;background:#eff4ff;margin-bottom:.85rem;font-size:1.15rem}
+.performance-page .metric .metric-label{font-weight:700}.performance-page .metric .metric-value{letter-spacing:-.035em}
+.performance-page .chart-toolbar{display:flex;justify-content:space-between;align-items:center;gap:.65rem;flex-wrap:wrap;margin:.3rem 0 .6rem}
+.performance-page .chart-toolbar select{max-width:100%;border:1px solid var(--border,#dbe1ea);border-radius:8px;padding:.55rem;background:var(--surface,#fff);color:inherit}
+.performance-page .chart-toolbar button{padding:.55rem .75rem;font-size:.82rem}
+.performance-page .chart-detail{min-height:2.4rem;margin:.65rem 0 0;padding:.65rem .75rem;border-radius:9px;background:var(--panel-soft,#f5f7fb);font-size:.84rem;color:var(--ink-muted,#6b7280)}
+.performance-page .visual-card{border-radius:15px;box-shadow:0 7px 24px rgba(20,35,60,.045)}
+.performance-page .visual-card h2{letter-spacing:-.02em}
+@media(hover:hover) and (pointer:fine){.performance-page .metric:hover{transform:translateY(-2px);border-color:#b8c9f5}.performance-page .quick-links a:hover{border-color:#9db6ef;background:#f8faff}}
 .performance-page .head{display:flex;justify-content:space-between;align-items:flex-start;gap:1rem;flex-wrap:wrap;margin-bottom:1rem}
 .performance-page h1{margin:0 0 .35rem;font-size:clamp(1.5rem,3vw,2rem)}
 .performance-page .muted,.performance-page .note{color:var(--ink-muted,#6b7280)}
@@ -34,8 +49,8 @@
 @media(max-width:700px){.performance-page .visuals{grid-template-columns:1fr}.performance-page .periods{grid-template-columns:repeat(2,minmax(0,1fr))}.performance-page .periods a:last-child{grid-column:1/-1}.performance-page .chart{height:250px}.performance-page .quick-links{grid-template-columns:1fr}.performance-page .filters{display:grid;grid-template-columns:1fr}.performance-page .filters button{width:100%}}
 </style>
 <div class="performance-page">
-  <header class="head">
-    <div><h1>📈 Performance Dashboard</h1><div class="muted">FleetFlow business performance across the selected period.</div></div>
+  <header class="hero">
+    <div><div class="eyebrow">FleetFlow · Business intelligence</div><h1>Performance Dashboard</h1><div class="muted">Explore fleet operations, cash flow and operating costs for your selected period.</div></div>
     <a class="back" href="{{ url_for('reports', start_date=start_date, end_date=end_date) }}">← Back to Reports</a>
   </header>
 
@@ -55,10 +70,10 @@
   </section>
 
   <section class="metrics" aria-label="Key performance indicators">
-    <article class="metric"><div class="metric-label">Completed-trip freight</div><div class="metric-value">₹{{ "{:,.2f}".format(pnl_revenue) }}</div><small>{{ pnl_trip_count }} completed trips</small></article>
-    <article class="metric"><div class="metric-label">Money collected</div><div class="metric-value">₹{{ "{:,.2f}".format(receipts) }}</div><small>{{ payment_summary.payment_count }} recorded payments</small></article>
-    <article class="metric"><div class="metric-label">Approved trip expenses</div><div class="metric-value">₹{{ "{:,.2f}".format(pnl_expenses) }}</div><small>{{ pnl_expense_count }} approved expense entries</small></article>
-    <article class="metric"><div class="metric-label">Estimated operating profit</div><div class="metric-value">₹{{ "{:,.2f}".format(pnl_operating_profit) }}</div><small>Freight less approved expenses and maintenance</small></article>
+    <article class="metric"><div class="metric-icon" aria-hidden="true">↗</div><div class="metric-label">Completed-trip freight</div><div class="metric-value">₹{{ "{:,.2f}".format(pnl_revenue) }}</div><small>{{ pnl_trip_count }} completed trips</small></article>
+    <article class="metric"><div class="metric-icon" aria-hidden="true">⇄</div><div class="metric-label">Money collected</div><div class="metric-value">₹{{ "{:,.2f}".format(receipts) }}</div><small>{{ payment_summary.payment_count }} recorded payments</small></article>
+    <article class="metric"><div class="metric-icon" aria-hidden="true">₹</div><div class="metric-label">Approved trip expenses</div><div class="metric-value">₹{{ "{:,.2f}".format(pnl_expenses) }}</div><small>{{ pnl_expense_count }} approved expense entries</small></article>
+    <article class="metric"><div class="metric-icon" aria-hidden="true">◈</div><div class="metric-label">Estimated operating profit</div><div class="metric-value">₹{{ "{:,.2f}".format(pnl_operating_profit) }}</div><small>Freight less approved expenses and maintenance</small></article>
   </section>
 
   <!-- Three dashboard-style panels from the selected design: operations, finances, and fleet shortcuts. -->
@@ -91,9 +106,52 @@
   const payments = {{ monthly_payments|tojson }};
   const categoryLabels = {{ category_labels|tojson }};
   const categoryValues = {{ category_values|tojson }};
-  new Chart(document.getElementById('tripStatusChart'),{type:'doughnut',data:{labels:statusLabels,datasets:[{data:statusValues}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom'}}}});
-  new Chart(document.getElementById('moneyTrendChart'),{type:'line',data:{labels:labels,datasets:[{label:'Freight',data:freight,tension:.25},{label:'Collections',data:payments,tension:.25},{label:'Approved expenses',data:expenses,tension:.25}]},options:{responsive:true,maintainAspectRatio:false,interaction:{mode:'index',intersect:false},scales:{y:{ticks:{callback:money}}},plugins:{legend:{position:'bottom'},tooltip:{callbacks:{label:c=>c.dataset.label+': '+money(c.raw)}}}}});
-  new Chart(document.getElementById('expenseCategoryChart'),{type:'bar',data:{labels:categoryLabels,datasets:[{label:'Approved expenses',data:categoryValues}]},options:{responsive:true,maintainAspectRatio:false,indexAxis:'y',scales:{x:{ticks:{callback:money}}},plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>money(c.raw)}}}}});
+  const palette = ['#2457c5','#0d9488','#d97706','#7c3aed','#db2777','#64748b'];
+  const statusTotal = statusValues.reduce((sum,v)=>sum+Number(v||0),0);
+  const statusDetail = document.getElementById('tripStatusDetail');
+  const trendDetail = document.getElementById('trendDetail');
+  const categoryDetail = document.getElementById('expenseCategoryDetail');
+  const statusChart = new Chart(document.getElementById('tripStatusChart'),{
+    type:'doughnut',
+    data:{labels:statusLabels,datasets:[{data:statusValues,backgroundColor:palette,borderWidth:3,borderColor:'#fff',hoverOffset:7}]},
+    options:{responsive:true,maintainAspectRatio:false,cutout:'66%',plugins:{legend:{position:'bottom',labels:{usePointStyle:true,padding:16}},tooltip:{callbacks:{label:c=>c.label+': '+c.raw+' trips ('+(statusTotal?((c.raw/statusTotal)*100).toFixed(1):'0.0')+'%)')}} ,
+    onClick:(event,elements,chart)=>{if(!elements.length)return;const i=elements[0].index;const count=Number(statusValues[i]||0);statusDetail.textContent=statusLabels[i]+': '+count+' trip(s) · '+(statusTotal?(count/statusTotal*100).toFixed(1):'0.0')+'% of trips in this period.'}
+  });
+  const trendChart = new Chart(document.getElementById('moneyTrendChart'),{
+    type:'line',
+    data:{labels:labels,datasets:[
+      {label:'Freight',data:freight,borderColor:'#2457c5',backgroundColor:'rgba(36,87,197,.10)',fill:true,tension:.3,pointRadius:3,pointHoverRadius:6},
+      {label:'Collections',data:payments,borderColor:'#0d9488',backgroundColor:'rgba(13,148,136,.08)',fill:false,tension:.3,pointRadius:3,pointHoverRadius:6},
+      {label:'Approved expenses',data:expenses,borderColor:'#d97706',backgroundColor:'rgba(217,119,6,.08)',fill:false,tension:.3,pointRadius:3,pointHoverRadius:6}
+    ]},
+    options:{responsive:true,maintainAspectRatio:false,interaction:{mode:'index',intersect:false},scales:{y:{beginAtZero:true,ticks:{callback:money}}},plugins:{legend:{position:'bottom',labels:{usePointStyle:true,padding:15}},tooltip:{callbacks:{label:c=>c.dataset.label+': '+money(c.raw)}}},
+    onClick:(event,elements,chart)=>{if(!elements.length)return;const i=elements[0].index;trendDetail.textContent=labels[i]+': Freight '+money(freight[i])+' · Collections '+money(payments[i])+' · Approved expenses '+money(expenses[i])+'.'}
+  });
+  function applyTrendWindow(){
+    const value=document.getElementById('trendWindow').value;
+    const count=value==='all'?labels.length:Math.min(labels.length,Math.max(1,Number(value)||6));
+    const start=Math.max(0,labels.length-count);
+    trendChart.data.labels=labels.slice(start);
+    trendChart.data.datasets.forEach((dataset,index)=>dataset.data=[freight,payments,expenses][index].slice(start));
+    trendChart.update();
+    trendDetail.textContent='Showing '+count+' of '+labels.length+' available month(s). Select a point for exact values.';
+  }
+  document.getElementById('trendWindow').addEventListener('change',applyTrendWindow);
+  document.getElementById('exportTrend').addEventListener('click',()=>{
+    const rows=[['Month','Freight','Collections','Approved expenses']];
+    labels.forEach((label,i)=>rows.push([label,freight[i]??0,payments[i]??0,expenses[i]??0]));
+    const csv=rows.map(row=>row.map(value=>'"'+String(value).replace(/"/g,'""')+'"').join(',')).join('\r\n');
+    const blob=new Blob(['\ufeff'+csv],{type:'text/csv;charset=utf-8;'});
+    const url=URL.createObjectURL(blob);const link=document.createElement('a');
+    link.href=url;link.download='fleetflow-performance-trend.csv';document.body.appendChild(link);link.click();link.remove();URL.revokeObjectURL(url);
+  });
+  const expenseChart = new Chart(document.getElementById('expenseCategoryChart'),{
+    type:'bar',
+    data:{labels:categoryLabels,datasets:[{label:'Approved expenses',data:categoryValues,backgroundColor:categoryLabels.map((_,i)=>palette[i%palette.length]),borderRadius:6,borderSkipped:false}]},
+    options:{responsive:true,maintainAspectRatio:false,indexAxis:'y',scales:{x:{beginAtZero:true,ticks:{callback:money}}},plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>money(c.raw)}}},
+    onClick:(event,elements)=>{if(!elements.length)return;const i=elements[0].index;categoryDetail.textContent=categoryLabels[i]+': '+money(categoryValues[i])+' in approved expenses.'}
+  });
+  applyTrendWindow();
 })();
 </script>
 {% endblock %}
