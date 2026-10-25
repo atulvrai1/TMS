@@ -1756,6 +1756,52 @@ def review_expense(id):
     return redirect(url_for("expenses"))
 
 
+@app.route("/parties/quick-create", methods=["POST"])
+@access_required
+def quick_create_party():
+    """Create a minimal party from the Add Trip workflow."""
+    if not _is_admin_user():
+        return jsonify({"ok": False, "error": "Administrator access is required to add a party."}), 403
+    if not _valid_csrf_token():
+        return jsonify({"ok": False, "error": "Your session token is invalid. Reload the page and try again."}), 400
+    name = request.form.get("name", "").strip()
+    party_type = request.form.get("party_type", "Customer").strip()
+    phone = request.form.get("phone", "").strip()
+    if not name or len(name) > 160:
+        return jsonify({"ok": False, "error": "Enter a party name (up to 160 characters)."}), 400
+    if party_type not in ("Customer", "Supplier", "Both"):
+        return jsonify({"ok": False, "error": "Choose Customer, Supplier, or Both."}), 400
+    if len(phone) > 40:
+        return jsonify({"ok": False, "error": "Phone number is too long."}), 400
+    try:
+        owner_user_id = int(request.form.get("owner_user_id") or session["user_id"])
+    except (TypeError, ValueError):
+        return jsonify({"ok": False, "error": "Choose a valid trip owner."}), 400
+    conn = get_db()
+    try:
+        if not _is_assignable_owner(conn, owner_user_id):
+            return jsonify({"ok": False, "error": "Choose an active trip owner."}), 400
+        existing = conn.execute(
+            "SELECT party_id, name, party_type FROM parties WHERE owner_user_id = ? AND name = ? COLLATE NOCASE",
+            (owner_user_id, name),
+        ).fetchone()
+        if existing:
+            return jsonify({"ok": True, "party": {"party_id": existing["party_id"], "name": existing["name"],
+                "party_type": existing["party_type"]}, "existing": True})
+        cursor = conn.execute(
+            "INSERT INTO parties (owner_user_id, name, party_type, phone) VALUES (?, ?, ?, ?)",
+            (owner_user_id, name, party_type, phone or None),
+        )
+        conn.commit()
+        return jsonify({"ok": True, "party": {"party_id": cursor.lastrowid, "name": name,
+            "party_type": party_type}, "existing": False}), 201
+    except sqlite3.IntegrityError:
+        conn.rollback()
+        return jsonify({"ok": False, "error": "This party already exists for the selected account."}), 409
+    finally:
+        conn.close()
+
+
 @app.route("/trips/create", methods=["POST"])
 @access_required
 def create_trip():
