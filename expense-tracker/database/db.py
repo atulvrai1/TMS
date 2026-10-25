@@ -247,6 +247,11 @@ def init_db():
             )
         if "owner_user_id" not in trip_columns:
             conn.execute("ALTER TABLE trips ADD COLUMN owner_user_id INTEGER REFERENCES users(user_id)")
+        if "party_id" not in trip_columns:
+            conn.execute("ALTER TABLE trips ADD COLUMN party_id INTEGER REFERENCES parties(party_id)")
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_trips_party ON trips(party_id, start_date DESC)"
+        )
 
         # Expenses Table
         conn.execute('''
