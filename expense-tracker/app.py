@@ -3419,19 +3419,22 @@ def reports(report_name=None):
         "SELECT COUNT(*) AS trip_count, "
         "COALESCE(SUM(CASE WHEN t.status = 'Completed' THEN 1 ELSE 0 END), 0) AS completed_count, "
         "COALESCE(SUM(CASE WHEN t.status = 'Cancelled' THEN 1 ELSE 0 END), 0) AS cancelled_count, "
-        "COALESCE(SUM(CASE WHEN t.status IN ('Scheduled','In Progress') THEN 1 ELSE 0 END), 0) AS active_count, "
-        "COALESCE(SUM(CASE WHEN t.status = 'Completed' "
-        "AND COALESCE(t.end_date, t.start_date) BETWEEN ? AND ? "
-        "THEN t.freight_amount ELSE 0 END), 0) AS freight_total "
-        f"FROM trips t WHERE {trip_where}", [start_date, end_date, *trip_args]
+        "COALESCE(SUM(CASE WHEN t.status IN ('Scheduled','In Progress') THEN 1 ELSE 0 END), 0) AS active_count "
+        f"FROM trips t WHERE {trip_where}", trip_args
+    ).fetchone()
+    # Freight revenue belongs to the period in which a trip was completed,
+    # even when the trip originally started before the selected range.
+    freight_summary = conn.execute(
+        "SELECT COALESCE(SUM(t.freight_amount), 0) AS freight_total "
+        f"FROM trips t WHERE {trip_scope} AND t.status='Completed' "
+        "AND COALESCE(t.end_date, t.start_date) BETWEEN ? AND ?",
+        [*trip_params, start_date, end_date]
     ).fetchone()
 
     expense_scope, expense_params = _record_owner_filter("t")
-    expense_where = (
-        f"{expense_scope} AND e.date BETWEEN ? AND ? AND e.status = 'Approved' "
-        "AND t.start_date BETWEEN ? AND ?"
-    )
-    expense_args = [*expense_params, start_date, end_date, start_date, end_date]
+    # Expense date, not the linked trip's start date, determines the period.
+    expense_where = f"{expense_scope} AND e.date BETWEEN ? AND ? AND e.status = 'Approved'"
+    expense_args = [*expense_params, start_date, end_date]
     expense_summary = conn.execute(
         "SELECT COALESCE(SUM(e.amount), 0) AS approved_expenses, COUNT(*) AS expense_count "
         "FROM expenses e JOIN trips t ON t.trip_id = e.trip_id WHERE " + expense_where,
@@ -3442,9 +3445,8 @@ def reports(report_name=None):
     payment_summary = conn.execute(
         "SELECT COALESCE(SUM(p.amount), 0) AS receipts, COUNT(*) AS payment_count "
         "FROM trip_payments p JOIN trips t ON t.trip_id = p.trip_id "
-        f"WHERE {payment_scope} AND p.payment_date BETWEEN ? AND ? "
-        "AND t.start_date BETWEEN ? AND ?",
-        [*payment_params, start_date, end_date, start_date, end_date]
+        f"WHERE {payment_scope} AND p.payment_date BETWEEN ? AND ?",
+        [*payment_params, start_date, end_date]
     ).fetchone()
 
     maintenance_scope, maintenance_params = _record_owner_filter("m")
@@ -3475,8 +3477,8 @@ def reports(report_name=None):
         "SELECT strftime('%Y-%m', p.payment_date) AS month, COALESCE(SUM(p.amount), 0) AS amount "
         "FROM trip_payments p JOIN trips t ON t.trip_id = p.trip_id "
         f"WHERE {payment_scope} AND p.payment_date BETWEEN ? AND ? "
-        "AND t.start_date BETWEEN ? AND ? GROUP BY month ORDER BY month",
-        [*payment_params, start_date, end_date, start_date, end_date]
+        "GROUP BY month ORDER BY month",
+        [*payment_params, start_date, end_date]
     ).fetchall()
     expense_categories = conn.execute(
         "SELECT COALESCE(e.category, 'Other') AS category, COALESCE(SUM(e.amount), 0) AS amount "
@@ -3633,7 +3635,7 @@ def reports(report_name=None):
         int(trip_summary["active_count"] or 0),
         int(trip_summary["cancelled_count"] or 0),
     ]
-    freight_total = float(trip_summary["freight_total"] or 0)
+    freight_total = float(freight_summary["freight_total"] or 0)
     approved_expenses = float(expense_summary["approved_expenses"] or 0)
     receipts = float(payment_summary["receipts"] or 0)
     report_context = dict(
