@@ -3488,11 +3488,20 @@ def reports(report_name=None):
         "GROUP BY month ORDER BY month",
         [*maintenance_params, start_date, end_date]
     ).fetchall()
+    # Trend freight must follow the same definition as the headline KPI:
+    # completed trips only, grouped by valid completion date (falling back to
+    # start_date when the completion date is missing or earlier than start_date).
+    freight_period_expr = (
+        "CASE WHEN t.end_date IS NOT NULL AND t.end_date >= t.start_date "
+        "THEN t.end_date ELSE t.start_date END"
+    )
     monthly_trips = conn.execute(
-        "SELECT strftime('%Y-%m', t.start_date) AS month, COUNT(*) AS trips, "
-        "COALESCE(SUM(t.freight_amount), 0) AS freight "
-        f"FROM trips t WHERE {trip_where} GROUP BY month ORDER BY month",
-        trip_args
+        "SELECT strftime('%Y-%m', " + freight_period_expr + ") AS month, "
+        "COUNT(*) AS trips, COALESCE(SUM(t.freight_amount), 0) AS freight "
+        f"FROM trips t WHERE {trip_scope} AND t.status = 'Completed' "
+        "AND " + freight_period_expr + " BETWEEN ? AND ? "
+        "GROUP BY month ORDER BY month",
+        [*trip_params, start_date, end_date]
     ).fetchall()
     monthly_expenses = conn.execute(
         "SELECT strftime('%Y-%m', e.date) AS month, COALESCE(SUM(e.amount), 0) AS amount "
@@ -3529,7 +3538,8 @@ def reports(report_name=None):
     pnl_revenue_row = conn.execute(
         "SELECT COALESCE(SUM(t.freight_amount), 0) AS revenue, COUNT(*) AS trip_count "
         f"FROM trips t WHERE {trip_scope} AND t.status = 'Completed' "
-        "AND COALESCE(t.end_date, t.start_date) BETWEEN ? AND ?",
+        "AND CASE WHEN t.end_date IS NOT NULL AND t.end_date >= t.start_date "
+        "THEN t.end_date ELSE t.start_date END BETWEEN ? AND ?",
         [*trip_params, start_date, end_date]
     ).fetchone()
 
