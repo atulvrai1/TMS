@@ -1377,13 +1377,16 @@ def _get_trip_financials(conn, owner_user_id=None):
         trip["balance_due"] = max(trip["freight_amount"] - trip["amount_received"], zero)
         trip["profit_loss"] = trip["freight_amount"] - trip["approved_expenses"]
         trip["cash_profit_loss"] = trip["amount_received"] - trip["approved_expenses"]
-        summary["freight_total"] += trip["freight_amount"]
-        summary["received_total"] += trip["amount_received"]
-        summary["balance_due_total"] += trip["balance_due"]
-        summary["approved_expenses_total"] += trip["approved_expenses"]
-        summary["pending_expenses_total"] += trip["pending_expenses"]
-        summary["profit_loss_total"] += trip["profit_loss"]
-        summary["cash_profit_loss_total"] += trip["cash_profit_loss"]
+        # Recognize fleet freight revenue only after a trip is completed, matching
+        # the Profit & Loss Report. Keep the trip-level breakdown for all statuses.
+        if trip["status"] == "Completed":
+            summary["freight_total"] += trip["freight_amount"]
+            summary["received_total"] += trip["amount_received"]
+            summary["balance_due_total"] += trip["balance_due"]
+            summary["approved_expenses_total"] += trip["approved_expenses"]
+            summary["pending_expenses_total"] += trip["pending_expenses"]
+            summary["profit_loss_total"] += trip["profit_loss"]
+            summary["cash_profit_loss_total"] += trip["cash_profit_loss"]
         trip_finances.append(trip)
 
     return summary, trip_finances
