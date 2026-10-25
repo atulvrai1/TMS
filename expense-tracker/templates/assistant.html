@@ -495,6 +495,65 @@
     bubble.replaceChildren(result);
   }
 
+  function renderReportChart(bubble, chart) {
+    if (!chart || !Array.isArray(chart.labels) || !Array.isArray(chart.datasets) || !chart.datasets.length) return;
+    const values = chart.datasets[0].data;
+    if (!Array.isArray(values) || !values.length || !chart.labels.length) return;
+    const section = document.createElement('section');
+    section.className = 'ff-payment-results ff-report-chart';
+    const heading = document.createElement('h3');
+    heading.className = 'ff-payment-title';
+    heading.textContent = chart.title || 'Report chart';
+    section.appendChild(heading);
+    const svgNS = 'http://www.w3.org/2000/svg';
+    const svg = document.createElementNS(svgNS, 'svg');
+    svg.setAttribute('viewBox', '0 0 640 280');
+    svg.setAttribute('role', 'img');
+    svg.setAttribute('aria-label', heading.textContent);
+    svg.style.width = '100%';
+    svg.style.maxWidth = '640px';
+    svg.style.height = 'auto';
+    const left = 58, right = 620, top = 22, bottom = 220;
+    const max = Math.max(1, ...values.map(v => Number(v) || 0));
+    const add = (tag, attrs, text) => {
+      const node = document.createElementNS(svgNS, tag);
+      Object.entries(attrs || {}).forEach(([key, value]) => node.setAttribute(key, String(value)));
+      if (text !== undefined) node.textContent = text;
+      svg.appendChild(node);
+      return node;
+    };
+    [0, .25, .5, .75, 1].forEach(fraction => {
+      const y = bottom - fraction * (bottom - top);
+      add('line', {x1:left,y1:y,x2:right,y2:y,stroke:'currentColor','stroke-opacity':'.14'});
+      add('text', {x:left-8,y:y+4,'text-anchor':'end','font-size':11,fill:'currentColor'}, Math.round(max*fraction).toLocaleString('en-IN'));
+    });
+    const count = Math.min(chart.labels.length, values.length);
+    const step = (right-left)/Math.max(count,1);
+    if (chart.type === 'line') {
+      const points = [];
+      for (let i=0;i<count;i++) {
+        const x=left+step*(i+.5), y=bottom-(Math.max(0,Number(values[i])||0)/max)*(bottom-top);
+        points.push(x+','+y);
+        add('circle',{cx:x,cy:y,r:4,fill:'currentColor'});
+        add('text',{x,y:bottom+20,'text-anchor':'middle','font-size':10,fill:'currentColor'},String(chart.labels[i]).slice(0,12));
+      }
+      if(points.length) add('polyline',{points:points.join(' '),fill:'none',stroke:'currentColor','stroke-width':2.5});
+    } else {
+      for(let i=0;i<count;i++) {
+        const value=Math.max(0,Number(values[i])||0), barWidth=Math.min(42,step*.62);
+        const height=(value/max)*(bottom-top), x=left+step*i+(step-barWidth)/2, y=bottom-height;
+        add('rect',{x,y,width:barWidth,height,rx:3,fill:'currentColor','fill-opacity':'.78'});
+        add('text',{x:x+barWidth/2,y:bottom+20,'text-anchor':'middle','font-size':10,fill:'currentColor'},String(chart.labels[i]).slice(0,11));
+      }
+    }
+    section.appendChild(svg);
+    const caption = document.createElement('p');
+    caption.className = 'ff-composer-note';
+    caption.textContent = 'Based on FleetFlow records visible to your account. Values are in rupees where indicated.';
+    section.appendChild(caption);
+    bubble.appendChild(section);
+  }
+
   function addMessage(kind, text, options = {}) {
     const welcome = document.getElementById('ff-welcome');
     if (welcome) welcome.remove();
@@ -511,7 +570,7 @@
     label.textContent = kind === 'user' ? 'You' : 'FleetFlow Assistant';
     const bubble = document.createElement('div');
     bubble.className = 'ff-message-bubble';
-    if (kind === 'assistant') renderAssistantResponse(bubble, text);
+    if (kind === 'assistant') { renderAssistantResponse(bubble, text); if (options.chart) renderReportChart(bubble, options.chart); }
     else bubble.textContent = text;
     body.append(label, bubble);
     row.append(avatar, body);
@@ -876,7 +935,7 @@
       } else if (typeof data.answer !== 'string' || !data.answer.trim()) {
         addMessage('assistant', data.error || 'The request completed, but no answer was returned. Please try another question.', {error:true});
       } else {
-        addMessage('assistant', data.answer.trim());
+        addMessage('assistant', data.answer.trim(), {chart:data.chart});
       }
     } catch (error) {
       typing.remove();
