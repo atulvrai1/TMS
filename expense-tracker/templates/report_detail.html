@@ -125,7 +125,7 @@
   </section>
   {% elif pnl_tab == 'date-range' %}
   <section class="panel">
-    <p class="muted">Selected period: {{ start_date }} to {{ end_date }}. Revenue is recognized on valid trip completion dates; approved expenses use expense dates and maintenance uses service dates.</p>
+    <p class="muted">Selected period: {{ start_date }} to {{ end_date }}. Revenue is recognized by completion date; for completed trips with no completion date, the start date is used as a reporting fallback. Approved expenses use expense dates and maintenance uses service dates.</p>
     <div class="pnl-statement">
       <div class="pnl-statement-head"><div><h2>Date-Range Profit / Loss</h2><div class="pnl-period">{{ start_date }} to {{ end_date }}</div></div><div class="pnl-period">{{ pnl_trip_count }} completed trips · {{ pnl_expense_count }} approved expense records · {{ pnl_maintenance_count }} maintenance records</div></div>
       <div class="table-wrap"><table class="pnl-table"><thead><tr><th>Account</th><th class="amount">Amount (₹)</th></tr></thead><tbody>
