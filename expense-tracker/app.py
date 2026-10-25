@@ -1926,11 +1926,9 @@ def update_trip_freight(id):
             (float(freight_amount), id)
         )
         conn.execute(
-            "UPDATE party_ledger_entries SET amount = ?, entry_date = ?, "
-            "description = ? WHERE trip_id = ? AND entry_type = 'Debit' "
-            "AND reference = ?",
-            (float(freight_amount), trip["start_date"],
-             f"Freight billed for Trip #{id}", id, f"TRIP-{id}")
+            "UPDATE party_ledger_entries SET amount = ?, description = ? "
+            "WHERE trip_id = ? AND entry_type = 'Debit' AND reference = ?",
+            (float(freight_amount), f"Freight billed for Trip #{id}", id, f"TRIP-{id}")
         )
         _log_trip_action(
             conn,
