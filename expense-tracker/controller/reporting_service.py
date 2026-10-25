@@ -46,6 +46,9 @@ def _date_range(question):
     if "last 12 months" in text or "past 12 months" in text or "yearly trend" in text:
         start = date(today.year - 1, today.month, 1)
         return start.isoformat(), today.isoformat(), "last 12 months"
+    if re.search(r"\b(chart|graph|trend|monthly|month wise|month-wise|over time)\b", text):
+        start = date(today.year - 1, today.month, 1)
+        return start.isoformat(), today.isoformat(), "last 12 months"
     return today.replace(day=1).isoformat(), today.isoformat(), "this month"
 
 
