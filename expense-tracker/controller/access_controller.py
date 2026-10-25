@@ -31,8 +31,10 @@ class UserAccessController:
         return bool(user and user['is_terminated'])
 
     def is_super_admin(self, email):
-        """Verifies if the user is the primary root admin."""
-        return email == SUPER_ADMIN_EMAIL
+        """Verify the configured root administrator without case/space mismatches."""
+        configured_email = (SUPER_ADMIN_EMAIL or "").strip().casefold()
+        candidate_email = (email or "").strip().casefold()
+        return bool(configured_email and candidate_email == configured_email)
 
     def is_admin(self, user_id):
         """Checks if the user has an Admin role."""
@@ -160,16 +162,19 @@ def access_required(f):
 
         from database.db import get_db
         conn = get_db()
-        controller = UserAccessController(conn)
-        authorized = controller.is_authorized(session['user_id'])
-        terminated = controller.is_terminated(session['user_id'])
-        user = conn.execute(
-            "SELECT email, role, job_role, driver_id FROM users WHERE user_id = ?",
-            (session['user_id'],)
-        ).fetchone()
-        conn.close()
+        try:
+            controller = UserAccessController(conn)
+            authorized = controller.is_authorized(session['user_id'])
+            terminated = controller.is_terminated(session['user_id'])
+            user = conn.execute(
+                "SELECT email, role, job_role, driver_id FROM users WHERE user_id = ?",
+                (session['user_id'],)
+            ).fetchone()
+            is_super_admin = bool(user and controller.is_super_admin(user['email']))
+        finally:
+            conn.close()
 
-        if not authorized:
+        if not authorized or not user:
             if terminated:
                 session.clear()
                 return redirect(url_for('login'))
@@ -179,10 +184,7 @@ def access_required(f):
         session['role'] = user['role']
         session['job_role'] = user['job_role']
         session['driver_id'] = user['driver_id']
-        session['is_admin'] = (
-            user['role'] == 'Admin'
-            or controller.is_super_admin(user['email'])
-        )
+        session['is_admin'] = user['role'] == 'Admin' or is_super_admin
         return f(*args, **kwargs)
     return decorated_function
 
@@ -197,23 +199,24 @@ def admin_required(f):
 
         from database.db import get_db
         conn = get_db()
-        controller = UserAccessController(conn)
-        is_authorized = controller.is_authorized(session['user_id'])
-        # Read the identity and role from the database. Session values may be
-        # stale after an account change and must not grant administrator access.
-        user = conn.execute(
-            "SELECT email, role FROM users WHERE user_id = ?",
-            (session['user_id'],)
-        ).fetchone()
-        is_admin = bool(
-            is_authorized
-            and user
-            and (
-                user['role'] == 'Admin'
-                or controller.is_super_admin(user['email'])
+        try:
+            controller = UserAccessController(conn)
+            is_authorized = controller.is_authorized(session['user_id'])
+            # Read identity and role from the database; session values may be stale.
+            user = conn.execute(
+                "SELECT email, role FROM users WHERE user_id = ?",
+                (session['user_id'],)
+            ).fetchone()
+            is_admin = bool(
+                is_authorized
+                and user
+                and (
+                    user['role'] == 'Admin'
+                    or controller.is_super_admin(user['email'])
+                )
             )
-        )
-        conn.close()
+        finally:
+            conn.close()
 
         if not is_admin:
             if not is_authorized:
