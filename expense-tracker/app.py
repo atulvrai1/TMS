@@ -3507,6 +3507,57 @@ def reports(report_name=None):
         "AND t.end_date BETWEEN ? AND ?",
         [*trip_params, start_date, end_date]
     ).fetchone()
+
+    # All-time P&L totals power the Overall tab; date-filtered totals remain separate.
+    pnl_all_revenue_row = conn.execute(
+        "SELECT COALESCE(SUM(t.freight_amount), 0) AS revenue, COUNT(*) AS trip_count "
+        f"FROM trips t WHERE {trip_scope} AND t.status='Completed' "
+        "AND t.end_date IS NOT NULL AND t.end_date >= t.start_date",
+        trip_params
+    ).fetchone()
+    pnl_all_expenses_row = conn.execute(
+        "SELECT COALESCE(SUM(e.amount), 0) AS amount, COUNT(*) AS count "
+        "FROM expenses e JOIN trips t ON t.trip_id=e.trip_id "
+        f"WHERE {trip_scope} AND e.status='Approved'",
+        trip_params
+    ).fetchone()
+    pnl_all_maintenance_row = conn.execute(
+        "SELECT COALESCE(SUM(m.cost), 0) AS amount, COUNT(*) AS count "
+        f"FROM maintenance m WHERE {maintenance_scope}",
+        maintenance_params
+    ).fetchone()
+
+    # Trip P&L is grouped by valid completion date, with approved expenses
+    # assigned by their expense date in the selected reporting period.
+    trip_pnl_report = conn.execute(
+        "SELECT t.trip_id, t.route_from, t.route_to, t.start_date, t.end_date, "
+        "COALESCE(tr.registration_number, 'Not assigned') AS truck, "
+        "COALESCE(t.freight_amount,0) AS revenue, "
+        "COALESCE((SELECT SUM(e.amount) FROM expenses e WHERE e.trip_id=t.trip_id "
+        "AND e.status='Approved' AND e.date BETWEEN ? AND ?),0) AS costs "
+        "FROM trips t LEFT JOIN trucks tr ON tr.truck_id=t.truck_id "
+        f"WHERE {trip_scope} AND t.status='Completed' AND t.end_date IS NOT NULL "
+        "AND t.end_date >= t.start_date AND t.end_date BETWEEN ? AND ? "
+        "ORDER BY t.end_date DESC, t.trip_id DESC",
+        [start_date, end_date, *trip_params, start_date, end_date]
+    ).fetchall()
+
+    # Truck P&L uses valid completed freight, approved trip expenses and
+    # maintenance recorded for that truck during the selected service-date range.
+    truck_pnl_report = conn.execute(
+        "SELECT tr.truck_id, tr.registration_number, "
+        "COUNT(DISTINCT CASE WHEN t.status='Completed' AND t.end_date IS NOT NULL "
+        "AND t.end_date >= t.start_date AND t.end_date BETWEEN ? AND ? THEN t.trip_id END) AS trip_count, "
+        "COALESCE(SUM(CASE WHEN t.status='Completed' AND t.end_date IS NOT NULL "
+        "AND t.end_date >= t.start_date AND t.end_date BETWEEN ? AND ? THEN t.freight_amount ELSE 0 END),0) AS revenue, "
+        "COALESCE((SELECT SUM(e.amount) FROM expenses e JOIN trips et ON et.trip_id=e.trip_id "
+        "WHERE et.truck_id=tr.truck_id AND e.status='Approved' AND e.date BETWEEN ? AND ?),0) AS costs, "
+        "COALESCE((SELECT SUM(m.cost) FROM maintenance m WHERE m.truck_id=tr.truck_id "
+        "AND m.service_date BETWEEN ? AND ?),0) AS maintenance_cost "
+        "FROM trucks tr WHERE 1=1 "
+        "GROUP BY tr.truck_id, tr.registration_number ORDER BY revenue DESC, tr.registration_number",
+        [start_date, end_date, start_date, end_date, start_date, end_date, start_date, end_date]
+    ).fetchall()
     pnl_expenses_row = conn.execute(
         "SELECT COALESCE(SUM(e.amount), 0) AS amount, COUNT(*) AS count "
         "FROM expenses e JOIN trips t ON t.trip_id=e.trip_id "
@@ -3654,6 +3705,17 @@ def reports(report_name=None):
         category_labels=category_labels, category_values=category_values,
         status_labels=status_labels, status_values=status_values,
         top_trips=top_trips,
+        pnl_all_revenue=float(pnl_all_revenue_row["revenue"] or 0),
+        pnl_all_trip_count=int(pnl_all_revenue_row["trip_count"] or 0),
+        pnl_all_expenses=float(pnl_all_expenses_row["amount"] or 0),
+        pnl_all_expense_count=int(pnl_all_expenses_row["count"] or 0),
+        pnl_all_maintenance=float(pnl_all_maintenance_row["amount"] or 0),
+        pnl_all_maintenance_count=int(pnl_all_maintenance_row["count"] or 0),
+        pnl_all_profit=float(pnl_all_revenue_row["revenue"] or 0)
+            - float(pnl_all_expenses_row["amount"] or 0)
+            - float(pnl_all_maintenance_row["amount"] or 0),
+        trip_pnl_report=trip_pnl_report,
+        truck_pnl_report=truck_pnl_report,
         pnl_revenue=float(pnl_revenue_row["revenue"] or 0),
         pnl_trip_count=int(pnl_revenue_row["trip_count"] or 0),
         pnl_expenses=float(pnl_expenses_row["amount"] or 0),
@@ -3673,7 +3735,7 @@ def reports(report_name=None):
     )
     report_titles = {
         "reconciliation": "Trip Financial Reconciliation",
-        "profit-loss": "Overall Profit / Loss",
+        "profit-loss": "Profit / Loss",
         "truck-revenue": "Truck Revenue Report",
         "party-revenue": "Party Revenue Report",
         "supplier-balance": "Supplier Balance Report",
