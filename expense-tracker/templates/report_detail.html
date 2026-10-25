@@ -57,10 +57,10 @@
 
   {% if report_name == 'reconciliation' %}
   <section class="panel">
-    <p class="muted">Completed trips whose completion date falls in the selected period. Receipts and costs are lifetime totals for each listed trip, so the outstanding balance is not limited to receipts received during the selected period.</p>
+    <p class="muted">Shows completed trips in the selected date range. Money received and expenses are totals recorded for each trip, not just transactions from these dates.</p>
     <div class="table-wrap"><table><thead><tr>
-      <th>Trip</th><th>Completed</th><th>Truck</th><th>Freight</th><th>Received</th>
-      <th>Outstanding</th><th>Overpayment</th><th>Approved costs</th><th>Pending costs</th><th>Operating margin</th>
+      <th>Trip</th><th>Completed</th><th>Truck</th><th>Trip Charges</th><th>Money Received</th>
+      <th>Money Yet to Receive</th><th>Extra Money Received</th><th>Approved Trip Expenses</th><th>Expenses Awaiting Approval</th><th>Profit or Loss</th>
     </tr></thead><tbody>
     {% for row in reconciliation_report %}
       <tr>
@@ -78,26 +78,26 @@
       <tr><td colspan="10" class="empty">No completed trips in this completion-date range.</td></tr>
     {% endfor %}
     </tbody></table></div>
-    <p class="note">Outstanding is floored at zero. Any receipt amount above freight is shown separately as overpayment. Operating margin is freight less approved trip expenses; maintenance and unrecorded overheads are excluded.</p>
+    <p class="note">Outstanding is floored at zero. Any receipt amount above freight is shown separately as overpayment. Profit or loss here is trip charges minus approved trip expenses. Truck maintenance and other costs not recorded against the trip are not included.</p>
   </section>
 
   {% elif report_name == 'profit-loss' %}
   <section class="panel">
-    <p class="muted">Operating result for the selected period, based on completed-trip freight revenue less approved trip expenses and recorded maintenance.</p>
+    <p class="muted">Profit or loss for the selected period: completed-trip charges minus approved trip expenses and recorded truck maintenance.</p>
     <div class="pnl-statement">
-      <div class="pnl-statement-head"><div><h2>Profit &amp; Loss Statement</h2><div class="pnl-period">For the period {{ start_date }} to {{ end_date }}</div></div><div class="pnl-period">{{ pnl_trip_count }} completed trips · {{ pnl_expense_count }} approved expense records · {{ pnl_maintenance_count }} maintenance records</div></div>
+      <div class="pnl-statement-head"><div><h2>Profit or Loss Summary</h2><div class="pnl-period">For the period {{ start_date }} to {{ end_date }}</div></div><div class="pnl-period">{{ pnl_trip_count }} completed trips · {{ pnl_expense_count }} approved expense records · {{ pnl_maintenance_count }} maintenance records</div></div>
       <div class="table-wrap"><table class="pnl-table"><thead><tr><th>Account</th><th class="amount">Amount (₹)</th></tr></thead><tbody>
         <tr class="section-row"><td colspan="2">Income</td></tr>
-        <tr><td>Freight revenue — completed trips</td><td class="amount">₹{{ "%.2f"|format(pnl_revenue) }}</td></tr>
-        <tr class="subtotal"><td>Total Income</td><td class="amount">₹{{ "%.2f"|format(pnl_revenue) }}</td></tr>
+        <tr><td>Trip Charges — Completed Trips</td><td class="amount">₹{{ "%.2f"|format(pnl_revenue) }}</td></tr>
+        <tr class="subtotal"><td>Total Money Earned</td><td class="amount">₹{{ "%.2f"|format(pnl_revenue) }}</td></tr>
         <tr class="section-row"><td colspan="2">Operating Expenses</td></tr>
-        <tr><td>Approved trip expenses</td><td class="amount">₹{{ "%.2f"|format(pnl_expenses) }}</td></tr>
-        <tr><td>Recorded maintenance costs</td><td class="amount">₹{{ "%.2f"|format(pnl_maintenance) }}</td></tr>
-        <tr class="subtotal"><td>Total Operating Expenses</td><td class="amount">₹{{ "%.2f"|format(pnl_expenses + pnl_maintenance) }}</td></tr>
-        <tr class="net-result"><td>Net Operating Profit / (Loss)</td><td class="amount">₹{{ "%.2f"|format(pnl_operating_profit) }}</td></tr>
+        <tr><td>Approved Trip Expenses</td><td class="amount">₹{{ "%.2f"|format(pnl_expenses) }}</td></tr>
+        <tr><td>Truck Repair and Service Costs</td><td class="amount">₹{{ "%.2f"|format(pnl_maintenance) }}</td></tr>
+        <tr class="subtotal"><td>Total Expenses</td><td class="amount">₹{{ "%.2f"|format(pnl_expenses + pnl_maintenance) }}</td></tr>
+        <tr class="net-result"><td>{% if pnl_operating_profit > 0 %}Profit After Expenses{% elif pnl_operating_profit < 0 %}Loss After Expenses{% else %}No Profit, No Loss{% endif %}</td><td class="amount">₹{{ "%.2f"|format(pnl_operating_profit) }}</td></tr>
       </tbody></table></div>
     </div>
-    <p class="note">This is an operational P&amp;L from currently recorded data, not a statutory or fully reconciled accounting statement. It excludes overheads not recorded in these categories, depreciation, tax, interest and supplier bills not recorded as approved trip expenses or maintenance. Collections are cash receipts and are not counted as revenue again.</p>
+    <p class="note">This summary uses the information currently recorded in FleetFlow. It may not include other business costs, taxes, loan interest or depreciation. Money received is shown separately and is not counted as earnings a second time. It excludes overheads not recorded in these categories, depreciation, tax, interest and supplier bills not recorded as approved trip expenses or maintenance. Collections are cash receipts and are not counted as revenue again.</p>
   </section>
 
   {% elif report_name == 'truck-revenue' %}
