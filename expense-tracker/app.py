@@ -3332,7 +3332,7 @@ def transport_documents():
     conn.close()
     return render_template(
         "transport_documents.html", trips=trips, documents=documents,
-        csrf_token=session.get("csrf_token", ""), block_content="dashboard"
+        csrf_token=session.get("csrf_token", ""), today=date.today().isoformat(), block_content="dashboard"
     )
 
 if __name__ == "__main__":
