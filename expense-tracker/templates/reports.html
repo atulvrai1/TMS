@@ -58,6 +58,7 @@
   </section>
 
   <section aria-label="Reports"><div class="report-catalog">
+<a href="{{ url_for('reports', report_name='performance', period='monthly') }}"><span class="report-icon" aria-hidden="true">📈</span><span><strong>Performance Dashboard</strong><small>Monthly, quarterly, half-yearly, yearly and all-time business performance with charts and fleet shortcuts</small></span></a>
 <a href="{{ url_for('reports', report_name='reconciliation', start_date=start_date, end_date=end_date) }}"><span class="report-icon" aria-hidden="true">🧾</span><span><strong>Trip Money Check</strong><small>Trip charges, money received, money still to receive and trip expenses</small></span></a>
 <a href="{{ url_for('reports', report_name='profit-loss', start_date=start_date, end_date=end_date) }}"><span class="report-icon" aria-hidden="true">⚖️</span><span><strong>Overall Profit / Loss</strong><small>View total profit or loss for any selected date range, after approved trip expenses and recorded maintenance</small></span></a>
 <a href="{{ url_for('reports', report_name='truck-revenue', start_date=start_date, end_date=end_date) }}"><span class="report-icon" aria-hidden="true">🚚</span><span><strong>Truck Earnings Report</strong><small>Trip charges and recorded truck costs</small></span></a>
