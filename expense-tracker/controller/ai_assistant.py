@@ -1382,7 +1382,7 @@ def _build_graph():
     graph.add_conditional_edges(
         "understanding",
         lambda state: state["intent"] if state["intent"] in INTENTS - {"help"} else "help",
-        {"trips": "record_query", "expenses": "record_query", "payments": "record_query",
+        {"trips": "record_query", "reports": "record_query", "expenses": "record_query", "payments": "record_query",
          "maintenance": "record_query", "trucks": "record_query", "drivers": "record_query",
          "challans": "record_query", "compliance": "record_query", "users": "record_query", "admins": "record_query", "help": "help"},
     )
