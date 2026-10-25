@@ -4,6 +4,27 @@
 {% block breadcrumb %}Operations / Trips{% endblock %}
 
 {% block content_dashboard %}
+<style>
+.trip-create-toolbar{display:flex;align-items:center;justify-content:space-between;gap:1rem;margin:0 0 1.25rem;padding:1rem 1.1rem;background:var(--surface,#fff);border:1px solid var(--border-color,#e5e7eb);border-radius:14px}
+.trip-create-toolbar h2{margin:0;font-size:1.1rem}.trip-create-toolbar .account-help{margin:.35rem 0 0}
+.trip-create-trigger{white-space:nowrap;min-height:44px;padding:.7rem 1.1rem}
+.trip-drawer-backdrop{position:fixed;inset:0;z-index:1200;display:flex;justify-content:flex-end;background:rgba(15,23,42,.52);backdrop-filter:blur(1px)}
+.trip-drawer-backdrop[hidden]{display:none}
+.trip-drawer{display:flex;flex-direction:column;width:min(760px,94vw);height:100%;background:var(--surface,#fff);box-shadow:-12px 0 38px rgba(0,0,0,.18);animation:tripDrawerIn .2s ease-out;outline:none}
+.trip-drawer-header{display:flex;align-items:center;justify-content:space-between;gap:1rem;padding:1.1rem 1.5rem;border-bottom:1px solid var(--border-color,#e5e7eb);flex:0 0 auto}
+.trip-drawer-header h2{margin:0;font-size:1.25rem}.trip-drawer-close{border:0;background:transparent;color:#64748b;font-size:2rem;line-height:1;cursor:pointer;padding:.1rem .35rem}
+.trip-drawer-body{padding:1.25rem 1.5rem;overflow-y:auto;flex:1 1 auto}.trip-drawer-body h3{margin:.15rem 0 .35rem;font-size:1.05rem}
+.trip-drawer-form{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:1rem 1.25rem;margin-top:1.1rem}
+.trip-drawer-form .form-group{min-width:0;margin:0}.trip-drawer-form .form-input{width:100%;min-width:0;box-sizing:border-box;min-height:44px}
+.trip-drawer-form .form-help{margin:.35rem 0 0}.trip-drawer-form .trip-field-freight,.trip-drawer-form .trip-field-owner,.trip-drawer-form .trip-field-party{grid-column:1/-1}
+.trip-drawer-form .dispatch-submit{display:none}
+.trip-drawer-footer{display:flex;justify-content:flex-end;align-items:center;gap:.75rem;padding:1rem 1.5rem;border-top:1px solid var(--border-color,#e5e7eb);background:var(--surface,#fff);flex:0 0 auto}
+.trip-drawer-footer button{min-width:100px;min-height:42px}.trip-drawer-footer button:disabled{opacity:.5;cursor:not-allowed}
+body.trip-drawer-open{overflow:hidden}
+@keyframes tripDrawerIn{from{transform:translateX(24px);opacity:.8}to{transform:translateX(0);opacity:1}}
+@media(max-width:640px){.trip-create-toolbar{align-items:flex-start;flex-direction:column}.trip-create-trigger{width:100%}.trip-drawer{width:100vw;max-width:100vw}.trip-drawer-header,.trip-drawer-body{padding-left:1rem;padding-right:1rem}.trip-drawer-form{grid-template-columns:minmax(0,1fr);gap:.85rem}.trip-drawer-form .form-group{grid-column:1/-1}.trip-drawer-footer{padding:.8rem 1rem}}
+@media(prefers-reduced-motion:reduce){.trip-drawer{animation:none}}
+</style>
 <div class="dashboard-page">
     <div class="panel-header">
     <div>
@@ -13,14 +34,24 @@
     </div>
 
     {% if can_dispatch %}
-    <details class="dispatch-panel" open>
-    <summary class="dispatch-panel-summary">Plan a trip</summary>
-    <p class="account-help">Choose the route, planned date, truck, driver, and agreed customer freight charge. Enter all amounts in your business currency.</p>
+    <div class="trip-create-toolbar">
+        <div><h2>Trips</h2><p class="account-help">Manage dispatch, routes, payments, and trip costs in one place.</p></div>
+        <button type="button" class="btn-primary trip-create-trigger" id="open-trip-drawer">＋ Add Trip</button>
+    </div>
+    <div class="trip-drawer-backdrop" id="trip-drawer-backdrop" hidden>
+        <section class="trip-drawer" id="trip-drawer" role="dialog" aria-modal="true" aria-labelledby="trip-drawer-title" tabindex="-1">
+            <header class="trip-drawer-header">
+                <h2 id="trip-drawer-title">Add Trip</h2>
+                <button type="button" class="trip-drawer-close" id="close-trip-drawer" aria-label="Close Add Trip form">×</button>
+            </header>
+            <div class="trip-drawer-body">
+                <h3>Trip Details</h3>
+                <p class="account-help">Choose the customer, route, vehicle, driver, and agreed freight charge. Required fields are marked.</p>
     {% if available_trucks and available_drivers %}
-    <form action="{{ url_for('create_trip') }}" method="POST" class="dispatch-form" data-disable-on-submit>
+    <form id="fleetflow-add-trip-form" action="{{ url_for('create_trip') }}" method="POST" class="dispatch-form trip-drawer-form" data-disable-on-submit>
         <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
         {% if assignable_users %}
-        <div class="form-group">
+        <div class="form-group trip-field-owner">
             <label for="owner_user_id">Trip owner</label>
             <select class="form-input" id="owner_user_id" name="owner_user_id" required>
                 {% for user in assignable_users %}
@@ -35,7 +66,7 @@
             <p class="form-help">Driver accounts must be linked to their driver record in User Access before trips can be assigned.</p>
         </div>
         {% endif %}
-        <div class="form-group">
+        <div class="form-group trip-field-party">
             <label for="party_id">Customer / party (optional)</label>
             <select class="form-input" id="party_id" name="party_id">
                 <option value="">No party linked</option>
@@ -48,24 +79,24 @@
             </select>
             <p class="form-help">Linking a party records the trip freight as a debit in that party’s ledger.</p>
         </div>
-        <div class="form-group">
-            <label for="route_from">Pickup / origin</label>
+        <div class="form-group trip-field-origin">
+            <label for="route_from">Origin *</label>
             <input class="form-input" id="route_from" name="route_from" maxlength="120" placeholder="Where the load starts" required>
         </div>
-        <div class="form-group">
-            <label for="route_to">Delivery / destination</label>
+        <div class="form-group trip-field-destination">
+            <label for="route_to">Destination *</label>
             <input class="form-input" id="route_to" name="route_to" maxlength="120" placeholder="Where the load is delivered" required>
         </div>
-        <div class="form-group">
-            <label for="start_date">Planned start date</label>
+        <div class="form-group trip-field-date">
+            <label for="start_date">Start Date *</label>
             <input class="form-input" type="date" id="start_date" name="start_date" required>
         </div>
-        <div class="form-group">
-            <label for="freight_amount">Customer freight charge</label>
+        <div class="form-group trip-field-freight">
+            <label for="freight_amount">Party Freight Amount *</label>
             <input class="form-input" type="number" id="freight_amount" name="freight_amount" min="0.01" max="100000000" step="0.01" placeholder="Agreed amount" required>
         </div>
-        <div class="form-group">
-            <label for="truck_id">Available truck</label>
+        <div class="form-group trip-field-truck">
+            <label for="truck_id">Truck Registration No. *</label>
             <select class="form-input" id="truck_id" name="truck_id" required>
                 <option value="">Select a truck</option>
                 {% for truck in available_trucks %}
@@ -73,8 +104,8 @@
                 {% endfor %}
             </select>
         </div>
-        <div class="form-group">
-            <label for="driver_id">Active driver</label>
+        <div class="form-group trip-field-driver">
+            <label for="driver_id">Driver *</label>
             <select class="form-input" id="driver_id" name="driver_id" required>
                 <option value="">Select a driver</option>
                 {% for driver in available_drivers %}
@@ -87,7 +118,13 @@
     {% else %}
     <p class="account-help">A trip can be scheduled when at least one truck is available and one driver is active and unassigned.</p>
     {% endif %}
-    </details>
+            </div>
+            <footer class="trip-drawer-footer">
+                <button type="button" class="btn-ghost" id="cancel-trip-drawer">Close</button>
+                <button type="submit" class="btn-primary" form="fleetflow-add-trip-form" id="drawer-save-trip" {% if not available_trucks or not available_drivers %}disabled{% endif %}>Save Trip</button>
+            </footer>
+        </section>
+    </div>
     {% endif %}
 
     {% if can_dispatch %}
@@ -218,6 +255,53 @@
 {% endblock %}
 
 {% block scripts %}
+<script>
+    const tripBackdrop = document.getElementById("trip-drawer-backdrop");
+    const tripDrawer = document.getElementById("trip-drawer");
+    const openTripDrawer = document.getElementById("open-trip-drawer");
+    const closeTripDrawer = document.getElementById("close-trip-drawer");
+    const cancelTripDrawer = document.getElementById("cancel-trip-drawer");
+    const saveTripDrawer = document.getElementById("drawer-save-trip");
+    const tripForm = document.getElementById("fleetflow-add-trip-form");
+    let tripDrawerReturnFocus = null;
+    const setTripDrawerOpen = (open) => {
+        if (!tripBackdrop || !tripDrawer) return;
+        if (open) {
+            tripDrawerReturnFocus = document.activeElement;
+            tripBackdrop.hidden = false;
+            document.body.classList.add("trip-drawer-open");
+            window.requestAnimationFrame(() => {
+                const firstField = tripDrawer.querySelector("input:not([type=hidden]), select, button");
+                if (firstField) firstField.focus();
+            });
+        } else {
+            tripBackdrop.hidden = true;
+            document.body.classList.remove("trip-drawer-open");
+            if (tripDrawerReturnFocus && typeof tripDrawerReturnFocus.focus === "function") tripDrawerReturnFocus.focus();
+        }
+    };
+    if (openTripDrawer) openTripDrawer.addEventListener("click", () => setTripDrawerOpen(true));
+    if (closeTripDrawer) closeTripDrawer.addEventListener("click", () => setTripDrawerOpen(false));
+    if (cancelTripDrawer) cancelTripDrawer.addEventListener("click", () => setTripDrawerOpen(false));
+    if (tripBackdrop) tripBackdrop.addEventListener("click", (event) => {
+        if (event.target === tripBackdrop) setTripDrawerOpen(false);
+    });
+    document.addEventListener("keydown", (event) => {
+        if (!tripBackdrop || tripBackdrop.hidden) return;
+        if (event.key === "Escape") setTripDrawerOpen(false);
+        if (event.key === "Tab" && tripDrawer) {
+            const focusable = Array.from(tripDrawer.querySelectorAll("button:not(:disabled), input:not(:disabled), select:not(:disabled), a[href], [tabindex]:not([tabindex='-1'])")).filter((element) => element.offsetParent !== null);
+            if (!focusable.length) return;
+            const first = focusable[0], last = focusable[focusable.length - 1];
+            if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
+            else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
+        }
+    });
+    if (tripForm && saveTripDrawer) tripForm.addEventListener("submit", () => {
+        saveTripDrawer.disabled = true;
+        saveTripDrawer.textContent = "Saving…";
+    });
+</script>
 {% if can_dispatch and assignable_users %}
 <script>
     const tripOwnerSelect = document.getElementById("owner_user_id");
@@ -236,8 +320,9 @@
         updateAvailableParties();
     }
     const tripDriverSelect = document.getElementById("driver_id");
-    const driverOptions = Array.from(tripDriverSelect.options);
+    const driverOptions = tripDriverSelect ? Array.from(tripDriverSelect.options) : [];
     const updateAvailableDrivers = () => {
+        if (!tripOwnerSelect || !tripDriverSelect || !tripOwnerSelect.selectedOptions.length) return;
         const selectedOwner = tripOwnerSelect.selectedOptions[0];
         const linkedDriverId = selectedOwner.dataset.driverId;
         const requiresLinkedDriver = selectedOwner.dataset.role === "User";
@@ -250,8 +335,10 @@
             tripDriverSelect.value = "";
         }
     };
-    tripOwnerSelect.addEventListener("change", updateAvailableDrivers);
-    updateAvailableDrivers();
+    if (tripOwnerSelect) {
+        tripOwnerSelect.addEventListener("change", updateAvailableDrivers);
+        updateAvailableDrivers();
+    }
 </script>
 {% endif %}
 {% endblock %}
