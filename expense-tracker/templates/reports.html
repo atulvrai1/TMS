@@ -24,6 +24,17 @@
 .analytics-page th{font-size:.75rem;text-transform:uppercase;letter-spacing:.04em;color:var(--ink-muted,#6b7280)}
 .analytics-page .empty{padding:1.2rem;text-align:center;color:var(--ink-muted,#6b7280)}
 .analytics-page .note{font-size:.82rem;color:var(--ink-muted,#6b7280);margin:.5rem 0 0}
+.analytics-page .report-jump-links{display:flex;gap:.55rem;flex-wrap:wrap;margin:.8rem 0 1rem}
+.analytics-page .report-jump-links a{display:inline-block;padding:.55rem .8rem;border:1px solid var(--border,#dbe1ea);border-radius:999px;text-decoration:none;color:inherit;background:var(--surface,#fff);font-size:.85rem;font-weight:600}
+.analytics-page .report-jump-links a:hover,.analytics-page .workflow-links a:hover{border-color:var(--industry-blue,#2457c5);transform:translateY(-1px)}
+.analytics-page .related-workflows{scroll-margin-top:1rem}
+.analytics-page .workflow-links{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:.75rem;margin-top:1rem}
+.analytics-page .workflow-links a{display:grid;grid-template-columns:2rem minmax(0,1fr);column-gap:.65rem;align-items:center;border:1px solid var(--border,#e5e9f0);border-radius:10px;padding:.85rem;text-decoration:none;color:inherit;min-width:0;transition:transform .15s,border-color .15s}
+.analytics-page .workflow-links a>span{grid-row:span 2;font-size:1.35rem;color:var(--industry-blue,#2457c5)}
+.analytics-page .workflow-links strong{font-size:.9rem}
+.analytics-page .workflow-links small{font-size:.77rem;color:var(--ink-muted,#6b7280);line-height:1.4}
+@media(max-width:900px){.analytics-page .workflow-links{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:560px){.analytics-page .workflow-links{grid-template-columns:1fr}}
 @media(max-width:1100px){.analytics-page .kpis{grid-template-columns:repeat(3,minmax(0,1fr))}}
 @media(max-width:760px){.analytics-page .grid{grid-template-columns:1fr}.analytics-page .kpis{grid-template-columns:repeat(2,minmax(0,1fr))}.analytics-page .chart-box{height:270px}}
 </style>
@@ -44,7 +55,14 @@
     <p class="note">Trip and freight figures use trip start date. Collections use payment date; costs use expense date. Only approved expenses are counted. Cancelled trips remain visible in operational status totals.</p>
   </section>
 
-  <div class="kpis">
+  <nav class="report-jump-links" aria-label="Report sections">
+    <a href="#business-summary">Business summary</a>
+    <a href="#business-trends">Trends &amp; costs</a>
+    <a href="#latest-trips">Latest trips</a>
+    <a href="#related-workflows">Related workflows</a>
+  </nav>
+
+  <div class="kpis" id="business-summary">
     <div class="kpi"><div class="kpi-label">Trips</div><div class="kpi-value">{{ trip_summary.trip_count }}</div></div>
     <div class="kpi"><div class="kpi-label">Completed</div><div class="kpi-value">{{ trip_summary.completed_count }}</div></div>
     <div class="kpi"><div class="kpi-label">Booked freight</div><div class="kpi-value">₹{{ "%.2f"|format(freight_total) }}</div></div>
@@ -60,7 +78,7 @@
     <div class="kpi"><div class="kpi-label">Maintenance spend</div><div class="kpi-value">₹{{ "%.2f"|format(maintenance_summary.maintenance_cost or 0) }}</div><div class="note">{{ maintenance_summary.service_count }} service records</div></div>
   </div>
 
-  <div class="grid">
+  <div class="grid" id="business-trends">
     <section class="panel">
       <h2 style="margin-top:0">Monthly business trend</h2>
       <div class="chart-box"><canvas id="monthlyChart" aria-label="Monthly freight, collections and approved expenses chart"></canvas></div>
@@ -75,7 +93,7 @@
       <h2 style="margin-top:0">Trip status mix</h2>
       <div class="chart-box"><canvas id="statusChart" aria-label="Trip status distribution chart"></canvas></div>
     </section>
-    <section class="panel">
+    <section class="panel" id="latest-trips">
       <h2 style="margin-top:0">Latest freight trips</h2>
       <div class="table-wrap">
         <table>
@@ -100,6 +118,25 @@
       <p class="note">*Per-trip receipts and costs are filtered by the selected payment/expense dates, while the freight column is the full booked freight for the trip.</p>
     </section>
   </div>
+
+  <section class="panel related-workflows" id="related-workflows">
+    <h2 style="margin-top:0">Related records &amp; workflows</h2>
+    <p class="muted">Open the source records behind your reports. These links take you to the existing FleetFlow modules.</p>
+    <div class="workflow-links">
+      <a href="{{ url_for('trips') }}"><span aria-hidden="true">↗</span><strong>Trips &amp; dispatch</strong><small>Routes, freight, status and trip records</small></a>
+      <a href="{{ url_for('parties') }}"><span aria-hidden="true">♧</span><strong>Parties &amp; ledger</strong><small>Customer/supplier records and debit-credit history</small></a>
+      <a href="{{ url_for('expenses') }}"><span aria-hidden="true">₹</span><strong>Expenses</strong><small>Expense entries and review status</small></a>
+      {% if session.get('is_admin') or session.get('role') == 'Admin' %}
+      <a href="{{ url_for('payments') }}"><span aria-hidden="true">▤</span><strong>Payments</strong><small>Recorded receipts and trip balances</small></a>
+      <a href="{{ url_for('maintenance') }}"><span aria-hidden="true">🛠</span><strong>Maintenance</strong><small>Service history and repair costs</small></a>
+      <a href="{{ url_for('transport_documents') }}"><span aria-hidden="true">🧾</span><strong>Loading slips &amp; POD</strong><small>Trip documents and delivery status</small></a>
+      <a href="{{ url_for('trucks') }}"><span aria-hidden="true">🚚</span><strong>Vehicle records</strong><small>Truck details and fleet status</small></a>
+      <a href="{{ url_for('roadside_compliance') }}"><span aria-hidden="true">🛡</span><strong>Compliance</strong><small>Document register and expiry tracking</small></a>
+      {% endif %}
+      <a href="{{ url_for('fleetflow_assistant.assistant_page') }}"><span aria-hidden="true">✦</span><strong>Ask FleetFlow Assistant</strong><small>Find records or request a supported action</small></a>
+    </div>
+    <p class="note">The dashboard is an operational summary, not a substitute for a reconciled accounting ledger. Estimated margin and collection gap can differ from final accounting profit and the party's current balance.</p>
+  </section>
 </div>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.8/dist/chart.umd.min.js" defer></script>
 <script>
