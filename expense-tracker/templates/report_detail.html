@@ -50,10 +50,26 @@
     <form method="get" action="{{ url_for('reports', report_name=report_name) }}" class="filters">
       <div><label for="start_date">From</label><input type="date" id="start_date" name="start_date" value="{{ start_date }}" required></div>
       <div><label for="end_date">To</label><input type="date" id="end_date" name="end_date" value="{{ end_date }}" required></div>
-      <button type="submit">Show Profit / Loss for Date Range</button>
-      <a class="button secondary" href="{{ url_for('export_reports_csv', report_name=report_name, start_date=start_date, end_date=end_date) }}">Export CSV</a>
+      <button type="submit">Apply Date Range</button>
+      <a class="button secondary" href="{{ url_for('export_reports_csv', report_name=report_name, tab=request.args.get('tab', 'overall'), start_date=start_date, end_date=end_date) }}">Export CSV</a>
     </form>
   </section>
+
+
+  {% if report_name == 'profit-loss' %}
+  {% set pnl_tab = request.args.get('tab', 'overall') %}
+  <nav class="pnl-tabs" aria-label="Profit and loss reports">
+    <a class="{% if pnl_tab == 'overall' %}active{% endif %}" href="{{ url_for('reports', report_name='profit-loss', tab='overall', start_date=start_date, end_date=end_date) }}">Overall Profit / Loss</a>
+    <a class="{% if pnl_tab == 'date-range' %}active{% endif %}" href="{{ url_for('reports', report_name='profit-loss', tab='date-range', start_date=start_date, end_date=end_date) }}">Date-Range Profit / Loss</a>
+    <a class="{% if pnl_tab == 'trip' %}active{% endif %}" href="{{ url_for('reports', report_name='profit-loss', tab='trip', start_date=start_date, end_date=end_date) }}">Trip-Based Profit / Loss</a>
+    <a class="{% if pnl_tab == 'truck' %}active{% endif %}" href="{{ url_for('reports', report_name='profit-loss', tab='truck', start_date=start_date, end_date=end_date) }}">Truck-Based Profit / Loss</a>
+  </nav>
+  <style>
+    .pnl-tabs{display:flex;gap:.55rem;flex-wrap:wrap;margin:0 0 1rem}
+    .pnl-tabs a{padding:.7rem .95rem;border:1px solid var(--border,#dbe1ea);border-radius:9px;text-decoration:none;color:inherit;font-weight:650;background:var(--surface,#fff)}
+    .pnl-tabs a.active{background:var(--industry-blue,#2457c5);color:#fff;border-color:var(--industry-blue,#2457c5)}
+  </style>
+  {% endif %}
 
   {% if report_name == 'reconciliation' %}
   <section class="panel">
@@ -82,23 +98,63 @@
   </section>
 
   {% elif report_name == 'profit-loss' %}
+  {% set pnl_tab = request.args.get('tab', 'overall') %}
+  {% if pnl_tab == 'overall' %}
   <section class="panel">
-    <p class="muted">Overall profit or loss for the selected date range: valid completed-trip charges minus approved trip expenses and recorded truck maintenance.</p>
+    <p class="muted">All-time profit or loss from recorded valid completed trips, approved trip expenses and recorded truck maintenance.</p>
     <div class="pnl-statement">
-      <div class="pnl-statement-head"><div><h2>Profit or Loss Summary</h2><div class="pnl-period">For the period {{ start_date }} to {{ end_date }}</div></div><div class="pnl-period">{{ pnl_trip_count }} completed trips · {{ pnl_expense_count }} approved expense records · {{ pnl_maintenance_count }} maintenance records</div></div>
+      <div class="pnl-statement-head"><div><h2>Profit or Loss Summary</h2><div class="pnl-period">All recorded dates</div></div><div class="pnl-period">{{ pnl_all_trip_count }} completed trips · {{ pnl_all_expense_count }} approved expense records · {{ pnl_all_maintenance_count }} maintenance records</div></div>
       <div class="table-wrap"><table class="pnl-table"><thead><tr><th>Account</th><th class="amount">Amount (₹)</th></tr></thead><tbody>
         <tr class="section-row"><td colspan="2">Income</td></tr>
-        <tr><td>Trip Charges — Completed Trips</td><td class="amount">₹{{ "%.2f"|format(pnl_revenue) }}</td></tr>
-        <tr class="subtotal"><td>Total Money Earned</td><td class="amount">₹{{ "%.2f"|format(pnl_revenue) }}</td></tr>
+        <tr><td>Trip Charges — Completed Trips</td><td class="amount">₹{{ "%.2f"|format(pnl_all_revenue) }}</td></tr>
+        <tr class="subtotal"><td>Total Money Earned</td><td class="amount">₹{{ "%.2f"|format(pnl_all_revenue) }}</td></tr>
         <tr class="section-row"><td colspan="2">Operating Expenses</td></tr>
-        <tr><td>Approved Trip Expenses</td><td class="amount">₹{{ "%.2f"|format(pnl_expenses) }}</td></tr>
-        <tr><td>Truck Repair and Service Costs</td><td class="amount">₹{{ "%.2f"|format(pnl_maintenance) }}</td></tr>
-        <tr class="subtotal"><td>Total Expenses</td><td class="amount">₹{{ "%.2f"|format(pnl_expenses + pnl_maintenance) }}</td></tr>
-        <tr class="net-result"><td>{% if pnl_operating_profit > 0 %}Profit After Expenses{% elif pnl_operating_profit < 0 %}Loss After Expenses{% else %}No Profit, No Loss{% endif %}</td><td class="amount">{% if pnl_operating_profit > 0 %}Profit: ₹{{ "%.2f"|format(pnl_operating_profit) }}{% elif pnl_operating_profit < 0 %}Loss: ₹{{ "%.2f"|format(pnl_operating_profit|abs) }}{% else %}No Profit, No Loss{% endif %}</td></tr>
+        <tr><td>Approved Trip Expenses</td><td class="amount">₹{{ "%.2f"|format(pnl_all_expenses) }}</td></tr>
+        <tr><td>Truck Repair and Service Costs</td><td class="amount">₹{{ "%.2f"|format(pnl_all_maintenance) }}</td></tr>
+        <tr class="subtotal"><td>Total Expenses</td><td class="amount">₹{{ "%.2f"|format(pnl_all_expenses + pnl_all_maintenance) }}</td></tr>
+        <tr class="net-result"><td>{% if pnl_all_profit > 0 %}Profit After Expenses{% elif pnl_all_profit < 0 %}Loss After Expenses{% else %}No Profit, No Loss{% endif %}</td><td class="amount">{% if pnl_all_profit > 0 %}Profit: ₹{{ "%.2f"|format(pnl_all_profit) }}{% elif pnl_all_profit < 0 %}Loss: ₹{{ "%.2f"|format(pnl_all_profit|abs) }}{% else %}No Profit, No Loss{% endif %}</td></tr>
       </tbody></table></div>
     </div>
     <p class="note">This summary uses the information currently recorded in FleetFlow. It may not include other business costs, taxes, loan interest or depreciation. Money received is shown separately and is not counted as earnings a second time. It excludes overheads not recorded in these categories, depreciation, tax, interest and supplier bills not recorded as approved trip expenses or maintenance. Collections are cash receipts and are not counted as revenue again.</p>
   </section>
+  {% elif pnl_tab == 'date-range' %}
+  <section class="panel">
+    <p class="muted">Selected period: {{ start_date }} to {{ end_date }}. Revenue is recognized on valid trip completion dates; approved expenses use expense dates and maintenance uses service dates.</p>
+    <div class="pnl-statement">
+      <div class="pnl-statement-head"><div><h2>Date-Range Profit / Loss</h2><div class="pnl-period">{{ start_date }} to {{ end_date }}</div></div><div class="pnl-period">{{ pnl_trip_count }} completed trips · {{ pnl_expense_count }} approved expense records · {{ pnl_maintenance_count }} maintenance records</div></div>
+      <div class="table-wrap"><table class="pnl-table"><thead><tr><th>Account</th><th class="amount">Amount (₹)</th></tr></thead><tbody>
+        <tr class="section-row"><td colspan="2">Income</td></tr>
+        <tr><td>Trip Charges — Completed Trips</td><td class="amount">₹{{ "%.2f"|format(pnl_revenue) }}</td></tr>
+        <tr class="subtotal"><td>Total Revenue</td><td class="amount">₹{{ "%.2f"|format(pnl_revenue) }}</td></tr>
+        <tr class="section-row"><td colspan="2">Expenses</td></tr>
+        <tr><td>Approved Trip Expenses</td><td class="amount">₹{{ "%.2f"|format(pnl_expenses) }}</td></tr>
+        <tr><td>Truck Repair and Service Costs</td><td class="amount">₹{{ "%.2f"|format(pnl_maintenance) }}</td></tr>
+        <tr class="subtotal"><td>Total Expenses</td><td class="amount">₹{{ "%.2f"|format(pnl_expenses + pnl_maintenance) }}</td></tr>
+        <tr class="net-result"><td>Net Profit / Loss</td><td class="amount">₹{{ "%.2f"|format(pnl_operating_profit) }}</td></tr>
+      </tbody></table></div>
+    </div>
+  </section>
+  {% elif pnl_tab == 'trip' %}
+  <section class="panel">
+    <h2>Trip-Based Profit / Loss</h2><p class="muted">Valid completed trips by completion date within {{ start_date }} to {{ end_date }}.</p>
+    <div class="table-wrap"><table><thead><tr><th>Trip</th><th>Route</th><th>Completion Date</th><th>Truck</th><th>Freight Revenue</th><th>Approved Expenses</th><th>Net Profit / Loss</th></tr></thead><tbody>
+    {% for row in trip_pnl_report %}
+      <tr><td>#{{ row.trip_id }}</td><td>{{ row.route_from }} → {{ row.route_to }}</td><td>{{ row.end_date }}</td><td>{{ row.truck }}</td><td>₹{{ "%.2f"|format(row.revenue or 0) }}</td><td>₹{{ "%.2f"|format(row.costs or 0) }}</td><td>₹{{ "%.2f"|format((row.revenue or 0)-(row.costs or 0)) }}</td></tr>
+    {% else %}<tr><td colspan="7" class="empty">No valid completed trips in this date range.</td></tr>{% endfor %}
+    </tbody></table></div>
+    <p class="note">Trip net profit/loss equals freight revenue minus approved expenses recorded within the selected period. Truck maintenance is shown in truck and overall reports, not duplicated into trip costs.</p>
+  </section>
+  {% elif pnl_tab == 'truck' %}
+  <section class="panel">
+    <h2>Truck-Based Profit / Loss</h2><p class="muted">Truck revenue and recorded costs for {{ start_date }} to {{ end_date }}.</p>
+    <div class="table-wrap"><table><thead><tr><th>Truck</th><th>Completed Trips</th><th>Freight Revenue</th><th>Approved Trip Expenses</th><th>Maintenance</th><th>Net Profit / Loss</th></tr></thead><tbody>
+    {% for row in truck_pnl_report %}
+      <tr><td>{{ row.registration_number }}</td><td>{{ row.trip_count }}</td><td>₹{{ "%.2f"|format(row.revenue or 0) }}</td><td>₹{{ "%.2f"|format(row.costs or 0) }}</td><td>₹{{ "%.2f"|format(row.maintenance_cost or 0) }}</td><td>₹{{ "%.2f"|format((row.revenue or 0)-(row.costs or 0)-(row.maintenance_cost or 0)) }}</td></tr>
+    {% else %}<tr><td colspan="6" class="empty">No trucks found for this account.</td></tr>{% endfor %}
+    </tbody></table></div>
+    <p class="note">Trip expenses are attributed through their trip's truck. Maintenance is attributed to the truck on the maintenance record. Trucks without activity may still appear with zero values.</p>
+  </section>
+  {% endif %}
 
   {% elif report_name == 'truck-revenue' %}
   <section class="panel"><h2>Revenue and operating cost by truck</h2>
