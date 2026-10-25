@@ -58,7 +58,7 @@
     </form>
   </section>
   {% else %}
-  <div class="pnl-total"><a class="button secondary" href="{{ url_for('export_reports_csv', report_name=report_name, tab=pnl_tab) }}">Export All-Time CSV</a></div>
+  <div class="pnl-total"><a class="button secondary" href="{{ url_for('export_reports_csv', report_name=report_name, tab=pnl_tab, start_date=start_date, end_date=end_date) }}">Export All-Time CSV</a></div>
   {% endif %}
 
 
