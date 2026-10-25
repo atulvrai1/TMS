@@ -18,7 +18,7 @@ def test_reports_dashboard_renders_scoped_metrics_and_charts(tmp_path):
         "FLEETFLOW_SUPER_ADMIN_EMAIL": "root@example.test",
     })
     code = r"""
-from datetime import date
+from datetime import date, timedelta
 from app import app
 from database.db import get_db
 
@@ -40,6 +40,16 @@ driver_id = conn.execute(
 trip_id = conn.execute(
     "INSERT INTO trips (truck_id, driver_id, freight_amount, start_date, route_from, route_to, status, owner_user_id) "
     "VALUES (?, ?, 50000, ?, 'Patna', 'Indore', 'Completed', ?)",
+    (truck_id, driver_id, date.today().isoformat(), user_id),
+).lastrowid
+older_trip_id = conn.execute(
+    "INSERT INTO trips (truck_id, driver_id, freight_amount, start_date, route_from, route_to, status, owner_user_id) "
+    "VALUES (?, ?, 30000, ?, 'Patna', 'Delhi', 'Completed', ?)",
+    (truck_id, driver_id, (date.today() - timedelta(days=1)).isoformat(), user_id),
+).lastrowid
+newer_same_day_trip_id = conn.execute(
+    "INSERT INTO trips (truck_id, driver_id, freight_amount, start_date, route_from, route_to, status, owner_user_id) "
+    "VALUES (?, ?, 60000, ?, 'Patna', 'Ranchi', 'Completed', ?)",
     (truck_id, driver_id, date.today().isoformat(), user_id),
 ).lastrowid
 conn.execute(
@@ -69,6 +79,13 @@ with app.test_client() as client:
     )
     assert response.status_code == 200, response.status_code
     assert b"Fleet & Business Intelligence" in response.data
+    assert b"Latest freight trips" in response.data
+    assert b"Top freight trips" not in response.data
+    # Latest trip date first; for equal dates, the larger trip ID comes first.
+    row_newest = response.data.index(f"#{newer_same_day_trip_id}".encode())
+    row_original = response.data.index(f"#{trip_id}".encode())
+    row_older = response.data.index(f"#{older_trip_id}".encode())
+    assert row_newest < row_original < row_older
     assert b"Booked freight" in response.data
     assert b"Approved costs by category" in response.data
     assert b"50000.00" in response.data
