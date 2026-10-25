@@ -1,0 +1,99 @@
+{% extends "base.html" %}
+{% block title %}Performance Dashboard — FleetFlow{% endblock %}
+{% block breadcrumb %}Reports / Performance{% endblock %}
+{% block content_dashboard %}
+<style>
+.performance-page{max-width:1500px;margin:0 auto;color:var(--ink,#172033)}
+.performance-page .head{display:flex;justify-content:space-between;align-items:flex-start;gap:1rem;flex-wrap:wrap;margin-bottom:1rem}
+.performance-page h1{margin:0 0 .35rem;font-size:clamp(1.5rem,3vw,2rem)}
+.performance-page .muted,.performance-page .note{color:var(--ink-muted,#6b7280)}
+.performance-page .panel,.performance-page .metric,.performance-page .visual-card{background:var(--surface,#fff);border:1px solid var(--border,#e5e9f0);border-radius:14px;padding:1rem;min-width:0;box-shadow:0 4px 18px rgba(20,35,60,.035)}
+.performance-page .panel{margin-bottom:1rem}
+.performance-page .periods{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:.55rem;margin-bottom:1rem}
+.performance-page .periods a{padding:.75rem .5rem;text-align:center;border:1px solid var(--border,#dbe1ea);border-radius:10px;text-decoration:none;color:inherit;font-weight:650}
+.performance-page .periods a.active{background:var(--industry-blue,#2457c5);border-color:var(--industry-blue,#2457c5);color:white}
+.performance-page .metrics{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:.8rem;margin-bottom:1rem}
+.performance-page .metric-label{font-size:.8rem;color:var(--ink-muted,#6b7280);margin-bottom:.4rem}
+.performance-page .metric-value{font-size:clamp(1.05rem,2vw,1.55rem);font-weight:800;overflow-wrap:anywhere}
+.performance-page .metric small{display:block;color:var(--ink-muted,#6b7280);margin-top:.35rem}
+.performance-page .visuals{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:1rem}
+.performance-page .visual-card h2{font-size:1.05rem;margin:0 0 .35rem}
+.performance-page .visual-card p{font-size:.84rem;color:var(--ink-muted,#6b7280);margin:.25rem 0 1rem}
+.performance-page .chart{height:290px;position:relative}
+.performance-page .quick-links{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:.75rem}
+.performance-page .quick-links a{display:flex;gap:.7rem;align-items:center;padding:.9rem;border:1px solid var(--border,#e5e9f0);border-radius:11px;text-decoration:none;color:inherit;min-width:0}
+.performance-page .quick-links .icon{font-size:1.6rem}
+.performance-page .quick-links strong,.performance-page .quick-links small{display:block}
+.performance-page .quick-links small{color:var(--ink-muted,#6b7280);font-size:.78rem;margin-top:.2rem}
+.performance-page .filters{display:flex;align-items:end;gap:.7rem;flex-wrap:wrap}
+.performance-page label{display:block;font-size:.8rem;font-weight:650;margin-bottom:.3rem}
+.performance-page input,.performance-page button{border:1px solid var(--border,#dbe1ea);border-radius:8px;padding:.65rem;background:var(--surface,#fff);color:inherit}
+.performance-page button{background:var(--industry-blue,#2457c5);border-color:transparent;color:#fff;font-weight:700;cursor:pointer}
+.performance-page .back{display:inline-block;padding:.7rem .9rem;border:1px solid var(--border,#dbe1ea);border-radius:9px;text-decoration:none;color:inherit}
+@media(max-width:1000px){.performance-page .metrics{grid-template-columns:repeat(2,minmax(0,1fr))}.performance-page .quick-links{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:700px){.performance-page .visuals{grid-template-columns:1fr}.performance-page .periods{grid-template-columns:repeat(2,minmax(0,1fr))}.performance-page .periods a:last-child{grid-column:1/-1}.performance-page .chart{height:250px}.performance-page .quick-links{grid-template-columns:1fr}.performance-page .filters{display:grid;grid-template-columns:1fr}.performance-page .filters button{width:100%}}
+</style>
+<div class="performance-page">
+  <header class="head">
+    <div><h1>📈 Performance Dashboard</h1><div class="muted">FleetFlow business performance across the selected period.</div></div>
+    <a class="back" href="{{ url_for('reports', start_date=start_date, end_date=end_date) }}">← Back to Reports</a>
+  </header>
+
+  <section class="panel" aria-label="Performance period">
+    <div class="periods">
+      {% for value,label in [('monthly','Monthly'),('quarterly','Quarterly'),('half-yearly','Half-Yearly'),('yearly','Yearly'),('overall','Overall')] %}
+      <a class="{% if selected_period == value %}active{% endif %}" href="{{ url_for('reports', report_name='performance', period=value) }}">{{ label }}</a>
+      {% endfor %}
+    </div>
+    <form method="get" action="{{ url_for('reports', report_name='performance') }}" class="filters">
+      <input type="hidden" name="period" value="custom">
+      <div><label for="start_date">From date</label><input type="date" id="start_date" name="start_date" value="{{ start_date }}" required></div>
+      <div><label for="end_date">To date</label><input type="date" id="end_date" name="end_date" value="{{ end_date }}" required></div>
+      <button type="submit">Apply custom range</button>
+    </form>
+    <p class="note">Amounts are based on records visible to your account. Freight is counted for completed trips; expenses include approved entries only. Collections are recorded payments, and maintenance uses service dates.</p>
+  </section>
+
+  <section class="metrics" aria-label="Key performance indicators">
+    <article class="metric"><div class="metric-label">Completed-trip freight</div><div class="metric-value">₹{{ "{:,.2f}".format(pnl_revenue) }}</div><small>{{ pnl_trip_count }} completed trips</small></article>
+    <article class="metric"><div class="metric-label">Money collected</div><div class="metric-value">₹{{ "{:,.2f}".format(receipts) }}</div><small>{{ payment_summary.payment_count }} recorded payments</small></article>
+    <article class="metric"><div class="metric-label">Approved trip expenses</div><div class="metric-value">₹{{ "{:,.2f}".format(pnl_expenses) }}</div><small>{{ pnl_expense_count }} approved expense entries</small></article>
+    <article class="metric"><div class="metric-label">Estimated operating profit</div><div class="metric-value">₹{{ "{:,.2f}".format(pnl_operating_profit) }}</div><small>Freight less approved expenses and maintenance</small></article>
+  </section>
+
+  <!-- Three dashboard-style panels from the selected design: operations, finances, and fleet shortcuts. -->
+  <section class="visuals" aria-label="Performance dashboard charts">
+    <article class="visual-card"><h2>Trip activity</h2><p>Trip status breakdown for this period.</p><div class="chart"><canvas id="tripStatusChart" aria-label="Trip status chart"></canvas></div></article>
+    <article class="visual-card"><h2>Monthly business trend</h2><p>Freight, collections and expenses over time.</p><div class="chart"><canvas id="moneyTrendChart" aria-label="Monthly business trend chart"></canvas></div></article>
+    <article class="visual-card"><h2>Operating costs</h2><p>Approved expenses by category.</p><div class="chart"><canvas id="expenseCategoryChart" aria-label="Expense category chart"></canvas></div></article>
+    <article class="visual-card"><h2>Fleet performance snapshot</h2><p>Quick access to the records that influence operational performance.</p>
+      <div class="quick-links">
+        <a href="{{ url_for('trips') }}"><span class="icon">🚚</span><span><strong>Trips & dispatch</strong><small>Review trip activity</small></span></a>
+        <a href="{{ url_for('payments') }}"><span class="icon">💳</span><span><strong>Payments</strong><small>Check collections</small></span></a>
+        <a href="{{ url_for('expenses') }}"><span class="icon">₹</span><span><strong>Expenses</strong><small>Review operating costs</small></span></a>
+        <a href="{{ url_for('maintenance') }}"><span class="icon">🛠️</span><span><strong>Maintenance</strong><small>Track servicing costs</small></span></a>
+        <a href="{{ url_for('trucks') }}"><span class="icon">🚛</span><span><strong>Trucks</strong><small>Open fleet records</small></span></a>
+        <a href="{{ url_for('drivers') }}"><span class="icon">🧑‍✈️</span><span><strong>Drivers</strong><small>Open driver records</small></span></a>
+      </div>
+    </article>
+  </section>
+</div>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+(function(){
+  if (!window.Chart) return;
+  const money = value => '₹' + Number(value || 0).toLocaleString('en-IN',{maximumFractionDigits:0});
+  const statusLabels = {{ status_labels|tojson }};
+  const statusValues = {{ status_values|tojson }};
+  const labels = {{ month_labels|tojson }};
+  const freight = {{ monthly_freight|tojson }};
+  const expenses = {{ monthly_expenses|tojson }};
+  const payments = {{ monthly_payments|tojson }};
+  const categoryLabels = {{ category_labels|tojson }};
+  const categoryValues = {{ category_values|tojson }};
+  new Chart(document.getElementById('tripStatusChart'),{type:'doughnut',data:{labels:statusLabels,datasets:[{data:statusValues}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom'}}}});
+  new Chart(document.getElementById('moneyTrendChart'),{type:'line',data:{labels:labels,datasets:[{label:'Freight',data:freight,tension:.25},{label:'Collections',data:payments,tension:.25},{label:'Approved expenses',data:expenses,tension:.25}]},options:{responsive:true,maintainAspectRatio:false,interaction:{mode:'index',intersect:false},scales:{y:{ticks:{callback:money}}},plugins:{legend:{position:'bottom'},tooltip:{callbacks:{label:c=>c.dataset.label+': '+money(c.raw)}}}}});
+  new Chart(document.getElementById('expenseCategoryChart'),{type:'bar',data:{labels:categoryLabels,datasets:[{label:'Approved expenses',data:categoryValues}]},options:{responsive:true,maintainAspectRatio:false,indexAxis:'y',scales:{x:{ticks:{callback:money}}},plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>money(c.raw)}}}}});
+})();
+</script>
+{% endblock %}
