@@ -1904,7 +1904,7 @@ def update_trip_freight(id):
     try:
         conn.execute("BEGIN IMMEDIATE")
         trip = conn.execute(
-            "SELECT freight_amount, route_from, route_to, owner_user_id FROM trips "
+            "SELECT freight_amount, route_from, route_to, owner_user_id, party_id FROM trips "
             "WHERE trip_id = ? AND " + _record_owner_filter("trips")[0],
             [id, *_record_owner_filter("trips")[1]]
         ).fetchone()
@@ -1924,6 +1924,13 @@ def update_trip_freight(id):
         conn.execute(
             "UPDATE trips SET freight_amount = ? WHERE trip_id = ?",
             (float(freight_amount), id)
+        )
+        conn.execute(
+            "UPDATE party_ledger_entries SET amount = ?, entry_date = ?, "
+            "description = ? WHERE trip_id = ? AND entry_type = 'Debit' "
+            "AND reference = ?",
+            (float(freight_amount), trip["start_date"],
+             f"Freight billed for Trip #{id}", id, f"TRIP-{id}")
         )
         _log_trip_action(
             conn,
@@ -1997,11 +2004,21 @@ def record_trip_payment(id):
             flash(f"Payment exceeds the remaining balance of {max(due, Decimal('0')):.2f}.", "error")
             return redirect(return_url)
 
-        conn.execute(
+        payment_cursor = conn.execute(
             "INSERT INTO trip_payments "
             "(trip_id, amount, payment_date, reference, recorded_by) VALUES (?, ?, ?, ?, ?)",
             (id, float(amount), payment_date, reference, session["user_id"])
         )
+        if trip["party_id"] is not None:
+            conn.execute(
+                "INSERT INTO party_ledger_entries "
+                "(party_id, entry_date, entry_type, amount, reference, description, trip_id, created_by) "
+                "VALUES (?, ?, 'Credit', ?, ?, ?, ?, ?)",
+                (trip["party_id"], payment_date, float(amount),
+                 f"PAY-{payment_cursor.lastrowid}",
+                 f"Payment received for Trip #{id}" + (f" ({reference})" if reference else ""),
+                 id, session["user_id"])
+            )
         _log_trip_action(
             conn,
             "Trip Payment Recorded",
