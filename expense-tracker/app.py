@@ -3729,8 +3729,7 @@ def export_reports_csv():
                 "COALESCE((SELECT SUM(e.amount) FROM expenses e WHERE e.trip_id=t.trip_id AND e.status='Pending'),0) AS pending_costs "
                 "FROM trips t LEFT JOIN trucks tr ON tr.truck_id=t.truck_id "
                 f"WHERE {trip_scope} AND t.status='Completed' "
-                "AND t.end_date IS NOT NULL AND t.end_date >= t.start_date "
-                "AND t.end_date BETWEEN ? AND ? "
+                "AND COALESCE(t.end_date,t.start_date) BETWEEN ? AND ? "
                 "ORDER BY completion_date DESC,t.trip_id DESC",
                 [*trip_params,start_date,end_date]
             ).fetchall()
@@ -3792,7 +3791,8 @@ def export_reports_csv():
                 "SELECT 'Freight Revenue',COALESCE(t.end_date,t.start_date),t.trip_id,t.trip_id,"
                 "(t.route_from || ' -> ' || t.route_to),'',t.freight_amount,'Inflow' "
                 "FROM trips t WHERE " + trip_scope + " AND t.status='Completed' "
-                "AND COALESCE(t.end_date,t.start_date) BETWEEN ? AND ? "
+                "AND t.end_date IS NOT NULL AND t.end_date >= t.start_date "
+                "AND t.end_date BETWEEN ? AND ? "
                 "UNION ALL "
                 "SELECT 'Maintenance',m.service_date,m.maintenance_id,NULL,m.service_type,COALESCE(m.notes,''),m.cost,'Outflow' "
                 "FROM maintenance m WHERE " + maintenance_scope + " AND m.service_date BETWEEN ? AND ?"
