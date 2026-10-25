@@ -45,6 +45,7 @@
       <h1>Fleet & Business Intelligence</h1>
       <div class="muted">One view of trip volume, freight, collections and approved operating costs.</div>
     </div>
+    <a href="{{ url_for('reports', report_name='profit-loss', start_date=start_date, end_date=end_date) }}" style="display:inline-block;border-radius:9px;background:var(--industry-blue,#2457c5);color:#fff;padding:.75rem 1rem;text-decoration:none;font-weight:700">Overall Profit / Loss</a>
   </div>
   <section class="panel">
     <form method="get" action="{{ url_for('reports') }}" class="filters">
@@ -58,7 +59,7 @@
 
   <section aria-label="Reports"><div class="report-catalog">
 <a href="{{ url_for('reports', report_name='reconciliation', start_date=start_date, end_date=end_date) }}"><span class="report-icon" aria-hidden="true">🧾</span><span><strong>Trip Money Check</strong><small>Trip charges, money received, money still to receive and trip expenses</small></span></a>
-<a href="{{ url_for('reports', report_name='profit-loss', start_date=start_date, end_date=end_date) }}"><span class="report-icon" aria-hidden="true">⚖️</span><span><strong>Profit or Loss Report</strong><small>Shows whether completed trips made a profit or a loss after recorded expenses and maintenance</small></span></a>
+<a href="{{ url_for('reports', report_name='profit-loss', start_date=start_date, end_date=end_date) }}"><span class="report-icon" aria-hidden="true">⚖️</span><span><strong>Overall Profit / Loss</strong><small>View total profit or loss for any selected date range, after approved trip expenses and recorded maintenance</small></span></a>
 <a href="{{ url_for('reports', report_name='truck-revenue', start_date=start_date, end_date=end_date) }}"><span class="report-icon" aria-hidden="true">🚚</span><span><strong>Truck Earnings Report</strong><small>Trip charges and recorded truck costs</small></span></a>
 <a href="{{ url_for('reports', report_name='party-revenue', start_date=start_date, end_date=end_date) }}"><span class="report-icon" aria-hidden="true">🧑‍💼</span><span><strong>Customer Trip Charges and Payments</strong><small>Trip charges and money received from customers</small></span></a>
 <a href="{{ url_for('reports', report_name='supplier-balance', start_date=start_date, end_date=end_date) }}"><span class="report-icon" aria-hidden="true">💰</span><span><strong>Money to Pay Suppliers</strong><small>Supplier balances and payment records</small></span></a>
