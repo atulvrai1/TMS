@@ -1,0 +1,127 @@
+{% extends "base.html" %}
+{% block title %}Loading Slips & POD — FleetFlow{% endblock %}
+{% block breadcrumb %}Operations / Loading Slips & POD{% endblock %}
+{% block content_dashboard %}
+<style>
+.transport-docs{max-width:1400px;margin:0 auto;color:var(--ink,#172033)}
+.transport-docs .heading{display:flex;justify-content:space-between;align-items:flex-start;gap:1rem;flex-wrap:wrap;margin-bottom:1.25rem}
+.transport-docs h1{margin:0 0 .35rem;font-size:1.8rem}
+.transport-docs .muted{color:var(--ink-muted,#687386)}
+.transport-docs .panel{background:var(--surface,#fff);border:1px solid var(--border,#e5e9f0);border-radius:14px;padding:1.1rem;margin-bottom:1rem;box-shadow:0 4px 18px rgba(20,35,60,.035)}
+.transport-docs .form-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:.85rem}
+.transport-docs label{display:block;font-size:.84rem;font-weight:600;margin-bottom:.3rem}
+.transport-docs input,.transport-docs select,.transport-docs textarea{box-sizing:border-box;width:100%;border:1px solid var(--border,#dbe1ea);border-radius:8px;padding:.65rem;background:var(--surface,#fff);color:inherit;font:inherit}
+.transport-docs textarea{min-height:70px;resize:vertical}
+.transport-docs .wide{grid-column:1/-1}
+.transport-docs button{border:0;border-radius:8px;background:var(--industry-blue,#2457c5);color:#fff;padding:.65rem .9rem;font-weight:600;cursor:pointer}
+.transport-docs .table-wrap{overflow:auto}
+.transport-docs table{border-collapse:collapse;width:100%;min-width:1000px}
+.transport-docs th,.transport-docs td{padding:.7rem .65rem;text-align:left;border-bottom:1px solid var(--border,#e5e9f0);vertical-align:top;font-size:.88rem}
+.transport-docs th{font-size:.75rem;text-transform:uppercase;letter-spacing:.04em;color:var(--ink-muted,#687386)}
+.transport-docs .status-form{display:grid;gap:.4rem;min-width:180px}
+.transport-docs .status-form input{padding:.45rem}
+.transport-docs .status-form button{padding:.5rem}
+.transport-docs .tag{display:inline-block;border-radius:99px;background:#edf3ff;color:#2854a5;padding:.2rem .5rem;font-size:.75rem;white-space:nowrap}
+.transport-docs .empty{text-align:center;padding:1.5rem;color:var(--ink-muted,#687386)}
+@media(max-width:850px){.transport-docs .form-grid{grid-template-columns:1fr 1fr}}
+@media(max-width:560px){.transport-docs .form-grid{grid-template-columns:1fr}.transport-docs .wide{grid-column:auto}}
+</style>
+<div class="transport-docs">
+  <div class="heading">
+    <div>
+      <h1>Loading Slips & Proof of Delivery</h1>
+      <div class="muted">Create trip-linked loading records, track delivery milestones, and retain POD references in the trip history.</div>
+    </div>
+  </div>
+
+  <section class="panel">
+    <h2 style="margin-top:0">Create a transport document</h2>
+    {% if trips %}
+    <form method="post" action="{{ url_for('transport_documents') }}" data-disable-on-submit>
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <input type="hidden" name="action" value="create">
+      <div class="form-grid">
+        <div>
+          <label for="trip_id">Trip</label>
+          <select id="trip_id" name="trip_id" required>
+            <option value="">Select trip</option>
+            {% for trip in trips %}
+            <option value="{{ trip.trip_id }}">#{{ trip.trip_id }} · {{ trip.route_from }} → {{ trip.route_to }} · {{ trip.registration_number or 'Truck not set' }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div>
+          <label for="document_type">Document type</label>
+          <select id="document_type" name="document_type" required>
+            <option value="Loading Slip">Loading Slip</option>
+            <option value="POD">Proof of Delivery (POD)</option>
+          </select>
+        </div>
+        <div>
+          <label for="document_number">Document / reference number</label>
+          <input id="document_number" name="document_number" maxlength="80" placeholder="e.g. LR-2026-001" required>
+        </div>
+        <div>
+          <label for="document_date">Document date</label>
+          <input id="document_date" type="date" name="document_date" value="{{ today or '' }}" required>
+        </div>
+        <div>
+          <label for="quantity">Quantity / load</label>
+          <input id="quantity" name="quantity" maxlength="80" placeholder="e.g. 12 tonnes">
+        </div>
+        <div>
+          <label for="cargo_description">Cargo description</label>
+          <input id="cargo_description" name="cargo_description" maxlength="300" placeholder="Goods / material">
+        </div>
+        <div class="wide">
+          <label for="notes">Notes</label>
+          <textarea id="notes" name="notes" maxlength="1000" placeholder="Loading instructions, receiver notes, or POD details"></textarea>
+        </div>
+        <div class="wide"><button type="submit">Save document</button></div>
+      </div>
+    </form>
+    {% else %}
+      <p class="muted">No accessible trips are available. Create or assign a trip before recording its documents.</p>
+    {% endif %}
+  </section>
+
+  <section class="panel">
+    <h2 style="margin-top:0">Document register</h2>
+    <p class="muted">The register keeps each reference attached to its trip. Update status as loading and delivery progress. POD Received requires a POD reference. File/photo upload is not included in this first workflow.</p>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Document</th><th>Trip / route</th><th>Truck & driver</th><th>Date</th><th>Load details</th><th>Status</th><th>Update</th></tr></thead>
+        <tbody>
+        {% for doc in documents %}
+          <tr>
+            <td><strong>{{ doc.document_type }}</strong><br>{{ doc.document_number }}<br><span class="muted">#{{ doc.document_id }}</span>{% if doc.pod_reference %}<br><span class="muted">POD: {{ doc.pod_reference }}</span>{% endif %}</td>
+            <td>Trip #{{ doc.trip_id }}<br>{{ doc.route_from }} → {{ doc.route_to }}</td>
+            <td>{{ doc.registration_number or '—' }}<br>{{ doc.driver_name or '—' }}</td>
+            <td>{{ doc.document_date }}</td>
+            <td>{{ doc.cargo_description or '—' }}{% if doc.quantity %}<br>{{ doc.quantity }}{% endif %}{% if doc.notes %}<br><span class="muted">{{ doc.notes }}</span>{% endif %}</td>
+            <td><span class="tag">{{ doc.status }}</span></td>
+            <td>
+              <form class="status-form" method="post" action="{{ url_for('transport_documents') }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                <input type="hidden" name="action" value="update_status">
+                <input type="hidden" name="document_id" value="{{ doc.document_id }}">
+                <label for="status-{{ doc.document_id }}">New status</label>
+                <select id="status-{{ doc.document_id }}" name="status">
+                  {% for status in ['Draft','Ready for Loading','Loaded','In Transit','Delivered','POD Received','Cancelled'] %}
+                  <option value="{{ status }}" {% if doc.status == status %}selected{% endif %}>{{ status }}</option>
+                  {% endfor %}
+                </select>
+                <input name="pod_reference" maxlength="120" value="{{ doc.pod_reference or '' }}" aria-label="POD reference" placeholder="POD reference (when received)">
+                <button type="submit">Update</button>
+              </form>
+            </td>
+          </tr>
+        {% else %}
+          <tr><td class="empty" colspan="7">No loading slips or POD records yet.</td></tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </section>
+</div>
+{% endblock %}
