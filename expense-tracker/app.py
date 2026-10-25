@@ -3815,26 +3815,49 @@ def export_reports_csv():
                 for r in data
             ]
         elif report_name == "profit-loss":
-            revenue = conn.execute(
-                "SELECT COALESCE(SUM(t.freight_amount),0) AS amount "
-                f"FROM trips t WHERE {trip_scope} AND t.status='Completed' "
-                "AND t.end_date IS NOT NULL AND t.end_date >= t.start_date "
-                "AND t.end_date BETWEEN ? AND ?",
-                [*trip_params, start_date, end_date]
-            ).fetchone()["amount"]
-            expenses = conn.execute(
-                "SELECT COALESCE(SUM(e.amount),0) AS amount "
-                "FROM expenses e JOIN trips t ON t.trip_id=e.trip_id "
-                f"WHERE {trip_scope} AND e.status='Approved' AND e.date BETWEEN ? AND ?",
-                [*trip_params, start_date, end_date]
-            ).fetchone()["amount"]
-            maintenance = conn.execute(
-                "SELECT COALESCE(SUM(m.cost),0) AS amount FROM maintenance m "
-                f"WHERE {maintenance_scope} AND m.service_date BETWEEN ? AND ?",
-                [*maintenance_params, start_date, end_date]
-            ).fetchone()["amount"]
+            pnl_tab = request.args.get("tab", "date-range").strip()
+            if pnl_tab == "overall":
+                revenue = conn.execute(
+                    "SELECT COALESCE(SUM(t.freight_amount),0) AS amount "
+                    f"FROM trips t WHERE {trip_scope} AND t.status='Completed' "
+                    "AND t.end_date IS NOT NULL AND t.end_date >= t.start_date",
+                    trip_params
+                ).fetchone()["amount"]
+                expenses = conn.execute(
+                    "SELECT COALESCE(SUM(e.amount),0) AS amount FROM expenses e "
+                    "JOIN trips t ON t.trip_id=e.trip_id "
+                    f"WHERE {trip_scope} AND e.status='Approved'",
+                    trip_params
+                ).fetchone()["amount"]
+                maintenance = conn.execute(
+                    "SELECT COALESCE(SUM(m.cost),0) AS amount FROM maintenance m "
+                    f"WHERE {maintenance_scope}",
+                    maintenance_params
+                ).fetchone()["amount"]
+                period_label = "All recorded dates"
+            else:
+                revenue = conn.execute(
+                    "SELECT COALESCE(SUM(t.freight_amount),0) AS amount "
+                    f"FROM trips t WHERE {trip_scope} AND t.status='Completed' "
+                    "AND t.end_date IS NOT NULL AND t.end_date >= t.start_date "
+                    "AND t.end_date BETWEEN ? AND ?",
+                    [*trip_params, start_date, end_date]
+                ).fetchone()["amount"]
+                expenses = conn.execute(
+                    "SELECT COALESCE(SUM(e.amount),0) AS amount "
+                    "FROM expenses e JOIN trips t ON t.trip_id=e.trip_id "
+                    f"WHERE {trip_scope} AND e.status='Approved' AND e.date BETWEEN ? AND ?",
+                    [*trip_params, start_date, end_date]
+                ).fetchone()["amount"]
+                maintenance = conn.execute(
+                    "SELECT COALESCE(SUM(m.cost),0) AS amount FROM maintenance m "
+                    f"WHERE {maintenance_scope} AND m.service_date BETWEEN ? AND ?",
+                    [*maintenance_params, start_date, end_date]
+                ).fetchone()["amount"]
+                period_label = f"{start_date} to {end_date}"
             headers = ["Profit & Loss Line Item", "Amount INR"]
             rows = [
+                ("Reporting period", period_label),
                 ("Freight revenue - completed trips", revenue),
                 ("Approved trip expenses", -float(expenses or 0)),
                 ("Recorded maintenance costs", -float(maintenance or 0)),
