@@ -3485,6 +3485,90 @@ def reports():
         f"FROM trips t WHERE {trip_where} ORDER BY t.start_date DESC, t.trip_id DESC LIMIT 10",
         [start_date, end_date, start_date, end_date, *trip_args]
     ).fetchall()
+
+    # Detailed report datasets. Each query uses the same record-visibility scope
+    # as the operational modules, and date filters are applied to the source dates.
+    pnl_revenue_row = conn.execute(
+        "SELECT COALESCE(SUM(t.freight_amount), 0) AS revenue, COUNT(*) AS trip_count "
+        f"FROM trips t WHERE {trip_scope} AND t.status = 'Completed' "
+        "AND COALESCE(t.end_date, t.start_date) BETWEEN ? AND ?",
+        [*trip_params, start_date, end_date]
+    ).fetchone()
+    pnl_expenses_row = conn.execute(
+        "SELECT COALESCE(SUM(e.amount), 0) AS amount, COUNT(*) AS count "
+        "FROM expenses e JOIN trips t ON t.trip_id=e.trip_id "
+        f"WHERE {trip_scope} AND e.status='Approved' AND e.date BETWEEN ? AND ?",
+        [*trip_params, start_date, end_date]
+    ).fetchone()
+    pnl_maintenance_row = conn.execute(
+        "SELECT COALESCE(SUM(m.cost), 0) AS amount, COUNT(*) AS count "
+        f"FROM maintenance m WHERE {maintenance_scope} AND m.service_date BETWEEN ? AND ?",
+        [*maintenance_params, start_date, end_date]
+    ).fetchone()
+
+    truck_report = conn.execute(
+        "SELECT tr.truck_id, tr.registration_number, COUNT(t.trip_id) AS trip_count, "
+        "COALESCE(SUM(CASE WHEN t.status='Completed' THEN t.freight_amount ELSE 0 END),0) AS revenue, "
+        "COALESCE(SUM((SELECT SUM(p.amount) FROM trip_payments p WHERE p.trip_id=t.trip_id "
+        "AND p.payment_date BETWEEN ? AND ?)),0) AS collections, "
+        "COALESCE(SUM((SELECT SUM(e.amount) FROM expenses e WHERE e.trip_id=t.trip_id "
+        "AND e.status='Approved' AND e.date BETWEEN ? AND ?)),0) AS costs "
+        "FROM trips t JOIN trucks tr ON tr.truck_id=t.truck_id "
+        f"WHERE {trip_where} GROUP BY tr.truck_id, tr.registration_number "
+        "ORDER BY revenue DESC, tr.registration_number",
+        [start_date, end_date, start_date, end_date, *trip_args]
+    ).fetchall()
+
+    party_revenue_report = conn.execute(
+        "SELECT p.party_id, p.name AS party_name, COUNT(t.trip_id) AS trip_count, "
+        "COALESCE(SUM(t.freight_amount),0) AS freight, "
+        "COALESCE(SUM((SELECT SUM(tp.amount) FROM trip_payments tp WHERE tp.trip_id=t.trip_id "
+        "AND tp.payment_date BETWEEN ? AND ?)),0) AS collections "
+        "FROM trips t LEFT JOIN parties p ON p.party_id=t.party_id "
+        f"WHERE {trip_where} GROUP BY p.party_id, p.name "
+        "ORDER BY freight DESC, party_name",
+        [start_date, end_date, *trip_args]
+    ).fetchall()
+
+    party_scope, party_params = _record_owner_filter("p")
+    party_balance_report = conn.execute(
+        "SELECT p.party_id, p.name, p.party_type, "
+        "COALESCE(SUM(CASE WHEN le.entry_type='Debit' AND le.entry_date < ? THEN le.amount "
+        "WHEN le.entry_type='Credit' AND le.entry_date < ? THEN -le.amount ELSE 0 END),0) AS opening_balance, "
+        "COALESCE(SUM(CASE WHEN le.entry_type='Debit' AND le.entry_date BETWEEN ? AND ? THEN le.amount ELSE 0 END),0) AS period_debits, "
+        "COALESCE(SUM(CASE WHEN le.entry_type='Credit' AND le.entry_date BETWEEN ? AND ? THEN le.amount ELSE 0 END),0) AS period_credits, "
+        "COALESCE(SUM(CASE WHEN le.entry_type='Debit' AND le.entry_date <= ? THEN le.amount "
+        "WHEN le.entry_type='Credit' AND le.entry_date <= ? THEN -le.amount ELSE 0 END),0) AS closing_balance "
+        "FROM parties p LEFT JOIN party_ledger_entries le ON le.party_id=p.party_id "
+        f"WHERE {party_scope} GROUP BY p.party_id, p.name, p.party_type ORDER BY p.name COLLATE NOCASE",
+        [start_date, start_date, start_date, end_date, start_date, end_date, end_date, end_date, *party_params]
+    ).fetchall()
+
+    supplier_balance_report = [dict(row) for row in party_balance_report
+                               if str(row["party_type"] or "").lower() in ("supplier", "both")]
+    transaction_report = conn.execute(
+        "SELECT * FROM ("
+        "SELECT 'Payment' AS transaction_type, p.payment_date AS transaction_date, "
+        "p.payment_id AS record_id, t.trip_id, "
+        "('Trip #' || t.trip_id || ' receipt') AS description, p.reference AS reference, "
+        "p.amount AS amount, 'Inflow' AS direction "
+        "FROM trip_payments p JOIN trips t ON t.trip_id=p.trip_id "
+        f"WHERE {trip_scope} AND p.payment_date BETWEEN ? AND ? "
+        "UNION ALL "
+        "SELECT 'Approved Expense' AS transaction_type, e.date AS transaction_date, "
+        "e.expense_id AS record_id, t.trip_id, e.category AS description, "
+        "e.description AS reference, e.amount AS amount, 'Outflow' AS direction "
+        "FROM expenses e JOIN trips t ON t.trip_id=e.trip_id "
+        f"WHERE {trip_scope} AND e.status='Approved' AND e.date BETWEEN ? AND ? "
+        "UNION ALL "
+        "SELECT 'Maintenance' AS transaction_type, m.service_date AS transaction_date, "
+        "m.maintenance_id AS record_id, NULL AS trip_id, m.service_type AS description, "
+        "m.notes AS reference, m.cost AS amount, 'Outflow' AS direction "
+        f"FROM maintenance m WHERE {maintenance_scope} AND m.service_date BETWEEN ? AND ?"
+        ") ORDER BY transaction_date DESC, record_id DESC LIMIT 1000",
+        [*trip_params, start_date, end_date, *trip_params, start_date, end_date,
+         *maintenance_params, start_date, end_date]
+    ).fetchall()
     conn.close()
 
     months = sorted(
@@ -3528,6 +3612,20 @@ def reports():
         category_labels=category_labels, category_values=category_values,
         status_labels=status_labels, status_values=status_values,
         top_trips=top_trips,
+        pnl_revenue=float(pnl_revenue_row["revenue"] or 0),
+        pnl_trip_count=int(pnl_revenue_row["trip_count"] or 0),
+        pnl_expenses=float(pnl_expenses_row["amount"] or 0),
+        pnl_expense_count=int(pnl_expenses_row["count"] or 0),
+        pnl_maintenance=float(pnl_maintenance_row["amount"] or 0),
+        pnl_maintenance_count=int(pnl_maintenance_row["count"] or 0),
+        pnl_operating_profit=float(pnl_revenue_row["revenue"] or 0)
+            - float(pnl_expenses_row["amount"] or 0)
+            - float(pnl_maintenance_row["amount"] or 0),
+        truck_report=truck_report,
+        party_revenue_report=party_revenue_report,
+        party_balance_report=party_balance_report,
+        supplier_balance_report=supplier_balance_report,
+        transaction_report=transaction_report,
         block_content="dashboard",
     )
 
