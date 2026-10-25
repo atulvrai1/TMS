@@ -3554,7 +3554,8 @@ def reports(report_name=None):
         "WHERE et.truck_id=tr.truck_id AND e.status='Approved' AND e.date BETWEEN ? AND ?),0) AS costs, "
         "COALESCE((SELECT SUM(m.cost) FROM maintenance m WHERE m.truck_id=tr.truck_id "
         "AND m.service_date BETWEEN ? AND ?),0) AS maintenance_cost "
-        f"FROM trucks tr WHERE {truck_scope} "
+        "FROM trucks tr LEFT JOIN trips t ON t.truck_id=tr.truck_id "
+        f"WHERE {truck_scope} "
         "GROUP BY tr.truck_id, tr.registration_number ORDER BY revenue DESC, tr.registration_number",
         [start_date, end_date, start_date, end_date, start_date, end_date, start_date, end_date, *truck_params]
     ).fetchall()
