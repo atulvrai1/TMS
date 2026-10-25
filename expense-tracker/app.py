@@ -3503,8 +3503,7 @@ def reports(report_name=None):
     pnl_revenue_row = conn.execute(
         "SELECT COALESCE(SUM(t.freight_amount), 0) AS revenue, COUNT(*) AS trip_count "
         f"FROM trips t WHERE {trip_scope} AND t.status = 'Completed' "
-        "AND t.end_date IS NOT NULL "
-        "AND t.end_date BETWEEN ? AND ?",
+        "AND COALESCE(t.end_date, t.start_date) BETWEEN ? AND ?",
         [*trip_params, start_date, end_date]
     ).fetchone()
 
