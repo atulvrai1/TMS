@@ -3427,7 +3427,8 @@ def reports(report_name=None):
     freight_summary = conn.execute(
         "SELECT COALESCE(SUM(t.freight_amount), 0) AS freight_total "
         f"FROM trips t WHERE {trip_scope} AND t.status='Completed' "
-        "AND COALESCE(t.end_date, t.start_date) BETWEEN ? AND ?",
+        "AND t.end_date IS NOT NULL AND t.end_date >= t.start_date "
+        "AND t.end_date BETWEEN ? AND ?",
         [*trip_params, start_date, end_date]
     ).fetchone()
 
@@ -3752,7 +3753,8 @@ def export_reports_csv():
             revenue = conn.execute(
                 "SELECT COALESCE(SUM(t.freight_amount),0) AS amount "
                 f"FROM trips t WHERE {trip_scope} AND t.status='Completed' "
-                "AND COALESCE(t.end_date,t.start_date) BETWEEN ? AND ?",
+                "AND t.end_date IS NOT NULL AND t.end_date >= t.start_date "
+                "AND t.end_date BETWEEN ? AND ?",
                 [*trip_params, start_date, end_date]
             ).fetchone()["amount"]
             expenses = conn.execute(
