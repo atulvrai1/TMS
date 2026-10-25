@@ -3526,8 +3526,8 @@ def reports(report_name=None):
         maintenance_params
     ).fetchone()
 
-    # Trip P&L is grouped by valid completion date, with approved expenses
-    # assigned by their expense date in the selected reporting period.
+    # Trip P&L uses the recorded completion date. Missing completion dates cannot
+    # be assigned to a date range; inconsistent start/end dates remain visible for correction.
     trip_pnl_report = conn.execute(
         "SELECT t.trip_id, t.route_from, t.route_to, t.start_date, t.end_date, "
         "COALESCE(tr.registration_number, 'Not assigned') AS truck, "
@@ -3551,7 +3551,7 @@ def reports(report_name=None):
         "AND t.end_date BETWEEN ? AND ? THEN t.freight_amount ELSE 0 END),0) AS revenue, "
         "COALESCE((SELECT SUM(e.amount) FROM expenses e JOIN trips et ON et.trip_id=e.trip_id "
         "WHERE et.truck_id=tr.truck_id AND et.status='Completed' AND et.end_date IS NOT NULL "
-        "AND et.end_date >= et.start_date AND et.end_date BETWEEN ? AND ? AND e.status='Approved'),0) AS costs, "
+        "AND et.end_date BETWEEN ? AND ? AND e.status='Approved'),0) AS costs, "
         "COALESCE((SELECT SUM(m.cost) FROM maintenance m WHERE m.truck_id=tr.truck_id "
         "AND m.service_date BETWEEN ? AND ?),0) AS maintenance_cost "
         "FROM trucks tr LEFT JOIN trips t ON t.truck_id=tr.truck_id "
@@ -3818,8 +3818,7 @@ def export_reports_csv():
             if pnl_tab == "overall":
                 revenue = conn.execute(
                     "SELECT COALESCE(SUM(t.freight_amount),0) AS amount "
-                    f"FROM trips t WHERE {trip_scope} AND t.status='Completed' "
-                    "AND t.status='Completed'",
+                    f"FROM trips t WHERE {trip_scope} AND t.status='Completed'",
                     trip_params
                 ).fetchone()["amount"]
                 expenses = conn.execute(
