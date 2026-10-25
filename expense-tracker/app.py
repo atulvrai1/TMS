@@ -3422,13 +3422,15 @@ def reports(report_name=None):
         "COALESCE(SUM(CASE WHEN t.status IN ('Scheduled','In Progress') THEN 1 ELSE 0 END), 0) AS active_count "
         f"FROM trips t WHERE {trip_where}", trip_args
     ).fetchone()
-    # Freight revenue belongs to the period in which a trip was completed,
-    # even when the trip originally started before the selected range.
+    # Use the valid completion date when present. If end_date is missing or
+    # predates start_date (legacy/inconsistent records), report against start_date
+    # so completed trips are not silently excluded from freight and collection-gap
+    # metrics. Keep this date rule consistent with the P&L reporting fallback.
     freight_summary = conn.execute(
         "SELECT COALESCE(SUM(t.freight_amount), 0) AS freight_total "
         f"FROM trips t WHERE {trip_scope} AND t.status='Completed' "
-        "AND t.end_date IS NOT NULL AND t.end_date >= t.start_date "
-        "AND t.end_date BETWEEN ? AND ?",
+        "AND CASE WHEN t.end_date IS NOT NULL AND t.end_date >= t.start_date "
+        "THEN t.end_date ELSE t.start_date END BETWEEN ? AND ?",
         [*trip_params, start_date, end_date]
     ).fetchone()
 
