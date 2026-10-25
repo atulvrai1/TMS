@@ -3414,8 +3414,10 @@ def reports(report_name=None):
         "COALESCE(SUM(CASE WHEN t.status = 'Completed' THEN 1 ELSE 0 END), 0) AS completed_count, "
         "COALESCE(SUM(CASE WHEN t.status = 'Cancelled' THEN 1 ELSE 0 END), 0) AS cancelled_count, "
         "COALESCE(SUM(CASE WHEN t.status IN ('Scheduled','In Progress') THEN 1 ELSE 0 END), 0) AS active_count, "
-        "COALESCE(SUM(t.freight_amount), 0) AS freight_total "
-        f"FROM trips t WHERE {trip_where}", trip_args
+        "COALESCE(SUM(CASE WHEN t.status = 'Completed' "
+        "AND COALESCE(t.end_date, t.start_date) BETWEEN ? AND ? "
+        "THEN t.freight_amount ELSE 0 END), 0) AS freight_total "
+        f"FROM trips t WHERE {trip_where}", [start_date, end_date, *trip_args]
     ).fetchone()
 
     expense_scope, expense_params = _record_owner_filter("t")
