@@ -95,11 +95,11 @@
     <section class="financial-overview" aria-labelledby="admin-financial-heading">
         <h2 class="admin-section-title" id="admin-financial-heading">Overall fleet P/L — all trips</h2>
         <p class="financial-definition">
-            Net P/L = freight charges − approved trip expenses. Cash P/L = payments received − approved trip expenses.
-            Expenses awaiting admin review are shown separately and excluded from profit until approved.
+            Freight revenue and customer balance due include completed trips only. Payments received and approved/pending expenses include recorded transactions across trips, including trips that are still active or were cancelled.
+            Net P/L = recognized freight revenue − approved expenses. Cash P/L = recorded payments − approved expenses. Pending expenses are shown separately.
         </p>
         <div class="stats-grid">
-            <div class="stat-tile"><span class="stat-label">Freight charges</span><span class="stat-value">{{ '%.2f'|format(finance_summary.freight_total) }}</span></div>
+            <div class="stat-tile"><span class="stat-label">Completed-trip freight revenue</span><span class="stat-value">{{ '%.2f'|format(finance_summary.freight_total) }}</span></div>
             <div class="stat-tile"><span class="stat-label">Payments received</span><span class="stat-value">{{ '%.2f'|format(finance_summary.received_total) }}</span></div>
             <a class="stat-tile stat-tile-link" href="{{ url_for('payments', due='1') }}" aria-label="View trips with customer balances due">
                 <span class="stat-label">Customer balance due · View trips →</span>
